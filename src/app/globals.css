@@ -105,10 +105,7 @@ body {
   }
 }
 
-/* Prevent pull-to-refresh and overscroll */
-html {
-  overscroll-behavior: none;
-}
+/* Allow pull-to-refresh */
 
 /* App-like touch interactions */
 * {
