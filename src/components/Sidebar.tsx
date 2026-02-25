@@ -33,7 +33,6 @@ const mobileNavItems = [
   { href: '/sessions', label: 'Sessioni', icon: Activity },
   { href: '/jobs', label: 'Job', icon: Workflow },
   { href: '/errors', label: 'Errori', icon: AlertTriangle },
-  { href: '/settings', label: 'Impostazioni', icon: Settings },
 ];
 
 export function Sidebar() {
