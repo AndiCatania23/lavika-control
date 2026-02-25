@@ -29,9 +29,9 @@ export function StatusPill({ status, size = 'md' }: StatusPillProps) {
   
   return (
     <span className={`inline-flex items-center rounded-full ${config.bg} ${config.text} ${
-      size === 'sm' ? 'px-2 py-0.5 text-xs' : 'px-2.5 py-1 text-xs'
+      size === 'sm' ? 'px-1.5 py-0.5 text-[10px]' : 'px-2.5 py-1 text-xs'
     } font-medium`}>
-      <span className={`w-1.5 h-1.5 rounded-full bg-current mr-1.5`} />
+      <span className={`w-1 h-1 rounded-full bg-current mr-1`} />
       {config.label}
     </span>
   );

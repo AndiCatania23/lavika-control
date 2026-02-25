@@ -33,13 +33,13 @@ export default function UsersPage() {
       header: 'Utente',
       sortable: true,
       render: (user: User) => (
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary text-xs font-medium">
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-primary text-[10px] font-medium">
             {user.avatar}
           </div>
           <div className="min-w-0">
-            <div className="font-medium text-foreground truncate">{user.name}</div>
-            <div className="text-xs text-muted-foreground truncate">{user.email}</div>
+            <div className="font-medium text-foreground text-sm truncate">{user.name}</div>
+            <div className="text-[10px] text-muted-foreground truncate">{user.email}</div>
           </div>
         </div>
       ),
@@ -49,7 +49,7 @@ export default function UsersPage() {
       header: 'Piano',
       sortable: true,
       render: (user: User) => (
-        <span className={`text-xs px-2 py-1 rounded ${
+        <span className={`text-[10px] px-1.5 py-0.5 rounded ${
           user.plan === 'enterprise' ? 'bg-purple-500/10 text-purple-400' :
           user.plan === 'pro' ? 'bg-blue-500/10 text-blue-400' :
           'bg-muted text-muted-foreground'

@@ -79,7 +79,7 @@ export function DataTable<T = Record<string, any>>({
       </div>
 
       <div className="border border-border rounded-lg overflow-x-auto">
-        <table className="w-full min-w-full">
+        <table className="w-full min-w-[500px]">
           <thead>
             <tr className="border-b border-border bg-muted/30">
               {columns.map(col => (
