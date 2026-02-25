@@ -2,22 +2,39 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { getDashboardKpis, Kpi } from '@/lib/data';
-import { systemStatus } from '@/mocks/kpis';
+import { getDevCards, getLatestCardValues, DevCard, DevCardValue } from '@/lib/data';
 import { KpiCard } from '@/components/KpiCard';
 import { SectionHeader } from '@/components/SectionHeader';
-import { StatusPill } from '@/components/StatusPill';
 import { ArrowRight } from 'lucide-react';
 
+interface KpiWithValue extends DevCard {
+  value?: DevCardValue;
+}
+
 export default function DashboardPage() {
-  const [kpis, setKpis] = useState<Kpi[]>([]);
+  const [cards, setCards] = useState<KpiWithValue[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getDashboardKpis().then(data => {
-      setKpis(data.kpis);
+    const loadData = async () => {
+      const devCards = await getDevCards();
+      
+      const kpiCards = devCards.filter(c => c.card_type === 'kpi');
+      const cardKeys = kpiCards.map(c => c.card_key);
+      
+      const values = await getLatestCardValues(cardKeys);
+      const valueMap = new Map(values.map(v => [v.card_key, v]));
+      
+      const cardsWithValues = kpiCards.map(card => ({
+        ...card,
+        value: valueMap.get(card.card_key),
+      }));
+      
+      setCards(cardsWithValues);
       setLoading(false);
-    });
+    };
+    
+    loadData();
   }, []);
 
   if (loading) {
@@ -36,8 +53,8 @@ export default function DashboardPage() {
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-        {kpis.map(kpi => (
-          <KpiCard key={kpi.id} kpi={kpi} />
+        {cards.map(card => (
+          <KpiCard key={card.id} card={card} />
         ))}
       </div>
 
@@ -47,15 +64,16 @@ export default function DashboardPage() {
             <h3 className="font-semibold text-foreground">Stato Sistema</h3>
           </div>
           <div className="space-y-3">
-            {systemStatus.map(service => (
-              <div key={service.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
-                <div className="flex items-center gap-3">
-                  <StatusPill status={service.status} size="sm" />
-                  <span className="text-sm text-foreground">{service.name}</span>
-                </div>
-                <span className="text-xs text-muted-foreground">{service.latency}</span>
+            <div className="flex items-center justify-between py-2 border-b border-border">
+              <div className="flex items-center gap-3">
+                <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-green-500/10 text-green-500">
+                  <span className="w-1 h-1 rounded-full bg-green-500 mr-1" />
+                  Operational
+                </span>
+                <span className="text-sm text-foreground">Supabase</span>
               </div>
-            ))}
+              <span className="text-xs text-muted-foreground">-</span>
+            </div>
           </div>
         </div>
 
