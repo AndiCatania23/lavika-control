@@ -32,10 +32,23 @@ export function PullToRefresh({ children }: PullToRefreshProps) {
     }
   }, [isPulling, startY]);
 
-  const handleTouchEnd = useCallback(() => {
+  const handleTouchEnd = useCallback(async () => {
     if (pullDistance > 80) {
       setIsRefreshing(true);
-      window.location.reload();
+      
+      if ('serviceWorker' in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        for (const registration of registrations) {
+          await registration.unregister();
+        }
+      }
+      
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(key => caches.delete(key)));
+      }
+      
+      window.location.href = window.location.href + '?t=' + Date.now();
     }
     setIsPulling(false);
     setPullDistance(0);
