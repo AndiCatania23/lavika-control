@@ -32,15 +32,15 @@ export default function UsersPage() {
       key: 'name',
       header: 'Utente',
       sortable: true,
-      className: 'w-full',
+      className: 'w-full min-w-[150px]',
       render: (user: User) => (
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary text-xs font-medium">
             {user.avatar}
           </div>
-          <div>
-            <div className="font-medium text-foreground">{user.name}</div>
-            <div className="text-xs text-muted-foreground">{user.email}</div>
+          <div className="min-w-0">
+            <div className="font-medium text-foreground truncate">{user.name}</div>
+            <div className="text-xs text-muted-foreground truncate">{user.email}</div>
           </div>
         </div>
       ),
@@ -49,6 +49,7 @@ export default function UsersPage() {
       key: 'plan',
       header: 'Piano',
       sortable: true,
+      className: 'whitespace-nowrap',
       render: (user: User) => (
         <span className={`text-xs px-2 py-1 rounded ${
           user.plan === 'enterprise' ? 'bg-purple-500/10 text-purple-400' :
@@ -63,6 +64,7 @@ export default function UsersPage() {
       key: 'status',
       header: 'Stato',
       sortable: true,
+      className: 'whitespace-nowrap',
       render: (user: User) => <StatusPill status={user.status} size="sm" />,
     },
     {
