@@ -1,36 +1,109 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Lavika Control
+
+Premium operational console for managing your platform.
+
+## Features
+
+- **Dashboard**: Real-time KPIs and system status monitoring
+- **Analytics**: User growth, revenue forecasts, and content metrics
+- **User Management**: View and manage platform users
+- **Sessions**: Track user login sessions and activity
+- **Jobs**: Manage and trigger background jobs
+- **Job Runs**: Monitor job execution history and logs
+- **Errors**: View and investigate system errors
+- **Settings**: Configure integrations and feature flags
+
+## Tech Stack
+
+- Next.js 14+ with App Router
+- TypeScript
+- Tailwind CSS
+- Lucide React (icons)
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Node.js 18+
+- npm
+
+### Installation
+
+```bash
+npm install
+```
+
+### Development
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Build
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run build
+```
 
-## Learn More
+### Production
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+npm start
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Authentication
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+This is a demo application with placeholder authentication.
 
-## Deploy on Vercel
+- **Login**: Use any email and password to sign in
+- **Session**: Stored in localStorage for demo purposes
+- **Logout**: Click the logout button in the topbar
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Project Structure
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+src/
+├── app/                    # Next.js App Router pages
+│   ├── (auth)/            # Auth route group
+│   │   └── login/         # Login page
+│   └── (console)/         # Console route group (protected)
+│       ├── dashboard/     # Dashboard
+│       ├── analytics/     # Analytics
+│       ├── users/         # User management
+│       ├── sessions/      # Session tracking
+│       ├── jobs/          # Job management
+│       ├── errors/        # Error tracking
+│       └── settings/      # Settings
+├── components/            # Reusable UI components
+├── lib/
+│   ├── auth.tsx          # Authentication context
+│   ├── toast.tsx         # Toast notifications
+│   └── data/             # Data layer adapter
+│       └── index.ts
+└── mocks/                # Mock data for demo
+```
+
+## Deployment
+
+### Vercel (Recommended)
+
+1. Push your code to a GitHub repository
+2. Import the project in Vercel
+3. Deploy with default settings
+
+### Manual Build
+
+```bash
+npm run build
+npm run start
+```
+
+## Environment Variables
+
+No environment variables are required for the demo. The application uses mock data.
+
+## License
+
+MIT
