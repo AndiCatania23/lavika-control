@@ -20,7 +20,7 @@ export function Topbar({ title = 'LΛVIKΛ' }: TopbarProps) {
         </div>
 
         <div className="flex items-center gap-3">
-          <div className={`relative ${searchOpen ? 'w-64' : 'w-auto'}`}>
+          <div className={`relative ${searchOpen ? 'w-full lg:w-64' : 'w-auto'}`}>
             <button
               onClick={() => setSearchOpen(!searchOpen)}
               className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
@@ -32,7 +32,7 @@ export function Topbar({ title = 'LΛVIKΛ' }: TopbarProps) {
                 type="text"
                 placeholder="Quick search..."
                 autoFocus
-                className="absolute right-full mr-2 top-1/2 -translate-y-1/2 w-64 px-3 py-2 bg-card border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                className="absolute left-0 top-1/2 -translate-y-1/2 w-full lg:w-64 px-3 py-2 ml-2 bg-card border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
               />
             )}
           </div>
