@@ -33,10 +33,7 @@ export default function SettingsPage() {
     notifications: true,
   });
 
-  const adminUsers = [
-    { id: 'usr_001', name: 'Andrea Failla', email: 'andrea.failla@icloud.com', role: 'admin' },
-    { id: 'usr_002', name: 'Mario Rossi', email: 'mario.rossi@example.com', role: 'viewer' },
-  ];
+  const adminUsers: { id: string; name: string; email: string; role: string }[] = [];
 
   const integrations = [
     { name: 'Supabase', status: 'active' as const, details: 'Database PostgreSQL' },

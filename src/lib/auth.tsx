@@ -41,18 +41,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   /* eslint-enable react-hooks/set-state-in-effect */
 
   const login = async (email: string, password: string): Promise<boolean> => {
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    if (email === 'andrea.failla@icloud.com' && password === 'Giuli@1992') {
-      const authUser: AuthUser = {
-        id: 'admin_001',
-        email,
-        name: 'Andrea Failla',
-      };
-      setUser(authUser);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(authUser));
-      return true;
-    }
+    // TODO: Implementare login con Supabase Auth
     return false;
   };
 
