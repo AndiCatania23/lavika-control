@@ -98,7 +98,23 @@ body {
   }
 }
 
-/* Allow pull-to-refresh */
+/* Pull-to-refresh styles */
+.pull-to-refresh {
+  overscroll-behavior-y: contain;
+}
+
+.pull-to-refresh-indicator {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%) translateY(-100%);
+  transition: transform 0.2s ease-out;
+  z-index: 9999;
+}
+
+.pull-to-refresh-indicator.visible {
+  transform: translateX(-50%) translateY(20px);
+}
 
 /* App-like touch interactions */
 * {
@@ -106,9 +122,14 @@ body {
   -webkit-touch-callout: none;
 }
 
-/* Smooth scrolling */
+/* Smooth scrolling and prevent bounce */
 html {
   scroll-behavior: smooth;
+  overscroll-behavior: none;
+}
+
+body {
+  overscroll-behavior: none;
 }
 
 /* Hide scrollbar but keep functionality */
