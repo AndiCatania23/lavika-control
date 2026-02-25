@@ -24,7 +24,7 @@ function IphoneToggle({ enabled, onClick }: { enabled: boolean; onClick: () => v
 }
 
 export default function SettingsPage() {
-  const { logout } = useAuth();
+  const { signOut } = useAuth();
   const router = useRouter();
   const [featureFlags, setFeatureFlags] = useState({
     darkMode: true,
@@ -130,8 +130,7 @@ export default function SettingsPage() {
 
       <button
         onClick={async () => {
-          await logout();
-          router.push('/login');
+          await signOut();
         }}
         className="w-full flex items-center justify-center gap-2 py-3 bg-destructive/10 text-destructive rounded-lg font-medium hover:bg-destructive/20 transition-colors"
       >

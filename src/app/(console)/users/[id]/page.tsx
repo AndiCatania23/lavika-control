@@ -70,11 +70,11 @@ export default function UserDetailPage() {
                 <div className="flex items-center gap-4 mt-3">
                   <StatusPill status={user.status} />
                   <span className={`text-xs px-2 py-1 rounded ${
-                    user.plan === 'enterprise' ? 'bg-purple-500/10 text-purple-400' :
-                    user.plan === 'pro' ? 'bg-blue-500/10 text-blue-400' :
-                    'bg-muted text-muted-foreground'
+                    user.badge === 'gold' ? 'bg-yellow-500/20 text-yellow-400' :
+                    user.badge === 'silver' ? 'bg-gray-400/20 text-gray-300' :
+                    'bg-amber-700/20 text-amber-600'
                   }`}>
-                    {user.plan.toUpperCase()}
+                    {user.badge.toUpperCase()}
                   </span>
                 </div>
               </div>

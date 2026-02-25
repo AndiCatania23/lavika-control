@@ -10,7 +10,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const { login } = useAuth();
+  const { signIn } = useAuth();
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -18,12 +18,12 @@ export default function LoginPage() {
     setError('');
     setIsLoading(true);
 
-    const success = await login(email, password);
+    const result = await signIn(email, password);
     
-    if (success) {
-      router.push('/dashboard');
+    if (result.error) {
+      setError(result.error);
     } else {
-      setError('Credenziali non valide');
+      router.push('/dashboard');
     }
     setIsLoading(false);
   };
