@@ -29,7 +29,10 @@ const navItems = [
 const mobileNavItems = [
   { href: '/dashboard', label: 'Home', icon: Home },
   { href: '/analytics', label: 'Analisi', icon: BarChart3 },
+  { href: '/users', label: 'Utenti', icon: Users },
+  { href: '/sessions', label: 'Sessioni', icon: Activity },
   { href: '/jobs', label: 'Job', icon: Workflow },
+  { href: '/errors', label: 'Errori', icon: AlertTriangle },
   { href: '/settings', label: 'Impostazioni', icon: Settings },
 ];
 
@@ -99,7 +102,7 @@ export function Sidebar() {
       </aside>
 
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-card border-t border-border safe-area-pb">
-        <div className="flex justify-around items-center h-16">
+        <div className="flex justify-around items-center h-14">
           {mobileNavItems.map(item => {
             const isActive = pathname === item.href || 
               (item.href !== '/dashboard' && pathname.startsWith(item.href));
@@ -108,7 +111,7 @@ export function Sidebar() {
                 key={item.href}
                 href={item.href}
                 className={`
-                  flex flex-col items-center justify-center gap-1 flex-1 h-full
+                  flex flex-col items-center justify-center flex-1 h-full
                   transition-colors
                   ${isActive 
                     ? 'text-primary' 
@@ -116,8 +119,8 @@ export function Sidebar() {
                   }
                 `}
               >
-                <item.icon className="w-5 h-5" />
-                <span className="text-xs">{item.label}</span>
+                <item.icon className="w-4 h-4" />
+                <span className="text-[10px] mt-0.5">{item.label}</span>
               </Link>
             );
           })}
