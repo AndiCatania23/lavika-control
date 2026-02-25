@@ -3,7 +3,7 @@ export interface User {
   email: string;
   name: string;
   avatar: string;
-  plan: 'free' | 'pro' | 'enterprise';
+  badge: 'bronze' | 'silver' | 'gold';
   status: 'active' | 'inactive' | 'suspended';
   createdAt: string;
   lastLogin: string;
@@ -17,7 +17,7 @@ export const users: User[] = [
     email: 'mario.rossi@example.com',
     name: 'Mario Rossi',
     avatar: 'MR',
-    plan: 'enterprise',
+    badge: 'gold',
     status: 'active',
     createdAt: '2024-01-15T10:30:00Z',
     lastLogin: '2025-02-25T08:45:00Z',
@@ -29,7 +29,7 @@ export const users: User[] = [
     email: 'giulia.bianchi@example.com',
     name: 'Giulia Bianchi',
     avatar: 'GB',
-    plan: 'pro',
+    badge: 'silver',
     status: 'active',
     createdAt: '2024-02-20T14:22:00Z',
     lastLogin: '2025-02-24T16:30:00Z',
@@ -41,7 +41,7 @@ export const users: User[] = [
     email: 'luca.verdi@example.com',
     name: 'Luca Verdi',
     avatar: 'LV',
-    plan: 'free',
+    badge: 'bronze',
     status: 'active',
     createdAt: '2024-03-10T09:15:00Z',
     lastLogin: '2025-02-23T11:20:00Z',
@@ -53,7 +53,7 @@ export const users: User[] = [
     email: 'anna.neri@example.com',
     name: 'Anna Neri',
     avatar: 'AN',
-    plan: 'pro',
+    badge: 'silver',
     status: 'active',
     createdAt: '2024-04-05T16:45:00Z',
     lastLogin: '2025-02-25T09:10:00Z',
@@ -65,7 +65,7 @@ export const users: User[] = [
     email: 'paolo.gialli@example.com',
     name: 'Paolo Gialli',
     avatar: 'PG',
-    plan: 'enterprise',
+    badge: 'gold',
     status: 'inactive',
     createdAt: '2024-01-22T11:00:00Z',
     lastLogin: '2025-01-15T14:30:00Z',
@@ -77,7 +77,7 @@ export const users: User[] = [
     email: 'sofia.blu@example.com',
     name: 'Sofia Blu',
     avatar: 'SB',
-    plan: 'free',
+    badge: 'bronze',
     status: 'active',
     createdAt: '2024-05-18T13:25:00Z',
     lastLogin: '2025-02-20T10:45:00Z',
@@ -89,7 +89,7 @@ export const users: User[] = [
     email: 'andrea.rosa@example.com',
     name: 'Andrea Rosa',
     avatar: 'AR',
-    plan: 'pro',
+    badge: 'silver',
     status: 'suspended',
     createdAt: '2024-02-14T08:30:00Z',
     lastLogin: '2025-02-10T15:00:00Z',
@@ -101,7 +101,7 @@ export const users: User[] = [
     email: 'elena.arancio@example.com',
     name: 'Elena Arancio',
     avatar: 'EA',
-    plan: 'enterprise',
+    badge: 'gold',
     status: 'active',
     createdAt: '2023-11-08T10:00:00Z',
     lastLogin: '2025-02-25T07:30:00Z',

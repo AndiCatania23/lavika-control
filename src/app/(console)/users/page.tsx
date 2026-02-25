@@ -45,16 +45,16 @@ export default function UsersPage() {
       ),
     },
     {
-      key: 'plan',
-      header: 'Piano',
+      key: 'badge',
+      header: 'Badge',
       sortable: true,
       render: (user: User) => (
         <span className={`text-[10px] px-1.5 py-0.5 rounded ${
-          user.plan === 'enterprise' ? 'bg-purple-500/10 text-purple-400' :
-          user.plan === 'pro' ? 'bg-blue-500/10 text-blue-400' :
-          'bg-muted text-muted-foreground'
+          user.badge === 'gold' ? 'bg-yellow-500/20 text-yellow-400' :
+          user.badge === 'silver' ? 'bg-gray-400/20 text-gray-300' :
+          'bg-amber-700/20 text-amber-600'
         }`}>
-          {user.plan.toUpperCase()}
+          {user.badge.toUpperCase()}
         </span>
       ),
     },
