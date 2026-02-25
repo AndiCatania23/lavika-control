@@ -87,7 +87,7 @@ export function Sidebar() {
       </aside>
 
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-card border-t border-border pb-safe">
-        <div className="flex justify-around items-center h-16">
+        <div className="flex justify-around items-center h-20">
           {mobileNavItems.map(item => {
             const isActive = pathname === item.href || 
               (item.href !== '/dashboard' && pathname.startsWith(item.href));
@@ -105,6 +105,7 @@ export function Sidebar() {
                 `}
               >
                 <item.icon className="w-5 h-5" />
+                <span className="text-[10px] mt-1">{item.label}</span>
               </Link>
             );
           })}
