@@ -32,6 +32,7 @@ export default function UsersPage() {
       key: 'name',
       header: 'Utente',
       sortable: true,
+      className: 'w-full',
       render: (user: User) => (
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary text-xs font-medium">
@@ -48,6 +49,7 @@ export default function UsersPage() {
       key: 'plan',
       header: 'Piano',
       sortable: true,
+      className: 'hidden md:table-cell',
       render: (user: User) => (
         <span className={`text-xs px-2 py-1 rounded ${
           user.plan === 'enterprise' ? 'bg-purple-500/10 text-purple-400' :
@@ -62,23 +64,27 @@ export default function UsersPage() {
       key: 'status',
       header: 'Stato',
       sortable: true,
+      className: 'hidden md:table-cell',
       render: (user: User) => <StatusPill status={user.status} size="sm" />,
     },
     {
       key: 'sessionsCount',
       header: 'Sessioni',
       sortable: true,
+      className: 'hidden lg:table-cell',
     },
     {
       key: 'revenue',
       header: 'Ricavi',
       sortable: true,
+      className: 'hidden lg:table-cell',
       render: (user: User) => user.revenue > 0 ? `€${user.revenue}` : '-',
     },
     {
       key: 'createdAt',
       header: 'Iscritto',
       sortable: true,
+      className: 'hidden lg:table-cell',
       render: (user: User) => new Date(user.createdAt).toLocaleDateString('it-IT'),
     },
   ];
