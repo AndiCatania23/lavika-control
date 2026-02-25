@@ -13,8 +13,6 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
-  Menu,
-  X,
   Home
 } from 'lucide-react';
 
@@ -38,24 +36,16 @@ const mobileNavItems = [
 export function Sidebar() {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
     <>
-      <button
-        onClick={() => setMobileOpen(!mobileOpen)}
-        className="lg:hidden fixed top-4 left-4 z-50 p-2 bg-card border border-border rounded-lg"
-      >
-        {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-      </button>
-
       <aside className={`
         fixed lg:static inset-y-0 left-0 z-40
         bg-card border-r border-border
         flex flex-col
         transition-all duration-300
         ${collapsed ? 'w-16' : 'w-64'}
-        ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+        -translate-x-full lg:translate-x-0
       `}>
         <div className="flex items-center justify-between h-16 px-4 border-b border-border">
           {!collapsed && (
@@ -77,7 +67,6 @@ export function Sidebar() {
               <Link
                 key={item.href}
                 href={item.href}
-                onClick={() => setMobileOpen(false)}
                 className={`
                   flex items-center gap-3 px-3 py-2.5 rounded-lg
                   transition-colors
@@ -134,13 +123,6 @@ export function Sidebar() {
           })}
         </div>
       </nav>
-
-      {mobileOpen && (
-        <div 
-          className="lg:hidden fixed inset-0 z-30 bg-black/50"
-          onClick={() => setMobileOpen(false)}
-        />
-      )}
     </>
   );
 }
