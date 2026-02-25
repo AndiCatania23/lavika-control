@@ -33,6 +33,7 @@ const mobileNavItems = [
   { href: '/sessions', label: 'Sessioni', icon: Activity },
   { href: '/jobs', label: 'Job', icon: Workflow },
   { href: '/errors', label: 'Errori', icon: AlertTriangle },
+  { href: '/settings', label: 'Impostazioni', icon: Settings },
 ];
 
 export function Sidebar() {
@@ -104,8 +105,7 @@ export function Sidebar() {
                   }
                 `}
               >
-                <item.icon className="w-4 h-4" />
-                <span className="text-[10px] mt-0.5">{item.label}</span>
+                <item.icon className="w-5 h-5" />
               </Link>
             );
           })}
