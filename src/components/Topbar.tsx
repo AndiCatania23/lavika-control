@@ -16,7 +16,9 @@ export function Topbar({ title = 'LΛVIKΛ' }: TopbarProps) {
       <div className="h-full flex items-center justify-between px-6">
         <div className="flex items-center gap-4">
           <h1 className="text-lg font-semibold text-foreground lg:hidden">{title}</h1>
+          <span className="lg:hidden px-2 py-0.5 bg-yellow-500/10 text-yellow-500 text-xs font-medium rounded">DEV</span>
           <h1 className="text-lg font-semibold text-foreground hidden lg:block">{title}</h1>
+          <span className="hidden lg:inline-block px-2.5 py-1 bg-yellow-500/10 text-yellow-500 text-xs font-medium rounded">DEV</span>
         </div>
 
         <div className="flex items-center gap-3">
@@ -36,10 +38,6 @@ export function Topbar({ title = 'LΛVIKΛ' }: TopbarProps) {
               />
             )}
           </div>
-
-          <span className="px-2.5 py-1 bg-yellow-500/10 text-yellow-500 text-xs font-medium rounded">
-            DEV
-          </span>
 
           <button className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors relative">
             <Bell className="w-5 h-5" />
