@@ -1,49 +1,19 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { getJobs, triggerJob, Job } from '@/lib/data';
-import { JobCard } from '@/components/JobCard';
+import { getDevFeed, DevFeedItem } from '@/lib/data';
 import { SectionHeader } from '@/components/SectionHeader';
-import { ModalConfirm } from '@/components/ModalConfirm';
-import { useToast } from '@/lib/toast';
-import { ArrowRight } from 'lucide-react';
 
 export default function JobsPage() {
-  const [jobs, setJobs] = useState<Job[]>([]);
+  const [items, setItems] = useState<DevFeedItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedJob, setSelectedJob] = useState<Job | null>(null);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [isStarting, setIsStarting] = useState(false);
-  const { showToast } = useToast();
 
   useEffect(() => {
-    getJobs().then(data => {
-      setJobs(data);
+    getDevFeed('jobs', 20).then(data => {
+      setItems(data);
       setLoading(false);
     });
   }, []);
-
-  const handleStartJob = (job: Job) => {
-    setSelectedJob(job);
-    setConfirmOpen(true);
-  };
-
-  const handleConfirmStart = async () => {
-    if (!selectedJob) return;
-    setIsStarting(true);
-    
-    try {
-      const run = await triggerJob(selectedJob.id, selectedJob.name, 'admin');
-      showToast('success', `Job "${selectedJob.name}" started (Run: ${run.id})`);
-    } catch {
-      showToast('error', 'Failed to start job');
-    }
-    
-    setIsStarting(false);
-    setConfirmOpen(false);
-    setSelectedJob(null);
-  };
 
   if (loading) {
     return (
@@ -57,37 +27,39 @@ export default function JobsPage() {
     <div className="space-y-6">
       <SectionHeader 
         title="Job" 
-        description="Gestisci ed esegui job in background"
-        actions={
-          <Link
-            href="/jobs/runs"
-            className="flex items-center gap-2 text-sm text-primary hover:underline"
-          >
-            Visualizza tutte le esecuzioni
-            <ArrowRight className="w-4 h-4" />
-          </Link>
-        }
+        description="Lista job dalla piattaforma"
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {jobs.map(job => (
-          <JobCard
-            key={job.id}
-            job={job}
-            onStart={handleStartJob}
-          />
-        ))}
+      <div className="bg-card border border-border rounded-lg overflow-hidden">
+        <table className="w-full">
+          <thead>
+            <tr className="border-b border-border bg-muted/30">
+              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Titolo</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Descrizione</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Data</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.length === 0 ? (
+              <tr>
+                <td colSpan={3} className="px-4 py-8 text-center text-muted-foreground">
+                  Nessun job trovato
+                </td>
+              </tr>
+            ) : (
+              items.map(item => (
+                <tr key={item.id} className="border-b border-border last:border-0 hover:bg-muted/20">
+                  <td className="px-4 py-3 text-sm text-foreground">{item.title}</td>
+                  <td className="px-4 py-3 text-sm text-muted-foreground">{item.description || '-'}</td>
+                  <td className="px-4 py-3 text-sm text-muted-foreground">
+                    {new Date(item.created_at).toLocaleDateString('it-IT')}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
       </div>
-
-      <ModalConfirm
-        isOpen={confirmOpen}
-        onClose={() => { setConfirmOpen(false); setSelectedJob(null); }}
-        onConfirm={handleConfirmStart}
-        title="Avvia Job"
-        message={`Sei sicuro di voler avviare "${selectedJob?.name}"?`}
-        confirmLabel="Avvia"
-        isLoading={isStarting}
-      />
     </div>
   );
 }
