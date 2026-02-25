@@ -2,57 +2,119 @@
 
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
+import { supabase } from './supabaseClient';
 
-interface AuthUser {
+interface AdminUser {
   id: string;
   email: string;
   name: string;
 }
 
 interface AuthContextType {
-  user: AuthUser | null;
+  user: AdminUser | null;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<boolean>;
-  logout: () => void;
+  isAdmin: boolean;
+  signIn: (email: string, password: string) => Promise<{ error: string | null }>;
+  signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const STORAGE_KEY = 'lavika_auth';
-
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(null);
+  const [user, setUser] = useState<AdminUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
   const router = useRouter();
 
-  /* eslint-disable react-hooks/set-state-in-effect */
-  useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored);
-        setUser(parsed);
-      } catch {
-        localStorage.removeItem(STORAGE_KEY);
-      }
-    }
-    setIsLoading(false);
-  }, []);
-  /* eslint-enable react-hooks/set-state-in-effect */
+  const checkAdminStatus = async (userId: string, userEmail: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('public.dev_admins')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
 
-  const login = async (email: string, password: string): Promise<boolean> => {
-    // TODO: Implementare login con Supabase Auth
-    return false;
+      if (data) {
+        setIsAdmin(true);
+        setUser({
+          id: data.user_id,
+          email: userEmail,
+          name: data.name || userEmail.split('@')[0],
+        });
+      } else {
+        setIsAdmin(false);
+      }
+    } catch (err) {
+      console.error('Error checking admin status:', err);
+      setIsAdmin(false);
+    }
   };
 
-  const logout = () => {
+  useEffect(() => {
+    const initAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (session?.user) {
+          await checkAdminStatus(session.user.id, session.user.email || '');
+        }
+      } catch (err) {
+        console.error('Auth init error:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    initAuth();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) {
+        await checkAdminStatus(session.user.id, session.user.email || '');
+      } else {
+        setUser(null);
+        setIsAdmin(false);
+      }
+      setIsLoading(false);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  const signIn = async (email: string, password: string): Promise<{ error: string | null }> => {
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        return { error: error.message };
+      }
+
+      if (data.user) {
+        await checkAdminStatus(data.user.id, data.user.email || '');
+      }
+
+      return { error: null };
+    } catch (err) {
+      return { error: 'Errore durante il login' };
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const signOut = async () => {
+    await supabase.auth.signOut();
     setUser(null);
-    localStorage.removeItem(STORAGE_KEY);
+    setIsAdmin(false);
     router.push('/login');
   };
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, isAdmin, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   );
