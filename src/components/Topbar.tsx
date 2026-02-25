@@ -1,15 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { Search, Bell, LogOut } from 'lucide-react';
-import { useAuth } from '@/lib/auth';
+import { Search, Bell, Settings } from 'lucide-react';
+import Link from 'next/link';
 
 interface TopbarProps {
   title?: string;
 }
 
 export function Topbar({ title = 'Lavika' }: TopbarProps) {
-  const { logout } = useAuth();
   const [searchOpen, setSearchOpen] = useState(false);
 
   return (
@@ -49,13 +48,13 @@ export function Topbar({ title = 'Lavika' }: TopbarProps) {
 
           <div className="h-6 w-px bg-border mx-1" />
 
-          <button
-            onClick={logout}
+          <Link
+            href="/settings"
             className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
-            title="Sign out"
+            title="Impostazioni"
           >
-            <LogOut className="w-5 h-5" />
-          </button>
+            <Settings className="w-5 h-5" />
+          </Link>
         </div>
       </div>
     </header>
