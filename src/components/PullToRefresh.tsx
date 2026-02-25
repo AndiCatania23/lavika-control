@@ -77,7 +77,7 @@ export function PullToRefresh({ children }: PullToRefreshProps) {
             animation: isRefreshing ? 'spin 1s linear infinite' : `rotate(${Math.min(pullDistance * 2, 180)}deg)`,
           }} 
         />
-        {isRefreshing ? 'Aggiornamento...' : 'Trai verso il basso per aggiornare'}
+        {isRefreshing ? 'Aggiornamento...' : 'Aggiorna'}
       </div>
       <style jsx>{`
         @keyframes spin {
