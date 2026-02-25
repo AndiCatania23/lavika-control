@@ -49,7 +49,6 @@ export default function UsersPage() {
       key: 'plan',
       header: 'Piano',
       sortable: true,
-      className: 'hidden md:table-cell',
       render: (user: User) => (
         <span className={`text-xs px-2 py-1 rounded ${
           user.plan === 'enterprise' ? 'bg-purple-500/10 text-purple-400' :
@@ -64,7 +63,6 @@ export default function UsersPage() {
       key: 'status',
       header: 'Stato',
       sortable: true,
-      className: 'hidden md:table-cell',
       render: (user: User) => <StatusPill status={user.status} size="sm" />,
     },
     {
