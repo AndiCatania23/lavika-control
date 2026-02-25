@@ -33,7 +33,6 @@ const mobileNavItems = [
   { href: '/sessions', label: 'Sessioni', icon: Activity },
   { href: '/jobs', label: 'Job', icon: Workflow },
   { href: '/errors', label: 'Errori', icon: AlertTriangle },
-  { href: '/settings', label: 'Impostazioni', icon: Settings },
 ];
 
 export function Sidebar() {
@@ -85,20 +84,6 @@ export function Sidebar() {
             );
           })}
         </nav>
-
-        <div className="p-4 border-t border-border">
-          <div className={`flex items-center gap-3 ${collapsed ? 'justify-center' : ''}`}>
-            <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary text-sm font-medium shrink-0">
-              AF
-            </div>
-            {!collapsed && (
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-foreground truncate">Andrea Failla</p>
-                <p className="text-xs text-muted-foreground truncate">andrea.failla@icloud.com</p>
-              </div>
-            )}
-          </div>
-        </div>
       </aside>
 
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-card border-t border-border pb-safe">

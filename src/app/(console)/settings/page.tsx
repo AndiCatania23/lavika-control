@@ -1,10 +1,14 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/lib/auth';
 import { StatusPill } from '@/components/StatusPill';
-import { Users, Database, HardDrive, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Users, Database, HardDrive, ToggleLeft, ToggleRight, LogOut } from 'lucide-react';
 
 export default function SettingsPage() {
+  const { logout } = useAuth();
+  const router = useRouter();
   const [featureFlags, setFeatureFlags] = useState({
     darkMode: true,
     betaFeatures: false,
@@ -115,6 +119,17 @@ export default function SettingsPage() {
           ))}
         </div>
       </div>
+
+      <button
+        onClick={async () => {
+          await logout();
+          router.push('/login');
+        }}
+        className="w-full flex items-center justify-center gap-2 py-3 bg-destructive/10 text-destructive rounded-lg font-medium hover:bg-destructive/20 transition-colors"
+      >
+        <LogOut className="w-5 h-5" />
+        Esci dall'applicazione
+      </button>
     </div>
   );
 }
