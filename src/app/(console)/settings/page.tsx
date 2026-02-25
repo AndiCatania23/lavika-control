@@ -4,7 +4,24 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { StatusPill } from '@/components/StatusPill';
-import { Users, Database, HardDrive, ToggleLeft, ToggleRight, LogOut } from 'lucide-react';
+import { Users, Database, HardDrive, LogOut, Settings } from 'lucide-react';
+
+function IphoneToggle({ enabled, onClick }: { enabled: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`relative w-14 h-8 rounded-full transition-colors duration-300 ${
+        enabled ? 'bg-primary' : 'bg-muted-foreground/30'
+      }`}
+    >
+      <div
+        className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow-md transition-transform duration-300 ${
+          enabled ? 'translate-x-7' : 'translate-x-1'
+        }`}
+      />
+    </button>
+  );
+}
 
 export default function SettingsPage() {
   const { logout } = useAuth();
@@ -85,7 +102,7 @@ export default function SettingsPage() {
 
       <div className="bg-card border border-border rounded-lg p-6">
         <div className="flex items-center gap-3 mb-6">
-          <ToggleLeft className="w-5 h-5 text-primary" />
+          <Settings className="w-5 h-5 text-primary" />
           <h3 className="font-semibold text-foreground">Funzionalità</h3>
         </div>
         <div className="space-y-4">
@@ -105,16 +122,10 @@ export default function SettingsPage() {
                   {key === 'notifications' && 'Abilita notifiche email'}
                 </div>
               </div>
-              <button
+              <IphoneToggle
+                enabled={value}
                 onClick={() => toggleFlag(key as keyof typeof featureFlags)}
-                className="text-primary transition-colors"
-              >
-                {value ? (
-                  <ToggleRight className="w-8 h-5" />
-                ) : (
-                  <ToggleLeft className="w-8 h-5 text-muted-foreground" />
-                )}
-              </button>
+              />
             </div>
           ))}
         </div>
