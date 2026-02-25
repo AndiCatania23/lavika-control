@@ -30,7 +30,7 @@ export default function UsersPage() {
   const columns = [
     {
       key: 'name',
-      header: 'User',
+      header: 'Utente',
       sortable: true,
       render: (user: User) => (
         <div className="flex items-center gap-3">
@@ -46,7 +46,7 @@ export default function UsersPage() {
     },
     {
       key: 'plan',
-      header: 'Plan',
+      header: 'Piano',
       sortable: true,
       render: (user: User) => (
         <span className={`text-xs px-2 py-1 rounded ${
@@ -60,40 +60,40 @@ export default function UsersPage() {
     },
     {
       key: 'status',
-      header: 'Status',
+      header: 'Stato',
       sortable: true,
       render: (user: User) => <StatusPill status={user.status} size="sm" />,
     },
     {
       key: 'sessionsCount',
-      header: 'Sessions',
+      header: 'Sessioni',
       sortable: true,
     },
     {
       key: 'revenue',
-      header: 'Revenue',
+      header: 'Ricavi',
       sortable: true,
-      render: (user: User) => user.revenue > 0 ? `$${user.revenue}` : '-',
+      render: (user: User) => user.revenue > 0 ? `€${user.revenue}` : '-',
     },
     {
       key: 'createdAt',
-      header: 'Joined',
+      header: 'Iscritto',
       sortable: true,
-      render: (user: User) => new Date(user.createdAt).toLocaleDateString('en-GB'),
+      render: (user: User) => new Date(user.createdAt).toLocaleDateString('it-IT'),
     },
   ];
 
   return (
     <div className="space-y-6">
       <SectionHeader 
-        title="Users" 
-        description="Manage and monitor your users"
+        title="Utenti" 
+        description="Gestisci e monitora gli utenti"
       />
 
       <DataTable
         data={users}
         columns={columns}
-        searchPlaceholder="Search users..."
+        searchPlaceholder="Cerca utenti..."
         searchKeys={['name', 'email']}
         onRowClick={(user) => router.push(`/users/${user.id}`)}
       />

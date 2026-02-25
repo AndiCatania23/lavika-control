@@ -10,16 +10,16 @@ export default function AnalyticsPage() {
   const [activeTab, setActiveTab] = useState<Tab>('users');
 
   const tabs: { id: Tab; label: string }[] = [
-    { id: 'users', label: 'Users' },
-    { id: 'revenue', label: 'Revenue Forecast' },
-    { id: 'content', label: 'Content' },
+    { id: 'users', label: 'Utenti' },
+    { id: 'revenue', label: 'Ricavi' },
+    { id: 'content', label: 'Contenuti' },
   ];
 
   return (
     <div className="space-y-6">
       <SectionHeader 
-        title="Analytics" 
-        description="Platform performance insights and forecasts"
+        title="Analisi" 
+        description="Statistiche e previsioni della piattaforma"
       />
 
       <div className="border-b border-border">
@@ -46,34 +46,34 @@ export default function AnalyticsPage() {
             <div className="bg-card border border-border rounded-lg p-5">
               <div className="flex items-center gap-3 mb-2">
                 <Users className="w-5 h-5 text-primary" />
-                <span className="text-sm text-muted-foreground">Total Users</span>
+                <span className="text-sm text-muted-foreground">Utenti Totali</span>
               </div>
               <div className="text-2xl font-semibold text-foreground">12,847</div>
-              <div className="text-xs text-green-500 mt-1">+12.5% from last month</div>
+              <div className="text-xs text-green-500 mt-1">+12.5% dal mese scorso</div>
             </div>
             <div className="bg-card border border-border rounded-lg p-5">
               <div className="flex items-center gap-3 mb-2">
                 <BarChart3 className="w-5 h-5 text-primary" />
-                <span className="text-sm text-muted-foreground">Active Now</span>
+                <span className="textsm text-muted-foreground">Attivi Ora</span>
               </div>
               <div className="text-2xl font-semibold text-foreground">4,892</div>
-              <div className="text-xs text-muted-foreground mt-1">38% of MAU</div>
+              <div className="text-xs text-muted-foreground mt-1">38% del MAU</div>
             </div>
             <div className="bg-card border border-border rounded-lg p-5">
               <div className="flex items-center gap-3 mb-2">
                 <Users className="w-5 h-5 text-primary" />
-                <span className="text-sm text-muted-foreground">New This Week</span>
+                <span className="text-sm text-muted-foreground">Nuovi Questa Settimana</span>
               </div>
               <div className="text-2xl font-semibold text-foreground">342</div>
-              <div className="text-xs text-green-500 mt-1">+8.2% vs last week</div>
+              <div className="text-xs text-green-500 mt-1">+8.2% vs settimana scorsa</div>
             </div>
             <div className="bg-card border border-border rounded-lg p-5">
               <div className="flex items-center gap-3 mb-2">
                 <Users className="w-5 h-5 text-primary" />
-                <span className="text-sm text-muted-foreground">Churn Rate</span>
+                <span className="text-sm text-muted-foreground">Tasso Abbandono</span>
               </div>
               <div className="text-2xl font-semibold text-foreground">2.3%</div>
-              <div className="text-xs text-green-500 mt-1">-0.5% vs last month</div>
+              <div className="text-xs text-green-500 mt-1">-0.5% vs mese scorso</div>
             </div>
           </>
         )}
@@ -85,32 +85,32 @@ export default function AnalyticsPage() {
                 <DollarSign className="w-5 h-5 text-primary" />
                 <span className="text-sm text-muted-foreground">MRR</span>
               </div>
-              <div className="text-2xl font-semibold text-foreground">$45,230</div>
-              <div className="text-xs text-green-500 mt-1">+15.2% from last month</div>
+              <div className="text-2xl font-semibold text-foreground">€45,230</div>
+              <div className="text-xs text-green-500 mt-1">+15.2% dal mese scorso</div>
             </div>
             <div className="bg-card border border-border rounded-lg p-5">
               <div className="flex items-center gap-3 mb-2">
                 <DollarSign className="w-5 h-5 text-primary" />
                 <span className="text-sm text-muted-foreground">ARR</span>
               </div>
-              <div className="text-2xl font-semibold text-foreground">$542,760</div>
-              <div className="text-xs text-green-500 mt-1">Projected</div>
+              <div className="text-2xl font-semibold text-foreground">€542,760</div>
+              <div className="text-xs text-green-500 mt-1">Proiettato</div>
             </div>
             <div className="bg-card border border-border rounded-lg p-5">
               <div className="flex items-center gap-3 mb-2">
                 <DollarSign className="w-5 h-5 text-primary" />
                 <span className="text-sm text-muted-foreground">LTV</span>
               </div>
-              <div className="text-2xl font-semibold text-foreground">$1,245</div>
-              <div className="text-xs text-muted-foreground mt-1">Average</div>
+              <div className="text-2xl font-semibold text-foreground">€1,245</div>
+              <div className="text-xs text-muted-foreground mt-1">Media</div>
             </div>
             <div className="bg-card border border-border rounded-lg p-5">
               <div className="flex items-center gap-3 mb-2">
                 <DollarSign className="w-5 h-5 text-primary" />
                 <span className="text-sm text-muted-foreground">ARPU</span>
               </div>
-              <div className="text-2xl font-semibold text-foreground">$89</div>
-              <div className="text-xs text-green-500 mt-1">+5.1% vs last month</div>
+              <div className="text-2xl font-semibold text-foreground">€89</div>
+              <div className="text-xs text-green-500 mt-1">+5.1% vs mese scorso</div>
             </div>
           </>
         )}
@@ -120,34 +120,34 @@ export default function AnalyticsPage() {
             <div className="bg-card border border-border rounded-lg p-5">
               <div className="flex items-center gap-3 mb-2">
                 <FileText className="w-5 h-5 text-primary" />
-                <span className="text-sm text-muted-foreground">Total Items</span>
+                <span className="text-sm text-muted-foreground">Elementi Totali</span>
               </div>
               <div className="text-2xl font-semibold text-foreground">45,230</div>
-              <div className="text-xs text-green-500 mt-1">+1,234 this week</div>
+              <div className="text-xs text-green-500 mt-1">+1,234 questa settimana</div>
             </div>
             <div className="bg-card border border-border rounded-lg p-5">
               <div className="flex items-center gap-3 mb-2">
                 <FileText className="w-5 h-5 text-primary" />
-                <span className="text-sm text-muted-foreground">Active</span>
+                <span className="text-sm text-muted-foreground">Attivi</span>
               </div>
               <div className="text-2xl font-semibold text-foreground">38,456</div>
-              <div className="text-xs text-muted-foreground mt-1">85% of total</div>
+              <div className="text-xs text-muted-foreground mt-1">85% del totale</div>
             </div>
             <div className="bg-card border border-border rounded-lg p-5">
               <div className="flex items-center gap-3 mb-2">
                 <FileText className="w-5 h-5 text-primary" />
-                <span className="text-sm text-muted-foreground">Pending</span>
+                <span className="text-sm text-muted-foreground">In Attesa</span>
               </div>
               <div className="text-2xl font-semibold text-foreground">5,234</div>
-              <div className="text-xs text-muted-foreground mt-1">Needs review</div>
+              <div className="text-xs text-muted-foreground mt-1">Da revisionare</div>
             </div>
             <div className="bg-card border border-border rounded-lg p-5">
               <div className="flex items-center gap-3 mb-2">
                 <FileText className="w-5 h-5 text-primary" />
-                <span className="text-sm text-muted-foreground">Errors</span>
+                <span className="text-sm text-muted-foreground">Errori</span>
               </div>
               <div className="text-2xl font-semibold text-foreground">1,540</div>
-              <div className="text-xs text-red-500 mt-1">Needs attention</div>
+              <div className="text-xs text-red-500 mt-1">Richiede attenzione</div>
             </div>
           </>
         )}
@@ -155,9 +155,9 @@ export default function AnalyticsPage() {
 
       <div className="bg-card border border-border rounded-lg p-6">
         <h3 className="font-semibold text-foreground mb-4">
-          {activeTab === 'users' && 'User Growth'}
-          {activeTab === 'revenue' && 'Revenue Trend'}
-          {activeTab === 'content' && 'Content Distribution'}
+          {activeTab === 'users' && 'Crescita Utenti'}
+          {activeTab === 'revenue' && 'Trend Ricavi'}
+          {activeTab === 'content' && 'Distribuzione Contenuti'}
         </h3>
         <div className="h-64 flex items-end gap-2">
           {[45, 62, 55, 78, 65, 82, 70, 88, 75, 92, 85, 95].map((height, i) => (

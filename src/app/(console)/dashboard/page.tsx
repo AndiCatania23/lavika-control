@@ -32,7 +32,7 @@ export default function DashboardPage() {
     <div className="space-y-8">
       <SectionHeader 
         title="Dashboard" 
-        description="Overview of your platform performance"
+        description="Panoramica delle performance della piattaforma"
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
@@ -44,7 +44,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-card border border-border rounded-lg p-5">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-foreground">System Status</h3>
+            <h3 className="font-semibold text-foreground">Stato Sistema</h3>
           </div>
           <div className="space-y-3">
             {systemStatus.map(service => (
@@ -61,28 +61,28 @@ export default function DashboardPage() {
 
         <div className="bg-card border border-border rounded-lg p-5">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-foreground">Quick Actions</h3>
+            <h3 className="font-semibold text-foreground">Azioni Rapide</h3>
           </div>
           <div className="space-y-2">
             <Link
               href="/jobs"
               className="flex items-center justify-between p-3 rounded-lg border border-border hover:border-primary/30 transition-colors group"
             >
-              <span className="text-sm text-foreground">View Jobs</span>
+              <span className="text-sm text-foreground">Visualizza Job</span>
               <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
             </Link>
             <Link
               href="/users"
               className="flex items-center justify-between p-3 rounded-lg border border-border hover:border-primary/30 transition-colors group"
             >
-              <span className="text-sm text-foreground">Manage Users</span>
+              <span className="text-sm text-foreground">Gestione Utenti</span>
               <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
             </Link>
             <Link
               href="/errors"
               className="flex items-center justify-between p-3 rounded-lg border border-border hover:border-primary/30 transition-colors group"
             >
-              <span className="text-sm text-foreground">View Errors</span>
+              <span className="text-sm text-foreground">Visualizza Errori</span>
               <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
             </Link>
           </div>

@@ -39,7 +39,7 @@ export default function SessionsPage() {
     },
     {
       key: 'device',
-      header: 'Device',
+      header: 'Dispositivo',
       sortable: true,
     },
     {
@@ -49,23 +49,23 @@ export default function SessionsPage() {
     },
     {
       key: 'ip',
-      header: 'IP Address',
+      header: 'Indirizzo IP',
       sortable: true,
     },
     {
       key: 'location',
-      header: 'Location',
+      header: 'Posizione',
       sortable: true,
     },
     {
       key: 'createdAt',
-      header: 'Started',
+      header: 'Iniziato',
       sortable: true,
-      render: (session: Session) => new Date(session.createdAt).toLocaleString('en-GB'),
+      render: (session: Session) => new Date(session.createdAt).toLocaleString('it-IT'),
     },
     {
       key: 'duration',
-      header: 'Duration',
+      header: 'Durata',
       sortable: true,
       render: (session: Session) => {
         const mins = Math.floor(session.duration / 60);
@@ -75,7 +75,7 @@ export default function SessionsPage() {
     },
     {
       key: 'status',
-      header: 'Status',
+      header: 'Stato',
       sortable: true,
       render: (session: Session) => <StatusPill status={session.status} size="sm" />,
     },
@@ -84,14 +84,14 @@ export default function SessionsPage() {
   return (
     <div className="space-y-6">
       <SectionHeader 
-        title="Sessions" 
-        description="Active and recent user sessions"
+        title="Sessioni" 
+        description="Sessioni utente attive e recenti"
       />
 
       <DataTable
         data={sessions}
         columns={columns}
-        searchPlaceholder="Search sessions..."
+        searchPlaceholder="Cerca sessioni..."
         searchKeys={['userName', 'userEmail', 'ip', 'location']}
       />
     </div>

@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { SectionHeader } from '@/components/SectionHeader';
 import { StatusPill } from '@/components/StatusPill';
 import { Users, Database, HardDrive, ToggleLeft, ToggleRight } from 'lucide-react';
 
@@ -14,14 +13,14 @@ export default function SettingsPage() {
   });
 
   const adminUsers = [
-    { id: 'usr_001', name: 'Mario Rossi', email: 'mario.rossi@example.com', role: 'admin' },
-    { id: 'usr_002', name: 'Giulia Bianchi', email: 'giulia.bianchi@example.com', role: 'viewer' },
+    { id: 'usr_001', name: 'Andrea Failla', email: 'andrea.failla@icloud.com', role: 'admin' },
+    { id: 'usr_002', name: 'Mario Rossi', email: 'mario.rossi@example.com', role: 'viewer' },
   ];
 
   const integrations = [
-    { name: 'Supabase', status: 'active' as const, details: 'PostgreSQL database' },
-    { name: 'R2 Storage', status: 'active' as const, details: 'S3-compatible object storage' },
-    { name: 'VPS Runner', status: 'active' as const, details: 'EC2 instance for job processing' },
+    { name: 'Supabase', status: 'active' as const, details: 'Database PostgreSQL' },
+    { name: 'R2 Storage', status: 'active' as const, details: 'Object storage S3-compatibile' },
+    { name: 'VPS Runner', status: 'active' as const, details: 'Istanza EC2 per job processing' },
   ];
 
   const toggleFlag = (flag: keyof typeof featureFlags) => {
@@ -30,15 +29,15 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-8">
-      <SectionHeader 
-        title="Settings" 
-        description="Manage your application settings"
-      />
+      <div className="space-y-2">
+        <h1 className="text-2xl font-bold text-foreground">Impostazioni</h1>
+        <p className="text-muted-foreground">Gestisci le impostazioni dell'applicazione</p>
+      </div>
 
       <div className="bg-card border border-border rounded-lg p-6">
         <div className="flex items-center gap-3 mb-6">
           <Users className="w-5 h-5 text-primary" />
-          <h3 className="font-semibold text-foreground">Roles & Permissions</h3>
+          <h3 className="font-semibold text-foreground">Ruoli e Permessi</h3>
         </div>
         <div className="space-y-3">
           {adminUsers.map(user => (
@@ -60,7 +59,7 @@ export default function SettingsPage() {
       <div className="bg-card border border-border rounded-lg p-6">
         <div className="flex items-center gap-3 mb-6">
           <Database className="w-5 h-5 text-primary" />
-          <h3 className="font-semibold text-foreground">Integrations</h3>
+          <h3 className="font-semibold text-foreground">Integrazioni</h3>
         </div>
         <div className="space-y-4">
           {integrations.map(integration => (
@@ -83,23 +82,23 @@ export default function SettingsPage() {
       <div className="bg-card border border-border rounded-lg p-6">
         <div className="flex items-center gap-3 mb-6">
           <ToggleLeft className="w-5 h-5 text-primary" />
-          <h3 className="font-semibold text-foreground">Feature Flags</h3>
+          <h3 className="font-semibold text-foreground">Funzionalità</h3>
         </div>
         <div className="space-y-4">
           {Object.entries(featureFlags).map(([key, value]) => (
             <div key={key} className="flex items-center justify-between py-3 border-b border-border last:border-0">
               <div>
                 <div className="font-medium text-foreground">
-                  {key === 'darkMode' && 'Dark Mode'}
-                  {key === 'betaFeatures' && 'Beta Features'}
-                  {key === 'analytics' && 'Analytics'}
-                  {key === 'notifications' && 'Notifications'}
+                  {key === 'darkMode' && 'Modalità Scura'}
+                  {key === 'betaFeatures' && 'Funzionalità Beta'}
+                  {key === 'analytics' && 'Analisi'}
+                  {key === 'notifications' && 'Notifiche'}
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  {key === 'darkMode' && 'Enable dark theme for the UI'}
-                  {key === 'betaFeatures' && 'Enable experimental features'}
-                  {key === 'analytics' && 'Enable usage analytics'}
-                  {key === 'notifications' && 'Enable email notifications'}
+                  {key === 'darkMode' && 'Abilita il tema scuro per l interfaccia'}
+                  {key === 'betaFeatures' && 'Abilita funzionalità sperimentali'}
+                  {key === 'analytics' && 'Abilita analisi utilizzo'}
+                  {key === 'notifications' && 'Abilita notifiche email'}
                 </div>
               </div>
               <button

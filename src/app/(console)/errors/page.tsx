@@ -32,27 +32,27 @@ export default function ErrorsPage() {
   const columns = [
     {
       key: 'severity',
-      header: 'Severity',
+      header: 'Severità',
       sortable: true,
       render: (error: ErrorLog) => <StatusPill status={error.severity} size="sm" />,
     },
     {
       key: 'source',
-      header: 'Source',
+      header: 'Sorgente',
       sortable: true,
     },
     {
       key: 'message',
-      header: 'Message',
+      header: 'Messaggio',
       render: (error: ErrorLog) => (
         <div className="max-w-md truncate text-foreground">{error.message}</div>
       ),
     },
     {
       key: 'timestamp',
-      header: 'Time',
+      header: 'Ora',
       sortable: true,
-      render: (error: ErrorLog) => new Date(error.timestamp).toLocaleString('en-GB'),
+      render: (error: ErrorLog) => new Date(error.timestamp).toLocaleString('it-IT'),
     },
     {
       key: 'jobRunId',
@@ -68,28 +68,28 @@ export default function ErrorsPage() {
   return (
     <div className="space-y-6">
       <SectionHeader 
-        title="Errors" 
-        description="System errors and warnings"
+        title="Errori" 
+        description="Errori e avvisi di sistema"
       />
 
       <div className="flex items-center gap-3">
-        <label className="text-sm text-muted-foreground">Filter by severity:</label>
+        <label className="text-sm text-muted-foreground">Filtra per severità:</label>
         <select
           value={severityFilter}
           onChange={e => setSeverityFilter(e.target.value)}
           className="px-3 py-2 bg-card border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
         >
-          <option value="">All</option>
-          <option value="critical">Critical</option>
-          <option value="error">Error</option>
-          <option value="warning">Warning</option>
+          <option value="">Tutti</option>
+          <option value="critical">Critico</option>
+          <option value="error">Errore</option>
+          <option value="warning">Avviso</option>
         </select>
       </div>
 
       <DataTable
         data={errors}
         columns={columns}
-        searchPlaceholder="Search errors..."
+        searchPlaceholder="Cerca errori..."
         searchKeys={['message', 'source']}
         onRowClick={(error) => router.push(`/errors/${error.id}`)}
       />

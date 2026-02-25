@@ -56,14 +56,14 @@ export default function JobsPage() {
   return (
     <div className="space-y-6">
       <SectionHeader 
-        title="Jobs" 
-        description="Manage and run background jobs"
+        title="Job" 
+        description="Gestisci ed esegui job in background"
         actions={
           <Link
             href="/jobs/runs"
             className="flex items-center gap-2 text-sm text-primary hover:underline"
           >
-            View all runs
+            Visualizza tutte le esecuzioni
             <ArrowRight className="w-4 h-4" />
           </Link>
         }

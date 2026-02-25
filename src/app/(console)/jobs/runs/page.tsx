@@ -44,45 +44,45 @@ export default function JobRunsPage() {
     },
     {
       key: 'status',
-      header: 'Status',
+      header: 'Stato',
       sortable: true,
       render: (run: JobRun) => <StatusPill status={run.status} size="sm" />,
     },
     {
       key: 'startedAt',
-      header: 'Started',
+      header: 'Iniziato',
       sortable: true,
-      render: (run: JobRun) => new Date(run.startedAt).toLocaleString('en-GB'),
+      render: (run: JobRun) => new Date(run.startedAt).toLocaleString('it-IT'),
     },
     {
       key: 'duration',
-      header: 'Duration',
+      header: 'Durata',
       sortable: true,
       render: (run: JobRun) => run.duration ? `${run.duration}s` : '-',
     },
     {
       key: 'triggeredBy',
-      header: 'Triggered By',
+      header: 'Avviato Da',
       sortable: true,
     },
     {
       key: 'scannedCount',
-      header: 'Scanned',
+      header: 'Scansionati',
       sortable: true,
     },
     {
       key: 'insertedCount',
-      header: 'Inserted',
+      header: 'Inseriti',
       sortable: true,
     },
     {
       key: 'updatedCount',
-      header: 'Updated',
+      header: 'Aggiornati',
       sortable: true,
     },
     {
       key: 'errorCount',
-      header: 'Errors',
+      header: 'Errori',
       sortable: true,
       render: (run: JobRun) => (
         <span className={run.errorCount > 0 ? 'text-red-500' : 'text-muted-foreground'}>
@@ -95,22 +95,22 @@ export default function JobRunsPage() {
   return (
     <div className="space-y-6">
       <SectionHeader 
-        title="Job Runs" 
-        description="History of all job executions"
+        title="Esecuzioni Job" 
+        description="Storico di tutte le esecuzioni dei job"
       />
 
       <div className="flex items-center gap-3">
-        <label className="text-sm text-muted-foreground">Filter by status:</label>
+        <label className="text-sm text-muted-foreground">Filtra per stato:</label>
         <select
           value={statusFilter}
           onChange={e => setStatusFilter(e.target.value)}
           className="px-3 py-2 bg-card border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
         >
-          <option value="">All</option>
-          <option value="running">Running</option>
-          <option value="success">Success</option>
-          <option value="failed">Failed</option>
-          <option value="cancelled">Cancelled</option>
+          <option value="">Tutti</option>
+          <option value="running">In corso</option>
+          <option value="success">Completato</option>
+          <option value="failed">Fallito</option>
+          <option value="cancelled">Cancellato</option>
         </select>
       </div>
 

@@ -23,7 +23,7 @@ export default function LoginPage() {
     if (success) {
       router.push('/dashboard');
     } else {
-      setError('Invalid credentials');
+      setError('Credenziali non valide');
     }
     setIsLoading(false);
   };
@@ -31,8 +31,8 @@ export default function LoginPage() {
   return (
     <div className="w-full max-w-md">
       <div className="text-center mb-8">
-        <h1 className="text-2xl font-bold text-foreground mb-2">Lavika Control</h1>
-        <p className="text-muted-foreground">Sign in to your account</p>
+        <h1 className="text-2xl font-bold text-foreground mb-2">LΛVIKΛ CONTROL</h1>
+        <p className="text-muted-foreground">Accedi al tuo account</p>
       </div>
 
       <div className="bg-card border border-border rounded-lg p-8">
@@ -53,7 +53,7 @@ export default function LoginPage() {
                 type="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                placeholder="admin@lavika.io"
+                placeholder="andrea.failla@icloud.com"
                 required
                 className="w-full pl-10 pr-4 py-3 bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
               />
@@ -70,7 +70,7 @@ export default function LoginPage() {
                 type="password"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
-                placeholder="Enter your password"
+                placeholder="Inserisci la password"
                 required
                 className="w-full pl-10 pr-4 py-3 bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
               />
@@ -87,16 +87,12 @@ export default function LoginPage() {
             ) : (
               <>
                 <LogIn className="w-5 h-5" />
-                Sign in
+                Accedi
               </>
             )}
           </button>
         </form>
       </div>
-
-      <p className="text-center text-sm text-muted-foreground mt-6">
-        Demo: use any email and password
-      </p>
     </div>
   );
 }

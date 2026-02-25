@@ -1,10 +1,10 @@
 {
-  "name": "Lavika Control",
-  "short_name": "Lavika",
-  "description": "Premium operational console",
+  "name": "LΛVIKΛ CONTROL",
+  "short_name": "LΛVIKΛ",
+  "description": "Console operativa premium",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#050505",
+  "background_color": "#0a0a0a",
   "theme_color": "#d4a853",
   "icons": [
     {

@@ -19,12 +19,12 @@ import {
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/analytics', label: 'Analytics', icon: BarChart3 },
-  { href: '/users', label: 'Users', icon: Users },
-  { href: '/sessions', label: 'Sessions', icon: Activity },
-  { href: '/jobs', label: 'Jobs', icon: Workflow },
-  { href: '/errors', label: 'Errors', icon: AlertTriangle },
-  { href: '/settings', label: 'Settings', icon: Settings },
+  { href: '/analytics', label: 'Analisi', icon: BarChart3 },
+  { href: '/users', label: 'Utenti', icon: Users },
+  { href: '/sessions', label: 'Sessioni', icon: Activity },
+  { href: '/jobs', label: 'Job', icon: Workflow },
+  { href: '/errors', label: 'Errori', icon: AlertTriangle },
+  { href: '/settings', label: 'Impostazioni', icon: Settings },
 ];
 
 export function Sidebar() {
@@ -89,12 +89,12 @@ export function Sidebar() {
         <div className="p-4 border-t border-border">
           <div className={`flex items-center gap-3 ${collapsed ? 'justify-center' : ''}`}>
             <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary text-sm font-medium shrink-0">
-              A
+              AF
             </div>
             {!collapsed && (
               <div className="min-w-0">
-                <p className="text-sm font-medium text-foreground truncate">Admin User</p>
-                <p className="text-xs text-muted-foreground truncate">admin@lavika.io</p>
+                <p className="text-sm font-medium text-foreground truncate">Andrea Failla</p>
+                <p className="text-xs text-muted-foreground truncate">andrea.failla@icloud.com</p>
               </div>
             )}
           </div>

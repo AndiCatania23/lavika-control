@@ -22,17 +22,17 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "Lavika Control",
-  description: "Premium operational console",
+  title: "LΛVIKΛ CONTROL",
+  description: "Console operativa premium",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Lavika",
+    title: "LΛVIKΛ CONTROL",
   },
   icons: {
-    icon: "/icon-192.svg",
-    apple: "/icon-192.svg",
+    icon: "/icon-192.png",
+    apple: "/icon-192.png",
   },
 };
 
@@ -42,7 +42,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="it">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
