@@ -4,8 +4,8 @@
   "description": "Console operativa premium",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0a0a0a",
-  "theme_color": "#d4a853",
+  "background_color": "#960018",
+  "theme_color": "#960018",
   "icons": [
     {
       "src": "/icon-192.png",
