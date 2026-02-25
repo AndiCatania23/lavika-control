@@ -12,7 +12,7 @@ export default function ConsoleLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, isAdmin } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -31,6 +31,17 @@ export default function ConsoleLayout({
 
   if (!user) {
     return null;
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center p-8">
+          <h1 className="text-2xl font-bold text-foreground mb-2">Accesso negato</h1>
+          <p className="text-muted-foreground">Non hai i permessi per accedere a questa area.</p>
+        </div>
+      </div>
+    );
   }
 
   return (
