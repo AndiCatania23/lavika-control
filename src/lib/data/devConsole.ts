@@ -35,14 +35,24 @@ export interface DevFeedItem {
 }
 
 export async function getDevCards(): Promise<DevCard[]> {
+  const { data: s } = await supabase.auth.getSession();
+  console.log('[DBG session]', s?.session?.user?.id ?? null, s?.session ? 'HAS_SESSION' : 'NO_SESSION');
+
   const { data, error } = await supabase
-    .from('public.dev_cards')
+    .from('dev_cards')
     .select('*')
     .eq('is_enabled', true)
     .order('sort_order');
 
+  console.log('[DBG dev_cards]', { len: data?.length ?? 0, error });
+
   if (error) {
-    console.error('Error fetching dev_cards:', error);
+    console.error('[DBG dev_cards error]', {
+      code: (error as any).code,
+      message: error.message,
+      details: (error as any).details,
+      hint: (error as any).hint,
+    });
     return [];
   }
 
@@ -53,7 +63,7 @@ export async function getLatestCardValues(cardKeys: string[]): Promise<DevCardVa
   if (cardKeys.length === 0) return [];
 
   const { data, error } = await supabase
-    .from('public.dev_card_values')
+    .from('dev_card_values')
     .select('*')
     .in('card_key', cardKeys)
     .order('computed_at', { ascending: false });
@@ -76,7 +86,7 @@ export async function getLatestCardValues(cardKeys: string[]): Promise<DevCardVa
 
 export async function getDevFeed(feedKey: string, limit: number = 20): Promise<DevFeedItem[]> {
   const { data, error } = await supabase
-    .from('public.dev_feed_items')
+    .from('dev_feed_items')
     .select('*')
     .eq('feed_key', feedKey)
     .order('created_at', { ascending: false })

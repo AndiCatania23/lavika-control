@@ -26,13 +26,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAdmin, setIsAdmin] = useState(false);
   const router = useRouter();
 
-  const checkAdminStatus = async (userId: string, userEmail: string) => {
+  const checkAdminStatus = async (userId: string, userEmail: string): Promise<boolean> => {
     try {
+      console.log('[admin-check] checking user:', userId);
+      
       const { data, error } = await supabase
-        .from('public.dev_admins')
+        .from('dev_admins')
         .select('*')
         .eq('user_id', userId)
-        .single();
+        .maybeSingle();
+
+      console.log('[admin-check] result:', { data, error });
 
       if (data) {
         setIsAdmin(true);
@@ -41,12 +45,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           email: userEmail,
           name: data.name || userEmail.split('@')[0],
         });
+        return true;
       } else {
         setIsAdmin(false);
+        return false;
       }
     } catch (err) {
       console.error('Error checking admin status:', err);
       setIsAdmin(false);
+      return false;
     }
   };
 
@@ -91,18 +98,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
       if (error) {
+        setIsLoading(false);
         return { error: error.message };
       }
 
       if (data.user) {
-        await checkAdminStatus(data.user.id, data.user.email || '');
+        const isUserAdmin = await checkAdminStatus(data.user.id, data.user.email || '');
+        
+        if (!isUserAdmin) {
+          await supabase.auth.signOut();
+          setIsLoading(false);
+          return { error: 'Accesso negato: utente non autorizzato' };
+        }
       }
 
+      setIsLoading(false);
       return { error: null };
     } catch (err) {
-      return { error: 'Errore durante il login' };
-    } finally {
       setIsLoading(false);
+      return { error: 'Errore durante il login' };
     }
   };
 
