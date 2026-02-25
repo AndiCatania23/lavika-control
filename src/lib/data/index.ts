@@ -4,8 +4,10 @@ import { sessions, Session } from '@/mocks/sessions';
 import { jobs, Job } from '@/mocks/jobs';
 import { getJobRuns, getJobRunById, createJobRun, completeJobRun, JobRun } from '@/mocks/jobRuns';
 import { getErrors, getErrorById, ErrorLog } from '@/mocks/errors';
+import { getDevCards, getLatestCardValues, getDevFeed, DevCard, DevCardValue, DevFeedItem } from './devConsole';
 
-export type { Kpi, User, Session, Job, JobRun, ErrorLog };
+export type { Kpi, User, Session, Job, JobRun, ErrorLog, DevCard, DevCardValue, DevFeedItem };
+export { getDevCards, getLatestCardValues, getDevFeed };
 
 export async function getDashboardKpis(): Promise<{ kpis: Kpi[]; systemStatus: typeof systemStatus }> {
   await new Promise(resolve => setTimeout(resolve, 100));
