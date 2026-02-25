@@ -51,7 +51,7 @@ export function Sidebar() {
       `}>
         <div className="flex items-center justify-between h-16 px-4 border-b border-border">
           {!collapsed && (
-            <span className="text-lg font-semibold text-foreground">Lavika</span>
+            <span className="text-lg font-semibold text-foreground">LΛVIKΛ</span>
           )}
           <button
             onClick={() => setCollapsed(!collapsed)}

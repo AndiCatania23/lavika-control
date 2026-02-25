@@ -8,7 +8,7 @@ interface TopbarProps {
   title?: string;
 }
 
-export function Topbar({ title = 'Lavika' }: TopbarProps) {
+export function Topbar({ title = 'LΛVIKΛ' }: TopbarProps) {
   const [searchOpen, setSearchOpen] = useState(false);
 
   return (
