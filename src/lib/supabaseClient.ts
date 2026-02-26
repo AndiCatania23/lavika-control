@@ -5,8 +5,10 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholde
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    persistSession: true,
+    persistSession: typeof window !== 'undefined',
     autoRefreshToken: true,
     detectSessionInUrl: true,
+    flowType: 'pkce',
+    debug: false,
   },
 });

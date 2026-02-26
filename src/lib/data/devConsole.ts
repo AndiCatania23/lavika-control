@@ -35,24 +35,14 @@ export interface DevFeedItem {
 }
 
 export async function getDevCards(): Promise<DevCard[]> {
-  const { data: s } = await supabase.auth.getSession();
-  console.log('[DBG session]', s?.session?.user?.id ?? null, s?.session ? 'HAS_SESSION' : 'NO_SESSION');
-
   const { data, error } = await supabase
     .from('dev_cards')
     .select('*')
     .eq('is_enabled', true)
     .order('sort_order');
 
-  console.log('[DBG dev_cards]', { len: data?.length ?? 0, error });
-
   if (error) {
-    console.error('[DBG dev_cards error]', {
-      code: (error as any).code,
-      message: error.message,
-      details: (error as any).details,
-      hint: (error as any).hint,
-    });
+    console.error('Error fetching dev_cards:', error);
     return [];
   }
 

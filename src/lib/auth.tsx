@@ -28,15 +28,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const checkAdminStatus = async (userId: string, userEmail: string): Promise<boolean> => {
     try {
-      console.log('[admin-check] checking user:', userId);
-      
       const { data, error } = await supabase
         .from('dev_admins')
         .select('*')
         .eq('user_id', userId)
         .maybeSingle();
-
-      console.log('[admin-check] result:', { data, error });
 
       if (data) {
         setIsAdmin(true);
