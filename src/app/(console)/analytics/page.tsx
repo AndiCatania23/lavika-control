@@ -43,6 +43,14 @@ interface R2Summary {
   error?: string;
 }
 
+interface ComparisonMetric {
+  metricKey: string;
+  value: number | null;
+  deltaDay: number | null;
+  deltaWeek: number | null;
+  deltaMonth: number | null;
+}
+
 const emptyR2Summary: R2Summary = {
   connected: false,
   totals: {
@@ -99,11 +107,69 @@ function CompactCard({
   );
 }
 
+function ComparisonCard({
+  title,
+  description,
+  deltaDay,
+  deltaWeek,
+  deltaMonth,
+  isLoading,
+}: {
+  title: string;
+  description: string;
+  deltaDay: number | null;
+  deltaWeek: number | null;
+  deltaMonth: number | null;
+  isLoading?: boolean;
+}) {
+  const formatDelta = (value: number | null) => {
+    if (isLoading) return '...';
+    if (value === null || Number.isNaN(value)) return '--';
+    const percentage = value * 100;
+    const sign = percentage > 0 ? '+' : '';
+    return `${sign}${percentage.toFixed(1)}%`;
+  };
+
+  const deltaTone = (value: number | null) => {
+    if (value === null || Number.isNaN(value) || isLoading) return 'text-foreground';
+    if (value > 0) return 'text-emerald-500';
+    if (value < 0) return 'text-red-500';
+    return 'text-muted-foreground';
+  };
+
+  return (
+    <div className="rounded-lg border border-border bg-card p-3.5">
+      <div className="mb-2.5">
+        <p className="text-sm font-semibold text-foreground">{title}</p>
+        <p className="text-[11px] text-muted-foreground">{description}</p>
+      </div>
+
+      <div className="space-y-1.5 text-xs">
+        <div className="flex items-center justify-between rounded-md border border-border/80 px-2 py-1.5">
+          <span className="text-muted-foreground">vs giorno precedente</span>
+          <span className={`font-medium ${deltaTone(deltaDay)}`}>{formatDelta(deltaDay)}</span>
+        </div>
+        <div className="flex items-center justify-between rounded-md border border-border/80 px-2 py-1.5">
+          <span className="text-muted-foreground">vs settimana precedente</span>
+          <span className={`font-medium ${deltaTone(deltaWeek)}`}>{formatDelta(deltaWeek)}</span>
+        </div>
+        <div className="flex items-center justify-between rounded-md border border-border/80 px-2 py-1.5">
+          <span className="text-muted-foreground">vs mese precedente</span>
+          <span className={`font-medium ${deltaTone(deltaMonth)}`}>{formatDelta(deltaMonth)}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AnalyticsPage() {
   const [activeTab, setActiveTab] = useState<Tab>('users');
   const [overviewKpis, setOverviewKpis] = useState<OverviewKpi[]>([]);
   const [r2Summary, setR2Summary] = useState<R2Summary>(emptyR2Summary);
   const [r2Loading, setR2Loading] = useState(false);
+  const [comparisonMetrics, setComparisonMetrics] = useState<ComparisonMetric[]>([]);
+  const [comparisonSnapshotDate, setComparisonSnapshotDate] = useState<string | null>(null);
+  const [comparisonLoading, setComparisonLoading] = useState(false);
 
   const getKpi = (key: string) => overviewKpis.find(item => item.key === key)?.value ?? 0;
 
@@ -141,8 +207,34 @@ export default function AnalyticsPage() {
     }
   };
 
+  const loadComparisons = async () => {
+    setComparisonLoading(true);
+    try {
+      const response = await fetch('/api/dev/analytics/comparisons', { cache: 'no-store' });
+      if (!response.ok) {
+        setComparisonMetrics([]);
+        setComparisonSnapshotDate(null);
+        return;
+      }
+
+      const payload = await response.json() as {
+        snapshotDate: string | null;
+        metrics: ComparisonMetric[];
+      };
+
+      setComparisonMetrics(Array.isArray(payload.metrics) ? payload.metrics : []);
+      setComparisonSnapshotDate(payload.snapshotDate ?? null);
+    } catch {
+      setComparisonMetrics([]);
+      setComparisonSnapshotDate(null);
+    } finally {
+      setComparisonLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadOverview();
+    loadComparisons();
   }, []);
 
   useEffect(() => {
@@ -266,6 +358,44 @@ export default function AnalyticsPage() {
       ];
   })();
 
+  const comparisonCards = (() => {
+    if (activeTab === 'users') {
+      return [
+        {
+          metricKey: 'users_active_wau',
+          title: 'Trend utenti attivi',
+          description: 'Confronto DAU / WAU / MAU nei periodi precedenti',
+        },
+        {
+          metricKey: 'users_new_7d',
+          title: 'Nuovi utenti',
+          description: 'Variazione acquisizione rispetto a giorno/settimana/mese',
+        },
+        {
+          metricKey: 'users_reactivation_rate',
+          title: 'Tasso di riattivazione',
+          description: 'Quota utenti rientrati dopo inattivita',
+        },
+        {
+          metricKey: 'users_stickiness_dau_mau',
+          title: 'Stickiness (DAU/MAU)',
+          description: 'Misura continuita utilizzo e fidelizzazione',
+        },
+      ];
+    }
+
+    if (activeTab === 'revenue') {
+      return [
+        { metricKey: null, title: 'Revenue totale', description: 'Andamento economico rispetto ai periodi precedenti' },
+        { metricKey: null, title: 'ARPU', description: 'Revenue media per utente a confronto nel tempo' },
+        { metricKey: null, title: 'Revenue per utenti attivi', description: 'Qualita monetizzazione sugli utenti ingaggiati' },
+        { metricKey: null, title: 'Incidenza attivi 7g', description: 'Peso degli attivi sulla base totale utenti' },
+      ];
+    }
+
+    return [];
+  })();
+
   return (
     <div className="space-y-6">
       <SectionHeader title="Analisi" description="Vista KPI operativa per team DEV" />
@@ -304,8 +434,36 @@ export default function AnalyticsPage() {
       </div>
 
       {activeTab !== 'content' && (
-        <div className="rounded-lg border border-border p-3.5 text-xs text-muted-foreground">
-          Nessun valore stimato o demo: qui vedi solo KPI reali disponibili oggi. Per trend storici servono serie temporali dedicate.
+        <div className="space-y-3">
+          <div className="rounded-lg border border-border bg-card/60 p-3 text-xs text-muted-foreground">
+            {activeTab === 'users' && comparisonSnapshotDate
+              ? `Confronti aggiornati allo snapshot del ${new Date(comparisonSnapshotDate).toLocaleDateString('it-IT')}.`
+              : activeTab === 'revenue'
+              ? 'Confronti Revenue pronti: verranno popolati quando attiverete i pagamenti.'
+              : 'Confronti storici pronti: collega le serie temporali per attivare i delta automatici.'}
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+            {comparisonCards.map(card => (
+              (() => {
+                const metric = card.metricKey
+                  ? comparisonMetrics.find(item => item.metricKey === card.metricKey) ?? null
+                  : null;
+
+                return (
+              <ComparisonCard
+                key={card.title}
+                title={card.title}
+                description={card.description}
+                deltaDay={metric?.deltaDay ?? null}
+                deltaWeek={metric?.deltaWeek ?? null}
+                deltaMonth={metric?.deltaMonth ?? null}
+                isLoading={activeTab === 'users' ? comparisonLoading : false}
+              />
+                );
+              })()
+            ))}
+          </div>
         </div>
       )}
 
