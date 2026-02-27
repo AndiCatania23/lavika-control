@@ -1,7 +1,7 @@
 'use client';
 
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
-import type { DevCard, DevCardValue } from '@/lib/data';
+import type { DevCard, DevCardValue } from '@/lib/data/devConsole';
 
 interface KpiCardProps {
   card: DevCard & {
@@ -38,15 +38,15 @@ export function KpiCard({ card }: KpiCardProps) {
   };
 
   return (
-    <div className="bg-card border border-border rounded-lg p-4 hover:border-primary/30 transition-colors">
-      <div className="flex items-start justify-between mb-2">
-        <span className="text-sm text-muted-foreground line-clamp-1">{card.title}</span>
+    <div className="bg-card border border-border rounded-lg p-3 sm:p-4 hover:border-primary/30 transition-colors">
+      <div className="flex items-start justify-between mb-1.5">
+        <span className="text-xs sm:text-sm text-muted-foreground line-clamp-1">{card.title}</span>
         {getStatusBadge()}
       </div>
       
-      <div className="text-2xl font-semibold text-foreground mb-2">
+      <div className="text-lg sm:text-2xl font-semibold text-foreground mb-1.5 sm:mb-2 leading-tight">
         {displayValue}
-        {val?.unit && <span className="text-sm font-normal text-muted-foreground ml-1">{val.unit}</span>}
+        {val?.unit && <span className="text-xs sm:text-sm font-normal text-muted-foreground ml-1">{val.unit}</span>}
       </div>
       
       {deltaText && (

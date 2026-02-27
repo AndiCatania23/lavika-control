@@ -4,8 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getJobRunByIdData, JobRun } from '@/lib/data';
 import { StatusPill } from '@/components/StatusPill';
-import { LogViewer, mockLogs } from '@/components/LogViewer';
-import { ArrowLeft, RefreshCw, Clock, User, Play } from 'lucide-react';
+import { ArrowLeft, Clock, User, Play } from 'lucide-react';
 
 export default function JobRunDetailPage() {
   const params = useParams();
@@ -61,10 +60,6 @@ export default function JobRunDetailPage() {
           </div>
           <div className="flex items-center gap-3">
             <StatusPill status={run.status} />
-            <button className="flex items-center gap-2 px-3 py-1.5 bg-primary text-primary-foreground rounded text-sm font-medium hover:bg-primary/90 transition-colors">
-              <RefreshCw className="w-3 h-3" />
-              Retry
-            </button>
           </div>
         </div>
 
@@ -123,10 +118,11 @@ export default function JobRunDetailPage() {
           </div>
         </div>
       </div>
-
-      <div>
-        <h3 className="font-semibold text-foreground mb-4">Logs</h3>
-        <LogViewer logs={mockLogs} autoScroll={run.status === 'running'} />
+      <div className="bg-card border border-border rounded-lg p-6">
+        <h3 className="font-semibold text-foreground mb-2">Logs</h3>
+        <p className="text-sm text-muted-foreground">
+          I log completi sono disponibili direttamente su GitHub Actions nella run {run.id}.
+        </p>
       </div>
     </div>
   );

@@ -4,9 +4,17 @@ export interface Session {
   userName: string;
   userEmail: string;
   device: string;
+  deviceLabel?: string;
+  platform?: string | null;
+  deviceType?: string | null;
+  osName?: string | null;
+  browserName?: string | null;
   browser: string;
   ip: string;
   location: string;
+  locationSource?: 'gps' | 'ip' | 'unknown';
+  locationSourceLabel?: 'GPS' | 'IP' | 'Unknown';
+  locationCoordinates?: string | null;
   createdAt: string;
   duration: number;
   status: 'active' | 'expired';

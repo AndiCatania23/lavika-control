@@ -3,6 +3,7 @@ export interface User {
   email: string;
   name: string;
   avatar: string;
+  avatarUrl?: string;
   badge: 'bronze' | 'silver' | 'gold';
   status: 'active' | 'inactive' | 'suspended';
   createdAt: string;

@@ -17,7 +17,7 @@ export default function ConsoleLayout({
 
   useEffect(() => {
     if (!isLoading && !user) {
-      router.push('/login');
+      router.replace('/login');
     }
   }, [user, isLoading, router]);
 
@@ -30,7 +30,11 @@ export default function ConsoleLayout({
   }
 
   if (!user) {
-    return null;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
   }
 
   if (!isAdmin) {
@@ -46,11 +50,11 @@ export default function ConsoleLayout({
 
   return (
     <PullToRefresh>
-      <div className="min-h-screen flex bg-background">
+      <div className="h-screen overflow-hidden flex bg-background">
         <Sidebar />
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
           <Topbar />
-          <main className="flex-1 p-6 pb-28 lg:pb-6 overflow-auto">
+          <main className="flex-1 p-6 pb-28 lg:pb-6 overflow-y-auto overflow-x-hidden">
             <div className="max-w-7xl mx-auto">
               {children}
             </div>

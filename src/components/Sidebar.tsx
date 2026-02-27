@@ -44,7 +44,7 @@ export function Sidebar() {
       <aside className={`
         fixed lg:static inset-y-0 left-0 z-40
         bg-card border-r border-border
-        flex flex-col
+        flex flex-col lg:h-screen lg:shrink-0 overflow-hidden
         transition-all duration-300
         ${collapsed ? 'w-16' : 'w-64'}
         -translate-x-full lg:translate-x-0

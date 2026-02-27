@@ -1,34 +1,277 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import Image from 'next/image';
+import Link from 'next/link';
 import { SectionHeader } from '@/components/SectionHeader';
-import { BarChart3, Users, DollarSign, FileText } from 'lucide-react';
+import { Users, DollarSign, FileText, HardDrive, RefreshCw } from 'lucide-react';
 
 type Tab = 'users' | 'revenue' | 'content';
 
+interface OverviewKpi {
+  key: string;
+  title: string;
+  value: number;
+  unit?: string;
+}
+
+interface R2FormatStat {
+  format: string;
+  videos: number;
+  covers: number;
+  other: number;
+  total: number;
+  sizeBytes: number;
+  seasons: number;
+  episodes: number;
+  coverVerticalUrl?: string;
+  coverHorizontalUrl?: string;
+}
+
+interface R2Summary {
+  connected: boolean;
+  totals: {
+    formats: number;
+    videos: number;
+    covers: number;
+    other: number;
+    allAssets: number;
+    sizeBytes: number;
+    sizeHuman: string;
+  };
+  formats: R2FormatStat[];
+  error?: string;
+}
+
+const emptyR2Summary: R2Summary = {
+  connected: false,
+  totals: {
+    formats: 0,
+    videos: 0,
+    covers: 0,
+    other: 0,
+    allAssets: 0,
+    sizeBytes: 0,
+    sizeHuman: '0 B',
+  },
+  formats: [],
+};
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ['KB', 'MB', 'GB', 'TB'];
+  let value = bytes / 1024;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  return `${value.toFixed(1)} ${units[unitIndex]}`;
+}
+
+function CompactCard({
+  label,
+  value,
+  hint,
+  icon,
+  iconClassName,
+}: {
+  label: string;
+  value: string;
+  hint: string;
+  icon: React.ReactNode;
+  iconClassName: string;
+}) {
+  return (
+    <div className="bg-card border border-border rounded-lg p-3">
+      <div className="flex items-center gap-2 mb-1 text-xs">
+        <span className={iconClassName}>{icon}</span>
+        <span>{label}</span>
+      </div>
+      <div className="text-lg font-semibold text-foreground leading-tight">{value}</div>
+      <div className="text-[11px] text-muted-foreground mt-1 line-clamp-1">{hint}</div>
+    </div>
+  );
+}
+
 export default function AnalyticsPage() {
   const [activeTab, setActiveTab] = useState<Tab>('users');
+  const [overviewKpis, setOverviewKpis] = useState<OverviewKpi[]>([]);
+  const [r2Summary, setR2Summary] = useState<R2Summary>(emptyR2Summary);
+  const [r2Loading, setR2Loading] = useState(false);
 
-  const tabs: { id: Tab; label: string }[] = [
+  const getKpi = (key: string) => overviewKpis.find(item => item.key === key)?.value ?? 0;
+
+  const loadOverview = async () => {
+    const response = await fetch('/api/dev/overview', { cache: 'no-store' });
+    if (!response.ok) {
+      setOverviewKpis([]);
+      return;
+    }
+    const payload = await response.json() as { kpis?: OverviewKpi[] };
+    setOverviewKpis(payload.kpis ?? []);
+  };
+
+  const loadR2Summary = async () => {
+    setR2Loading(true);
+    try {
+      const response = await fetch('/api/dev/r2/summary', { cache: 'no-store' });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        setR2Summary({
+          ...emptyR2Summary,
+          error: typeof payload?.error === 'string' ? payload.error : 'Errore lettura archivio R2',
+        });
+        return;
+      }
+      const payload = await response.json() as R2Summary;
+      setR2Summary(payload);
+    } catch {
+      setR2Summary({
+        ...emptyR2Summary,
+        error: 'Errore di rete durante la lettura R2',
+      });
+    } finally {
+      setR2Loading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadOverview();
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'content') {
+      loadR2Summary();
+    }
+  }, [activeTab]);
+
+  const tabs: Array<{ id: Tab; label: string }> = [
     { id: 'users', label: 'Utenti' },
     { id: 'revenue', label: 'Ricavi' },
     { id: 'content', label: 'Contenuti' },
   ];
 
+  const totalUsers = getKpi('total_users');
+  const activeUsersNow = getKpi('active_users_now');
+  const activeUsers24h = getKpi('active_users_24h');
+  const activeUsers7d = getKpi('active_users_7d');
+  const activeRate = totalUsers > 0 ? (activeUsers7d / totalUsers) * 100 : 0;
+
+  const totalRevenue = getKpi('users_revenue_total');
+  const arpu = totalUsers > 0 ? totalRevenue / totalUsers : 0;
+  const revenuePerActive7d = activeUsers7d > 0 ? totalRevenue / activeUsers7d : 0;
+
+  const currentCards = (() => {
+    if (activeTab === 'users') {
+      return [
+        {
+          label: 'Utenti Totali',
+          value: totalUsers.toLocaleString('it-IT'),
+          hint: 'Fonte: Supabase Auth',
+          icon: <Users className="w-4 h-4" />,
+          iconClassName: 'text-sky-500',
+        },
+        {
+          label: 'Utenti Attivi Ora',
+          value: activeUsersNow.toLocaleString('it-IT'),
+          hint: 'Attivita app ultimi 30 minuti',
+          icon: <Users className="w-4 h-4" />,
+          iconClassName: 'text-sky-500',
+        },
+        {
+          label: 'Utenti Attivi 24h',
+          value: activeUsers24h.toLocaleString('it-IT'),
+          hint: 'Attivita app ultime 24 ore',
+          icon: <Users className="w-4 h-4" />,
+          iconClassName: 'text-sky-500',
+        },
+        {
+          label: 'Utenti Attivi 7g',
+          value: activeUsers7d.toLocaleString('it-IT'),
+          hint: `Copertura ${activeRate.toFixed(1)}%`,
+          icon: <Users className="w-4 h-4" />,
+          iconClassName: 'text-sky-500',
+        },
+      ];
+    }
+
+    if (activeTab === 'revenue') {
+      return [
+        {
+          label: 'Revenue Totale',
+          value: `EUR ${totalRevenue.toLocaleString('it-IT')}`,
+          hint: 'Somma revenue/ltv da user profile',
+          icon: <DollarSign className="w-4 h-4" />,
+          iconClassName: 'text-emerald-500',
+        },
+        {
+          label: 'ARPU',
+          value: `EUR ${arpu.toFixed(2)}`,
+          hint: 'Revenue media per utente totale',
+          icon: <DollarSign className="w-4 h-4" />,
+          iconClassName: 'text-emerald-500',
+        },
+        {
+          label: 'Revenue per Attivo 7g',
+          value: `EUR ${revenuePerActive7d.toFixed(2)}`,
+          hint: 'Revenue / utenti attivi 7g',
+          icon: <DollarSign className="w-4 h-4" />,
+          iconClassName: 'text-emerald-500',
+        },
+        {
+          label: 'Incidenza Attivi 7g',
+          value: `${activeRate.toFixed(1)}%`,
+          hint: 'Per leggere qualita monetizzazione',
+          icon: <DollarSign className="w-4 h-4" />,
+          iconClassName: 'text-emerald-500',
+        },
+      ];
+    }
+
+    return [
+      {
+          label: 'Asset Totali',
+          value: r2Summary.totals.allAssets.toLocaleString('it-IT'),
+          hint: 'File presenti nel bucket R2',
+          icon: <FileText className="w-4 h-4" />,
+          iconClassName: 'text-violet-500',
+        },
+      {
+          label: 'Video',
+          value: r2Summary.totals.videos.toLocaleString('it-IT'),
+          hint: 'Cartelle video/ su tutti i format',
+          icon: <FileText className="w-4 h-4" />,
+          iconClassName: 'text-violet-500',
+        },
+      {
+          label: 'Copertine',
+          value: r2Summary.totals.covers.toLocaleString('it-IT'),
+          hint: 'Cartelle copertine/ su tutti i format',
+          icon: <FileText className="w-4 h-4" />,
+          iconClassName: 'text-violet-500',
+        },
+      {
+          label: 'Storage Usato',
+          value: r2Summary.totals.sizeHuman,
+          hint: 'Dimensione totale R2',
+          icon: <HardDrive className="w-4 h-4" />,
+          iconClassName: r2Summary.connected ? 'text-violet-500' : 'text-red-500',
+        },
+      ];
+  })();
+
   return (
     <div className="space-y-6">
-      <SectionHeader 
-        title="Analisi" 
-        description="Statistiche e previsioni della piattaforma"
-      />
+      <SectionHeader title="Analisi" description="Vista KPI operativa per team DEV" />
 
       <div className="border-b border-border">
-        <nav className="flex gap-6">
+        <nav className="flex gap-5">
           {tabs.map(tab => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`py-3 text-sm font-medium border-b-2 transition-colors ${
+              className={`py-2 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === tab.id
                   ? 'border-primary text-foreground'
                   : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -40,139 +283,121 @@ export default function AnalyticsPage() {
         </nav>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        {activeTab === 'users' && (
-          <>
-            <div className="bg-card border border-border rounded-lg p-5">
-              <div className="flex items-center gap-3 mb-2">
-                <Users className="w-5 h-5 text-primary" />
-                <span className="text-sm text-muted-foreground">Utenti Totali</span>
-              </div>
-              <div className="text-2xl font-semibold text-foreground">12,847</div>
-              <div className="text-xs text-green-500 mt-1">+12.5% dal mese scorso</div>
-            </div>
-            <div className="bg-card border border-border rounded-lg p-5">
-              <div className="flex items-center gap-3 mb-2">
-                <BarChart3 className="w-5 h-5 text-primary" />
-                <span className="textsm text-muted-foreground">Attivi Ora</span>
-              </div>
-              <div className="text-2xl font-semibold text-foreground">4,892</div>
-              <div className="text-xs text-muted-foreground mt-1">38% del MAU</div>
-            </div>
-            <div className="bg-card border border-border rounded-lg p-5">
-              <div className="flex items-center gap-3 mb-2">
-                <Users className="w-5 h-5 text-primary" />
-                <span className="text-sm text-muted-foreground">Nuovi Questa Settimana</span>
-              </div>
-              <div className="text-2xl font-semibold text-foreground">342</div>
-              <div className="text-xs text-green-500 mt-1">+8.2% vs settimana scorsa</div>
-            </div>
-            <div className="bg-card border border-border rounded-lg p-5">
-              <div className="flex items-center gap-3 mb-2">
-                <Users className="w-5 h-5 text-primary" />
-                <span className="text-sm text-muted-foreground">Tasso Abbandono</span>
-              </div>
-              <div className="text-2xl font-semibold text-foreground">2.3%</div>
-              <div className="text-xs text-green-500 mt-1">-0.5% vs mese scorso</div>
-            </div>
-          </>
-        )}
-
-        {activeTab === 'revenue' && (
-          <>
-            <div className="bg-card border border-border rounded-lg p-5">
-              <div className="flex items-center gap-3 mb-2">
-                <DollarSign className="w-5 h-5 text-primary" />
-                <span className="text-sm text-muted-foreground">MRR</span>
-              </div>
-              <div className="text-2xl font-semibold text-foreground">€45,230</div>
-              <div className="text-xs text-green-500 mt-1">+15.2% dal mese scorso</div>
-            </div>
-            <div className="bg-card border border-border rounded-lg p-5">
-              <div className="flex items-center gap-3 mb-2">
-                <DollarSign className="w-5 h-5 text-primary" />
-                <span className="text-sm text-muted-foreground">ARR</span>
-              </div>
-              <div className="text-2xl font-semibold text-foreground">€542,760</div>
-              <div className="text-xs text-green-500 mt-1">Proiettato</div>
-            </div>
-            <div className="bg-card border border-border rounded-lg p-5">
-              <div className="flex items-center gap-3 mb-2">
-                <DollarSign className="w-5 h-5 text-primary" />
-                <span className="text-sm text-muted-foreground">LTV</span>
-              </div>
-              <div className="text-2xl font-semibold text-foreground">€1,245</div>
-              <div className="text-xs text-muted-foreground mt-1">Media</div>
-            </div>
-            <div className="bg-card border border-border rounded-lg p-5">
-              <div className="flex items-center gap-3 mb-2">
-                <DollarSign className="w-5 h-5 text-primary" />
-                <span className="text-sm text-muted-foreground">ARPU</span>
-              </div>
-              <div className="text-2xl font-semibold text-foreground">€89</div>
-              <div className="text-xs text-green-500 mt-1">+5.1% vs mese scorso</div>
-            </div>
-          </>
-        )}
-
-        {activeTab === 'content' && (
-          <>
-            <div className="bg-card border border-border rounded-lg p-5">
-              <div className="flex items-center gap-3 mb-2">
-                <FileText className="w-5 h-5 text-primary" />
-                <span className="text-sm text-muted-foreground">Elementi Totali</span>
-              </div>
-              <div className="text-2xl font-semibold text-foreground">45,230</div>
-              <div className="text-xs text-green-500 mt-1">+1,234 questa settimana</div>
-            </div>
-            <div className="bg-card border border-border rounded-lg p-5">
-              <div className="flex items-center gap-3 mb-2">
-                <FileText className="w-5 h-5 text-primary" />
-                <span className="text-sm text-muted-foreground">Attivi</span>
-              </div>
-              <div className="text-2xl font-semibold text-foreground">38,456</div>
-              <div className="text-xs text-muted-foreground mt-1">85% del totale</div>
-            </div>
-            <div className="bg-card border border-border rounded-lg p-5">
-              <div className="flex items-center gap-3 mb-2">
-                <FileText className="w-5 h-5 text-primary" />
-                <span className="text-sm text-muted-foreground">In Attesa</span>
-              </div>
-              <div className="text-2xl font-semibold text-foreground">5,234</div>
-              <div className="text-xs text-muted-foreground mt-1">Da revisionare</div>
-            </div>
-            <div className="bg-card border border-border rounded-lg p-5">
-              <div className="flex items-center gap-3 mb-2">
-                <FileText className="w-5 h-5 text-primary" />
-                <span className="text-sm text-muted-foreground">Errori</span>
-              </div>
-              <div className="text-2xl font-semibold text-foreground">1,540</div>
-              <div className="text-xs text-red-500 mt-1">Richiede attenzione</div>
-            </div>
-          </>
-        )}
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+        {currentCards.map(card => (
+          <CompactCard
+            key={card.label}
+            label={card.label}
+            value={card.value}
+            hint={card.hint}
+            icon={card.icon}
+            iconClassName={card.iconClassName}
+          />
+        ))}
       </div>
 
-      <div className="bg-card border border-border rounded-lg p-6">
-        <h3 className="font-semibold text-foreground mb-4">
-          {activeTab === 'users' && 'Crescita Utenti'}
-          {activeTab === 'revenue' && 'Trend Ricavi'}
-          {activeTab === 'content' && 'Distribuzione Contenuti'}
-        </h3>
-        <div className="h-64 flex items-end gap-2">
-          {[45, 62, 55, 78, 65, 82, 70, 88, 75, 92, 85, 95].map((height, i) => (
-            <div key={i} className="flex-1 flex flex-col items-center gap-2">
-              <div 
-                className="w-full bg-primary/40 rounded-t hover:bg-primary/60 transition-colors"
-                style={{ height: `${height}%` }}
-              />
-              <span className="text-xs text-muted-foreground">
-                {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][i]}
-              </span>
-            </div>
-          ))}
+      {activeTab !== 'content' && (
+        <div className="rounded-lg border border-border p-3.5 text-xs text-muted-foreground">
+          Nessun valore stimato o demo: qui vedi solo KPI reali disponibili oggi. Per trend storici servono serie temporali dedicate.
         </div>
-      </div>
+      )}
+
+      {activeTab === 'content' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-foreground">Distribuzione R2 per format</h3>
+            <button
+              type="button"
+              onClick={loadR2Summary}
+              disabled={r2Loading}
+              className="inline-flex items-center gap-2 px-2.5 py-1.5 text-xs border border-border rounded-lg hover:bg-muted/40 disabled:opacity-60"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${r2Loading ? 'animate-spin' : ''}`} />
+              Aggiorna
+            </button>
+          </div>
+
+          {!r2Summary.connected && (
+            <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3 text-xs text-yellow-700">
+              R2 non raggiungibile. Verifica `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`.
+              {r2Summary.error ? ` Dettaglio: ${r2Summary.error}` : ''}
+            </div>
+          )}
+
+          <div className="overflow-auto rounded-lg border border-border">
+            <table className="w-full text-xs md:text-sm">
+              <thead className="bg-muted/40 text-muted-foreground">
+                <tr>
+                  <th className="text-left p-2.5 font-medium">Format</th>
+                  <th className="text-right p-2.5 font-medium">Video</th>
+                  <th className="text-right p-2.5 font-medium">Copertine</th>
+                  <th className="text-right p-2.5 font-medium">Altri</th>
+                  <th className="text-right p-2.5 font-medium">Totale</th>
+                  <th className="text-right p-2.5 font-medium">Size</th>
+                </tr>
+              </thead>
+              <tbody>
+                {r2Summary.formats.map(row => (
+                  <tr key={row.format} className="border-t border-border">
+                    <td className="p-2.5 text-foreground font-medium">{row.format}</td>
+                    <td className="p-2.5 text-right text-foreground">{row.videos.toLocaleString('it-IT')}</td>
+                    <td className="p-2.5 text-right text-foreground">{row.covers.toLocaleString('it-IT')}</td>
+                    <td className="p-2.5 text-right text-muted-foreground">{row.other.toLocaleString('it-IT')}</td>
+                    <td className="p-2.5 text-right text-foreground">{row.total.toLocaleString('it-IT')}</td>
+                    <td className="p-2.5 text-right text-muted-foreground">{formatBytes(row.sizeBytes)}</td>
+                  </tr>
+                ))}
+                {r2Summary.formats.length === 0 && (
+                  <tr>
+                    <td className="p-4 text-center text-muted-foreground" colSpan={6}>
+                      Nessun format trovato.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold text-foreground">Format Overview</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
+              {r2Summary.formats
+                .filter(row => row.videos > 0)
+                .map(row => (
+                  <Link
+                    key={`${row.format}-overview`}
+                    href={`/analytics/formats/${encodeURIComponent(row.format)}`}
+                    className="bg-card border border-border rounded-lg p-2 flex items-center gap-2 hover:border-primary/40 transition-colors"
+                  >
+                    <div className="w-32 sm:w-40 md:w-36 xl:w-40 aspect-video rounded-md overflow-hidden border border-border bg-muted/20 shrink-0">
+                      {row.coverHorizontalUrl ? (
+                        <Image
+                          src={row.coverHorizontalUrl}
+                          alt={`${row.format} orizzontale`}
+                          width={320}
+                          height={180}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-[10px] text-muted-foreground">No cover</div>
+                      )}
+                    </div>
+
+                    <div className="min-w-0 flex-1 flex flex-col gap-1.5">
+                      <div className="text-xs sm:text-sm font-semibold text-foreground truncate">{row.format}</div>
+                      <span className="inline-flex w-fit px-1.5 py-0.5 rounded bg-muted text-muted-foreground text-[10px] sm:text-[11px] whitespace-nowrap">
+                        Stagioni: {row.seasons}
+                      </span>
+                      <span className="inline-flex w-fit px-1.5 py-0.5 rounded bg-primary/10 text-primary text-[10px] sm:text-[11px] whitespace-nowrap">
+                        Episodi: {row.episodes}
+                      </span>
+                    </div>
+                  </Link>
+                ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

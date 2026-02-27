@@ -6,6 +6,18 @@ import { DataTable } from '@/components/DataTable';
 import { SectionHeader } from '@/components/SectionHeader';
 import { StatusPill } from '@/components/StatusPill';
 
+function extractDeviceName(session: Session): string {
+  const source = session.deviceLabel ?? session.device ?? 'Unknown device';
+  return source.split(' · ')[0]?.trim() || 'Unknown device';
+}
+
+function extractCityName(session: Session): string {
+  const source = session.location ?? 'Unknown';
+  const withoutCoordinates = source.split(' · ')[0] ?? source;
+  const city = withoutCoordinates.split(',')[0]?.trim();
+  return city && city.length > 0 ? city : 'Unknown';
+}
+
 export default function SessionsPage() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,6 +53,7 @@ export default function SessionsPage() {
       key: 'device',
       header: 'Dispositivo',
       sortable: true,
+      render: (session: Session) => extractDeviceName(session),
     },
     {
       key: 'browser',
@@ -48,18 +61,14 @@ export default function SessionsPage() {
       sortable: true,
     },
     {
-      key: 'ip',
-      header: 'Indirizzo IP',
-      sortable: true,
-    },
-    {
       key: 'location',
       header: 'Posizione',
       sortable: true,
+      render: (session: Session) => extractCityName(session),
     },
     {
       key: 'createdAt',
-      header: 'Iniziato',
+      header: 'Ultima attivita',
       sortable: true,
       render: (session: Session) => new Date(session.createdAt).toLocaleString('it-IT'),
     },
@@ -85,14 +94,14 @@ export default function SessionsPage() {
     <div className="space-y-6">
       <SectionHeader 
         title="Sessioni" 
-        description="Sessioni utente attive e recenti"
+        description="Sessioni reali utente da telemetry Lavika"
       />
 
       <DataTable
         data={sessions}
         columns={columns}
         searchPlaceholder="Cerca sessioni..."
-        searchKeys={['userName', 'userEmail', 'ip', 'location']}
+        searchKeys={['userName', 'userEmail', 'location']}
       />
     </div>
   );

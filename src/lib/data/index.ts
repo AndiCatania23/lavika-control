@@ -1,72 +1,137 @@
-import { kpis, systemStatus, Kpi } from '@/mocks/kpis';
-import { users, User } from '@/mocks/users';
-import { sessions, Session } from '@/mocks/sessions';
-import { jobs, Job } from '@/mocks/jobs';
-import { getJobRuns, getJobRunById, createJobRun, completeJobRun, JobRun } from '@/mocks/jobRuns';
-import { getErrors, getErrorById, ErrorLog } from '@/mocks/errors';
-import { getDevCards, getLatestCardValues, getDevFeed, DevCard, DevCardValue, DevFeedItem } from './devConsole';
+import type { User } from '@/mocks/users';
+import type { Session } from '@/mocks/sessions';
+import type { Job } from '@/mocks/jobs';
+import type { JobRun } from '@/mocks/jobRuns';
+import type { ErrorLog } from '@/mocks/errors';
+import type { UserContentInsights } from '@/lib/metrics/userInsights';
 
-export type { Kpi, User, Session, Job, JobRun, ErrorLog, DevCard, DevCardValue, DevFeedItem };
-export { getDevCards, getLatestCardValues, getDevFeed };
+export type { User, Session, Job, JobRun, ErrorLog };
+export type { UserContentInsights };
 
-export async function getDashboardKpis(): Promise<{ kpis: Kpi[]; systemStatus: typeof systemStatus }> {
-  await new Promise(resolve => setTimeout(resolve, 100));
-  return { kpis, systemStatus };
+async function safeJson<T>(response: Response, fallback: T): Promise<T> {
+  if (!response.ok) return fallback;
+  return response.json() as Promise<T>;
 }
 
 export async function getUsers(): Promise<User[]> {
-  await new Promise(resolve => setTimeout(resolve, 100));
-  return users;
+  const response = await fetch('/api/dev/users', { cache: 'no-store' });
+  return safeJson(response, [] as User[]);
 }
 
 export async function getUserById(id: string): Promise<User | undefined> {
-  await new Promise(resolve => setTimeout(resolve, 100));
-  return users.find(u => u.id === id);
+  const response = await fetch(`/api/dev/users/${id}`, { cache: 'no-store' });
+  if (!response.ok) return undefined;
+  return response.json() as Promise<User>;
+}
+
+export async function getUserInsights(id: string): Promise<UserContentInsights> {
+  const response = await fetch(`/api/dev/users/${id}/insights`, { cache: 'no-store' });
+  return safeJson(response, {
+    userId: id,
+    totalViews: 0,
+    uniqueFormats: 0,
+    uniqueSeasons: 0,
+    uniqueEpisodes: 0,
+    rewatchedEpisodes: 0,
+    rewatchRate: 0,
+    favoritesCount: 0,
+    watchTimeSeconds: 0,
+    activeDays: 0,
+    avgViewsPerActiveDay: 0,
+    firstViewAt: null,
+    lastViewAt: null,
+    lastActivityAt: null,
+    activeNow: false,
+    active24h: false,
+    active7d: false,
+    preferredDayPart: 'n/d',
+    engagementSegment: 'new',
+    topFormats: [],
+    topEpisodes: [],
+    topSeasons: [],
+  } as UserContentInsights);
 }
 
 export async function getSessions(): Promise<Session[]> {
-  await new Promise(resolve => setTimeout(resolve, 100));
-  return sessions;
+  const response = await fetch('/api/dev/sessions', { cache: 'no-store' });
+  return safeJson(response, [] as Session[]);
+}
+
+export async function getSessionsByUserId(userId: string): Promise<Session[]> {
+  const response = await fetch(`/api/dev/sessions?userId=${encodeURIComponent(userId)}`, { cache: 'no-store' });
+  return safeJson(response, [] as Session[]);
 }
 
 export async function getJobs(): Promise<Job[]> {
-  await new Promise(resolve => setTimeout(resolve, 100));
-  return jobs;
+  const response = await fetch('/api/jobs', { cache: 'no-store' });
+  return safeJson(response, [] as Job[]);
 }
 
 export async function getJobById(id: string): Promise<Job | undefined> {
-  await new Promise(resolve => setTimeout(resolve, 100));
-  return jobs.find(j => j.id === id);
+  const response = await fetch(`/api/jobs/${id}`, { cache: 'no-store' });
+  if (!response.ok) return undefined;
+  return response.json() as Promise<Job>;
 }
 
 export async function getJobRunsData(filters?: { jobId?: string; status?: string }): Promise<JobRun[]> {
-  await new Promise(resolve => setTimeout(resolve, 100));
-  return getJobRuns(filters);
+  const params = new URLSearchParams();
+  if (filters?.jobId) params.set('jobId', filters.jobId);
+  if (filters?.status) params.set('status', filters.status);
+
+  const qs = params.toString();
+  const response = await fetch(`/api/jobs/runs${qs ? `?${qs}` : ''}`, { cache: 'no-store' });
+  return safeJson(response, [] as JobRun[]);
 }
 
 export async function getJobRunByIdData(id: string): Promise<JobRun | undefined> {
-  await new Promise(resolve => setTimeout(resolve, 100));
-  return getJobRunById(id);
+  const response = await fetch(`/api/jobs/runs/${id}`, { cache: 'no-store' });
+  if (!response.ok) return undefined;
+  return response.json() as Promise<JobRun>;
 }
 
-export async function triggerJob(jobId: string, jobName: string, triggeredBy: string = 'admin'): Promise<JobRun> {
-  await new Promise(resolve => setTimeout(resolve, 100));
-  const run = createJobRun(jobId, jobName, triggeredBy);
-  
-  setTimeout(() => {
-    const success = Math.random() > 0.2;
-    completeJobRun(run.id, success);
-  }, 3000);
-  
-  return run;
+export async function triggerJob(jobId: string, _jobName: string, triggeredBy: string = 'admin'): Promise<JobRun> {
+  const response = await fetch('/api/jobs', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ jobId, triggeredBy }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Job trigger failed (${response.status})`);
+  }
+
+  const payload = await response.json() as { run?: JobRun };
+
+  return payload.run ?? {
+    id: `run_${Date.now()}`,
+    jobId,
+    jobName: jobId,
+    status: 'running',
+    startedAt: new Date().toISOString(),
+    finishedAt: null,
+    duration: null,
+    triggeredBy,
+    scannedCount: 0,
+    insertedCount: 0,
+    updatedCount: 0,
+    errorCount: 0,
+  };
 }
 
 export async function getErrorsData(filters?: { severity?: string; source?: string }): Promise<ErrorLog[]> {
-  await new Promise(resolve => setTimeout(resolve, 100));
-  return getErrors(filters);
+  const params = new URLSearchParams();
+  if (filters?.severity) params.set('severity', filters.severity);
+  if (filters?.source) params.set('source', filters.source);
+
+  const qs = params.toString();
+  const response = await fetch(`/api/console/errors${qs ? `?${qs}` : ''}`, { cache: 'no-store' });
+  return safeJson(response, [] as ErrorLog[]);
 }
 
 export async function getErrorByIdData(id: string): Promise<ErrorLog | undefined> {
-  await new Promise(resolve => setTimeout(resolve, 100));
-  return getErrorById(id);
+  const response = await fetch(`/api/console/errors/${id}`, { cache: 'no-store' });
+  if (!response.ok) return undefined;
+  return response.json() as Promise<ErrorLog>;
 }

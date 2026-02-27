@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { getUsers, User } from '@/lib/data';
 import { DataTable } from '@/components/DataTable';
 import { SectionHeader } from '@/components/SectionHeader';
-import { StatusPill } from '@/components/StatusPill';
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
@@ -32,11 +31,19 @@ export default function UsersPage() {
       key: 'name',
       header: 'Utente',
       sortable: true,
+      className: 'w-[62%] min-w-0',
       render: (user: User) => (
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-primary text-[10px] font-medium">
-            {user.avatar}
-          </div>
+        <div className="flex items-center gap-2 min-w-0">
+          {user.avatarUrl ? (
+            <div
+              className="w-7 h-7 rounded-full bg-cover bg-center border border-border"
+              style={{ backgroundImage: `url(${user.avatarUrl})` }}
+            />
+          ) : (
+            <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-primary text-[10px] font-medium">
+              {user.avatar}
+            </div>
+          )}
           <div className="min-w-0">
             <div className="font-medium text-foreground text-sm truncate">{user.name}</div>
             <div className="text-[10px] text-muted-foreground truncate">{user.email}</div>
@@ -45,11 +52,11 @@ export default function UsersPage() {
       ),
     },
     {
-      key: 'badge',
+      key: 'badgeStatus',
       header: 'Badge',
-      sortable: true,
+      className: 'w-[72px] whitespace-nowrap',
       render: (user: User) => (
-        <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+        <span className={`text-[9px] px-1 py-0.5 rounded ${
           user.badge === 'gold' ? 'bg-yellow-500/20 text-yellow-400' :
           user.badge === 'silver' ? 'bg-gray-400/20 text-gray-300' :
           'bg-amber-700/20 text-amber-600'
@@ -62,27 +69,37 @@ export default function UsersPage() {
       key: 'status',
       header: 'Stato',
       sortable: true,
-      render: (user: User) => <StatusPill status={user.status} size="sm" />,
+      className: 'w-[88px] whitespace-nowrap',
+      render: (user: User) => (
+        <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-medium ${
+          user.status === 'active'
+            ? 'bg-green-500/10 text-green-500'
+            : user.status === 'inactive'
+            ? 'bg-muted text-muted-foreground'
+            : 'bg-red-500/10 text-red-500'
+        }`}>
+          <span className="w-1 h-1 rounded-full bg-current mr-1" />
+          {user.status}
+        </span>
+      ),
     },
     {
       key: 'sessionsCount',
       header: 'Sessioni',
       sortable: true,
-      className: 'hidden md:table-cell',
+      className: 'w-[90px] whitespace-nowrap',
+      render: (user: User) => (
+        <span className="text-xs text-foreground">{user.sessionsCount.toLocaleString('it-IT')}</span>
+      ),
     },
     {
-      key: 'revenue',
-      header: 'Ricavi',
+      key: 'lastLogin',
+      header: 'Ultima attivita',
       sortable: true,
-      className: 'hidden md:table-cell',
-      render: (user: User) => user.revenue > 0 ? `€${user.revenue}` : '-',
-    },
-    {
-      key: 'createdAt',
-      header: 'Iscritto',
-      sortable: true,
-      className: 'hidden lg:table-cell',
-      render: (user: User) => new Date(user.createdAt).toLocaleDateString('it-IT'),
+      className: 'w-[150px] whitespace-nowrap',
+      render: (user: User) => (
+        <span className="text-[11px] text-muted-foreground">{new Date(user.lastLogin).toLocaleString('it-IT')}</span>
+      ),
     },
   ];
 
@@ -98,6 +115,7 @@ export default function UsersPage() {
         columns={columns}
         searchPlaceholder="Cerca utenti..."
         searchKeys={['name', 'email']}
+        mobileVariant="table"
         onRowClick={(user) => router.push(`/users/${user.id}`)}
       />
     </div>
