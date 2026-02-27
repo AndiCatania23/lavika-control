@@ -130,6 +130,13 @@ function ComparisonCard({
     return `${sign}${percentage.toFixed(1)}%`;
   };
 
+  const deltaArrow = (value: number | null) => {
+    if (value === null || Number.isNaN(value) || isLoading) return '';
+    if (value > 0) return '↑';
+    if (value < 0) return '↓';
+    return '→';
+  };
+
   const deltaTone = (value: number | null) => {
     if (value === null || Number.isNaN(value) || isLoading) return 'text-foreground';
     if (value > 0) return 'text-emerald-500';
@@ -137,25 +144,51 @@ function ComparisonCard({
     return 'text-muted-foreground';
   };
 
+  const trendPill = (() => {
+    if (isLoading || deltaWeek === null || Number.isNaN(deltaWeek)) {
+      return { label: 'In attesa', className: 'bg-muted text-muted-foreground' };
+    }
+    if (deltaWeek > 0) {
+      return { label: 'In crescita', className: 'bg-emerald-500/10 text-emerald-500' };
+    }
+    if (deltaWeek < 0) {
+      return { label: 'In calo', className: 'bg-red-500/10 text-red-500' };
+    }
+    return { label: 'Stabile', className: 'bg-muted text-muted-foreground' };
+  })();
+
   return (
     <div className="rounded-lg border border-border bg-card p-3.5">
-      <div className="mb-2.5">
+      <div className="mb-2.5 flex items-start justify-between gap-2">
+        <div>
         <p className="text-sm font-semibold text-foreground">{title}</p>
         <p className="text-[11px] text-muted-foreground">{description}</p>
+        </div>
+        <span className={`inline-flex shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${trendPill.className}`}>
+          {trendPill.label}
+        </span>
       </div>
 
       <div className="space-y-1.5 text-xs">
-        <div className="flex items-center justify-between rounded-md border border-border/80 px-2 py-1.5">
-          <span className="text-muted-foreground">vs giorno precedente</span>
-          <span className={`font-medium ${deltaTone(deltaDay)}`}>{formatDelta(deltaDay)}</span>
-        </div>
-        <div className="flex items-center justify-between rounded-md border border-border/80 px-2 py-1.5">
-          <span className="text-muted-foreground">vs settimana precedente</span>
-          <span className={`font-medium ${deltaTone(deltaWeek)}`}>{formatDelta(deltaWeek)}</span>
-        </div>
-        <div className="flex items-center justify-between rounded-md border border-border/80 px-2 py-1.5">
-          <span className="text-muted-foreground">vs mese precedente</span>
-          <span className={`font-medium ${deltaTone(deltaMonth)}`}>{formatDelta(deltaMonth)}</span>
+        <div className="grid grid-cols-3 gap-1.5">
+          <div className="rounded-md border border-border/80 px-1.5 py-2 text-center">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Giorno</p>
+            <p className={`mt-1 text-[11px] font-semibold leading-none ${deltaTone(deltaDay)}`}>
+              {deltaArrow(deltaDay)} {formatDelta(deltaDay)}
+            </p>
+          </div>
+          <div className="rounded-md border border-border/80 px-1.5 py-2 text-center">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Settimana</p>
+            <p className={`mt-1 text-[11px] font-semibold leading-none ${deltaTone(deltaWeek)}`}>
+              {deltaArrow(deltaWeek)} {formatDelta(deltaWeek)}
+            </p>
+          </div>
+          <div className="rounded-md border border-border/80 px-1.5 py-2 text-center">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Mese</p>
+            <p className={`mt-1 text-[11px] font-semibold leading-none ${deltaTone(deltaMonth)}`}>
+              {deltaArrow(deltaMonth)} {formatDelta(deltaMonth)}
+            </p>
+          </div>
         </div>
       </div>
     </div>
