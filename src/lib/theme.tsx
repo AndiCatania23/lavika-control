@@ -25,8 +25,14 @@ function getStoredTheme(): Theme | null {
   return savedTheme === 'light' || savedTheme === 'dark' ? savedTheme : null;
 }
 
+function getDomTheme(): Theme | null {
+  if (typeof document === 'undefined') return null;
+  const attr = document.documentElement.getAttribute('data-theme');
+  return attr === 'light' || attr === 'dark' ? attr : null;
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>(() => getStoredTheme() ?? DEFAULT_THEME);
+  const [theme, setThemeState] = useState<Theme>(() => getDomTheme() ?? getStoredTheme() ?? DEFAULT_THEME);
 
   useEffect(() => {
     applyTheme(theme);
