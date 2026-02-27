@@ -146,10 +146,10 @@ export default function AnalyticsPage() {
     }
   }, [activeTab]);
 
-  const tabs: Array<{ id: Tab; label: string }> = [
-    { id: 'users', label: 'Utenti' },
-    { id: 'revenue', label: 'Ricavi' },
-    { id: 'content', label: 'Contenuti' },
+  const tabs: Array<{ id: Tab; label: string; mobileLabel: string; icon: React.ReactNode }> = [
+    { id: 'users', label: 'Audience', mobileLabel: 'Utenti', icon: <Users className="h-3.5 w-3.5" /> },
+    { id: 'revenue', label: 'Monetizzazione', mobileLabel: 'Ricavi', icon: <DollarSign className="h-3.5 w-3.5" /> },
+    { id: 'content', label: 'Catalogo', mobileLabel: 'Asset', icon: <FileText className="h-3.5 w-3.5" /> },
   ];
 
   const totalUsers = getKpi('total_users');
@@ -265,19 +265,21 @@ export default function AnalyticsPage() {
     <div className="space-y-6">
       <SectionHeader title="Analisi" description="Vista KPI operativa per team DEV" />
 
-      <div className="border-b border-border">
-        <nav className="flex gap-5">
+      <div className="rounded-xl border border-border bg-card/70 p-1">
+        <nav className="grid grid-cols-3 gap-1">
           {tabs.map(tab => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`py-2 text-sm font-medium border-b-2 transition-colors ${
+              className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs sm:text-sm font-medium transition-colors ${
                 activeTab === tab.id
-                  ? 'border-primary text-foreground'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
               }`}
             >
-              {tab.label}
+              {tab.icon}
+              <span className="hidden sm:inline">{tab.label}</span>
+              <span className="sm:hidden">{tab.mobileLabel}</span>
             </button>
           ))}
         </nav>

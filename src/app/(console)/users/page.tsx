@@ -31,7 +31,7 @@ export default function UsersPage() {
       key: 'name',
       header: 'Utente',
       sortable: true,
-      className: 'w-[62%] min-w-0',
+      className: 'w-[40%] min-w-0',
       render: (user: User) => (
         <div className="flex items-center gap-2 min-w-0">
           {user.avatarUrl ? (
@@ -96,7 +96,7 @@ export default function UsersPage() {
       key: 'lastLogin',
       header: 'Ultima attivita',
       sortable: true,
-      className: 'w-[150px] whitespace-nowrap',
+      className: 'w-[132px] whitespace-nowrap',
       render: (user: User) => (
         <span className="text-[11px] text-muted-foreground">{new Date(user.lastLogin).toLocaleString('it-IT')}</span>
       ),
@@ -115,7 +115,21 @@ export default function UsersPage() {
         columns={columns}
         searchPlaceholder="Cerca utenti..."
         searchKeys={['name', 'email']}
-        mobileVariant="table"
+        mobileColumnKeys={['name', 'status', 'sessionsCount', 'lastLogin']}
+        mobileHideLabelKeys={['name']}
+        mobileDense
+        mobileRowFooter={(user) => (
+          <div className="flex items-center justify-between text-[11px]">
+            <span className="text-muted-foreground">Badge</span>
+            <span className={`rounded px-1.5 py-0.5 ${
+              user.badge === 'gold' ? 'bg-yellow-500/20 text-yellow-400' :
+              user.badge === 'silver' ? 'bg-gray-400/20 text-gray-300' :
+              'bg-amber-700/20 text-amber-600'
+            }`}>
+              {user.badge.toUpperCase()}
+            </span>
+          </div>
+        )}
         onRowClick={(user) => router.push(`/users/${user.id}`)}
       />
     </div>
