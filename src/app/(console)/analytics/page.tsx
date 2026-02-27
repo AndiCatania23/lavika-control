@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { SectionHeader } from '@/components/SectionHeader';
-import { Users, DollarSign, FileText, HardDrive, RefreshCw } from 'lucide-react';
+import { Users, DollarSign, FileText, HardDrive, RefreshCw, Film, ImageIcon, Layers } from 'lucide-react';
 
 type Tab = 'users' | 'revenue' | 'content';
 
@@ -330,28 +330,43 @@ export default function AnalyticsPage() {
             <table className="w-full text-xs md:text-sm">
               <thead className="bg-muted/40 text-muted-foreground">
                 <tr>
-                  <th className="text-left p-2.5 font-medium">Format</th>
-                  <th className="text-right p-2.5 font-medium">Video</th>
-                  <th className="text-right p-2.5 font-medium">Copertine</th>
-                  <th className="text-right p-2.5 font-medium">Altri</th>
-                  <th className="text-right p-2.5 font-medium">Totale</th>
-                  <th className="text-right p-2.5 font-medium">Size</th>
+                  <th className="text-left p-1.5 sm:p-2.5 font-medium">Format</th>
+                  <th className="text-right p-1.5 sm:p-2.5 font-medium">
+                    <span className="inline-flex items-center justify-end w-full" aria-label="Video" title="Video">
+                      <Film className="h-3.5 w-3.5 sm:hidden" />
+                      <span className="hidden sm:inline">Video</span>
+                    </span>
+                  </th>
+                  <th className="text-right p-1.5 sm:p-2.5 font-medium">
+                    <span className="inline-flex items-center justify-end w-full" aria-label="Copertine" title="Copertine">
+                      <ImageIcon className="h-3.5 w-3.5 sm:hidden" />
+                      <span className="hidden sm:inline">Copertine</span>
+                    </span>
+                  </th>
+                  <th className="text-right p-1.5 sm:p-2.5 font-medium">
+                    <span className="inline-flex items-center justify-end w-full" aria-label="Altri" title="Altri">
+                      <Layers className="h-3.5 w-3.5 sm:hidden" />
+                      <span className="hidden sm:inline">Altri</span>
+                    </span>
+                  </th>
+                  <th className="text-right p-1.5 sm:p-2.5 font-medium">Totale</th>
+                  <th className="text-right p-1.5 sm:p-2.5 font-medium">Size</th>
                 </tr>
               </thead>
               <tbody>
                 {r2Summary.formats.map(row => (
                   <tr key={row.format} className="border-t border-border">
-                    <td className="p-2.5 text-foreground font-medium">{row.format}</td>
-                    <td className="p-2.5 text-right text-foreground">{row.videos.toLocaleString('it-IT')}</td>
-                    <td className="p-2.5 text-right text-foreground">{row.covers.toLocaleString('it-IT')}</td>
-                    <td className="p-2.5 text-right text-muted-foreground">{row.other.toLocaleString('it-IT')}</td>
-                    <td className="p-2.5 text-right text-foreground">{row.total.toLocaleString('it-IT')}</td>
-                    <td className="p-2.5 text-right text-muted-foreground">{formatBytes(row.sizeBytes)}</td>
+                    <td className="p-1.5 sm:p-2.5 text-foreground font-medium">{row.format}</td>
+                    <td className="p-1.5 sm:p-2.5 text-right text-foreground">{row.videos.toLocaleString('it-IT')}</td>
+                    <td className="p-1.5 sm:p-2.5 text-right text-foreground">{row.covers.toLocaleString('it-IT')}</td>
+                    <td className="p-1.5 sm:p-2.5 text-right text-muted-foreground">{row.other.toLocaleString('it-IT')}</td>
+                    <td className="p-1.5 sm:p-2.5 text-right text-foreground">{row.total.toLocaleString('it-IT')}</td>
+                    <td className="p-1.5 sm:p-2.5 text-right text-muted-foreground">{formatBytes(row.sizeBytes)}</td>
                   </tr>
                 ))}
                 {r2Summary.formats.length === 0 && (
                   <tr>
-                    <td className="p-4 text-center text-muted-foreground" colSpan={6}>
+                    <td className="p-3 sm:p-4 text-center text-muted-foreground" colSpan={6}>
                       Nessun format trovato.
                     </td>
                   </tr>
