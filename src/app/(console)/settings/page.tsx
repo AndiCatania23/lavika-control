@@ -20,13 +20,13 @@ function IphoneToggle({ enabled, onClick }: { enabled: boolean; onClick: () => v
     <button
       onClick={onClick}
       aria-pressed={enabled}
-      className={`relative h-6 w-12 rounded-full transition-colors duration-300 ${
+      className={`relative h-6 w-12 shrink-0 overflow-hidden rounded-full transition-colors duration-300 ${
         enabled ? 'bg-primary' : 'bg-muted-foreground/30'
       }`}
     >
       <div
-        className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-md transition-transform duration-300 ${
-          enabled ? 'translate-x-6' : 'translate-x-0.5'
+        className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-md transition-transform duration-300 ${
+          enabled ? 'translate-x-6' : 'translate-x-0'
         }`}
       />
     </button>

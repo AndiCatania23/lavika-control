@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { RefreshCw } from 'lucide-react';
 
 interface PullToRefreshProps {
@@ -10,29 +10,62 @@ interface PullToRefreshProps {
 export function PullToRefresh({ children }: PullToRefreshProps) {
   const [isPulling, setIsPulling] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [startY, setStartY] = useState(0);
   const [pullDistance, setPullDistance] = useState(0);
+  const startYRef = useRef(0);
 
-  const handleTouchStart = useCallback((e: TouchEvent) => {
-    if (window.scrollY === 0) {
-      setStartY(e.touches[0].clientY);
-      setIsPulling(true);
-    }
+  const isScrollableElement = useCallback((element: Element) => {
+    const htmlElement = element as HTMLElement;
+    const style = window.getComputedStyle(htmlElement);
+    const overflowY = style.overflowY;
+    const canScroll = overflowY === 'auto' || overflowY === 'scroll';
+    return canScroll && htmlElement.scrollHeight > htmlElement.clientHeight;
   }, []);
 
+  const canStartPull = useCallback((target: EventTarget | null) => {
+    if (!(target instanceof Element)) {
+      return window.scrollY === 0;
+    }
+
+    let node: Element | null = target;
+
+    while (node && node !== document.body && node !== document.documentElement) {
+      if (isScrollableElement(node)) {
+        if ((node as HTMLElement).scrollTop > 0) {
+          return false;
+        }
+      }
+      node = node.parentElement;
+    }
+
+    return window.scrollY === 0;
+  }, [isScrollableElement]);
+
+  const handleTouchStart = useCallback((e: TouchEvent) => {
+    if (canStartPull(e.target)) {
+      startYRef.current = e.touches[0].clientY;
+      setIsPulling(true);
+      setPullDistance(0);
+    } else {
+      setIsPulling(false);
+      setPullDistance(0);
+    }
+  }, [canStartPull]);
+
   const handleTouchMove = useCallback((e: TouchEvent) => {
-    if (!isPulling || window.scrollY > 0) return;
-    
+    if (!isPulling) return;
+
     const currentY = e.touches[0].clientY;
-    const diff = currentY - startY;
-    
+    const diff = currentY - startYRef.current;
+
     if (diff > 0) {
-      setPullDistance(diff);
+      setPullDistance(Math.min(diff, 140));
       e.preventDefault();
     }
-  }, [isPulling, startY]);
+  }, [isPulling]);
 
   const handleTouchEnd = useCallback(async () => {
+    if (!isPulling) return;
+
     if (pullDistance > 80) {
       setIsRefreshing(true);
       
@@ -52,7 +85,7 @@ export function PullToRefresh({ children }: PullToRefreshProps) {
     }
     setIsPulling(false);
     setPullDistance(0);
-  }, [pullDistance]);
+  }, [isPulling, pullDistance]);
 
   useEffect(() => {
     document.addEventListener('touchstart', handleTouchStart, { passive: true });
