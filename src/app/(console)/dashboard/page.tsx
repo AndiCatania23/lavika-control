@@ -294,15 +294,15 @@ export default function DashboardPage() {
               <div className="text-[10px] sm:text-xs text-muted-foreground truncate">{item.label}</div>
               <div className="text-[11px] sm:text-sm font-medium text-foreground truncate">{item.detail}</div>
             </div>
-            <div className={`inline-flex items-center gap-1 px-1.5 py-0.5 sm:px-2 sm:py-1 rounded text-[10px] sm:text-xs shrink-0 ${
+            <div className={`inline-flex items-center gap-1 px-1.5 py-0.5 sm:px-2 sm:py-1 rounded text-[10px] leading-none sm:text-xs shrink-0 ${
               item.status === 'ok'
                 ? 'bg-green-500/10 text-green-600'
                 : item.status === 'warn'
                 ? 'bg-yellow-500/10 text-yellow-600'
                 : 'bg-red-500/10 text-red-600'
             }`}>
-              {item.status === 'ok' ? <CheckCircle2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> : <XCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5" />}
-              <span className="inline-flex">{item.icon}</span>
+              {item.status === 'ok' ? <CheckCircle2 className="w-3 h-3 shrink-0 sm:w-3.5 sm:h-3.5" /> : <XCircle className="w-3 h-3 shrink-0 sm:w-3.5 sm:h-3.5" />}
+              <span className="inline-flex shrink-0">{item.icon}</span>
             </div>
           </div>
         ))}
