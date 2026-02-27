@@ -2,9 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { SectionHeader } from '@/components/SectionHeader';
 import {
   AlertTriangle,
+  ArrowLeft,
   ArrowRight,
   CheckCircle2,
   Coins,
@@ -103,6 +105,7 @@ function MetricCard({
 }
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [kpis, setKpis] = useState<OverviewKpi[]>([]);
   const [runs, setRuns] = useState<DashboardRun[]>([]);
   const [diagnostics, setDiagnostics] = useState<DiagnosticsData | null>(null);
@@ -259,6 +262,15 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      <button
+        type="button"
+        onClick={() => router.back()}
+        className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-muted/40 lg:hidden"
+      >
+        <ArrowLeft className="h-3.5 w-3.5" />
+        Indietro
+      </button>
+
       <SectionHeader
         title="Dashboard"
         description="Stato sistema e KPI operativi a colpo d occhio"
@@ -277,20 +289,20 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         {healthItems.map(item => (
-          <div key={item.label} className="bg-card border border-border rounded-lg p-3 flex items-center justify-between gap-2">
-            <div>
-              <div className="text-xs text-muted-foreground">{item.label}</div>
-              <div className="text-sm font-medium text-foreground">{item.detail}</div>
+          <div key={item.label} className="bg-card border border-border rounded-lg px-3 py-2 sm:p-3 flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <div className="text-[11px] sm:text-xs text-muted-foreground">{item.label}</div>
+              <div className="text-xs sm:text-sm font-medium text-foreground truncate">{item.detail}</div>
             </div>
-            <div className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs ${
+            <div className={`inline-flex items-center gap-1 px-1.5 py-0.5 sm:px-2 sm:py-1 rounded text-[10px] sm:text-xs shrink-0 ${
               item.status === 'ok'
                 ? 'bg-green-500/10 text-green-600'
                 : item.status === 'warn'
                 ? 'bg-yellow-500/10 text-yellow-600'
                 : 'bg-red-500/10 text-red-600'
             }`}>
-              {item.status === 'ok' ? <CheckCircle2 className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
-              {item.icon}
+              {item.status === 'ok' ? <CheckCircle2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> : <XCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5" />}
+              <span className="hidden sm:inline-flex">{item.icon}</span>
             </div>
           </div>
         ))}
