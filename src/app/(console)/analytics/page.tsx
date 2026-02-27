@@ -69,6 +69,11 @@ function formatBytes(bytes: number): string {
   return `${value.toFixed(1)} ${units[unitIndex]}`;
 }
 
+function formatGigabytes(bytes: number): string {
+  const gb = bytes / (1024 * 1024 * 1024);
+  return `${gb.toFixed(2)} GB`;
+}
+
 function CompactCard({
   label,
   value,
@@ -361,7 +366,10 @@ export default function AnalyticsPage() {
                     <td className="p-1.5 sm:p-2.5 text-right text-foreground">{row.covers.toLocaleString('it-IT')}</td>
                     <td className="p-1.5 sm:p-2.5 text-right text-muted-foreground">{row.other.toLocaleString('it-IT')}</td>
                     <td className="p-1.5 sm:p-2.5 text-right text-foreground">{row.total.toLocaleString('it-IT')}</td>
-                    <td className="p-1.5 sm:p-2.5 text-right text-muted-foreground">{formatBytes(row.sizeBytes)}</td>
+                    <td className="p-1.5 sm:p-2.5 text-right text-muted-foreground">
+                      <span className="sm:hidden">{formatGigabytes(row.sizeBytes)}</span>
+                      <span className="hidden sm:inline">{formatBytes(row.sizeBytes)}</span>
+                    </td>
                   </tr>
                 ))}
                 {r2Summary.formats.length === 0 && (
