@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
+import { useTheme } from '@/lib/theme';
 import { StatusPill } from '@/components/StatusPill';
 import { Users, Database, HardDrive, LogOut, Settings } from 'lucide-react';
 
@@ -25,9 +25,8 @@ function IphoneToggle({ enabled, onClick }: { enabled: boolean; onClick: () => v
 
 export default function SettingsPage() {
   const { signOut } = useAuth();
-  const router = useRouter();
+  const { isDark, setTheme } = useTheme();
   const [featureFlags, setFeatureFlags] = useState({
-    darkMode: true,
     betaFeatures: false,
     analytics: true,
     notifications: true,
@@ -49,12 +48,12 @@ export default function SettingsPage() {
     <div className="space-y-8">
       <div className="space-y-2">
         <h1 className="text-2xl font-bold text-foreground">Impostazioni</h1>
-        <p className="text-muted-foreground">Gestisci le impostazioni dell'applicazione</p>
+        <p className="text-muted-foreground">Gestisci le impostazioni dell&apos;applicazione</p>
       </div>
 
       <div className="bg-card border border-border rounded-lg p-6">
         <div className="flex items-center gap-3 mb-6">
-          <Users className="w-5 h-5 text-primary" />
+          <Users className="w-5 h-5 text-sky-500" />
           <h3 className="font-semibold text-foreground">Ruoli e Permessi</h3>
         </div>
         <div className="space-y-3">
@@ -76,16 +75,16 @@ export default function SettingsPage() {
 
       <div className="bg-card border border-border rounded-lg p-6">
         <div className="flex items-center gap-3 mb-6">
-          <Database className="w-5 h-5 text-primary" />
+          <Database className="w-5 h-5 text-indigo-500" />
           <h3 className="font-semibold text-foreground">Integrazioni</h3>
         </div>
         <div className="space-y-4">
           {integrations.map(integration => (
             <div key={integration.name} className="flex items-center justify-between py-3 border-b border-border last:border-0">
               <div className="flex items-center gap-3">
-                {integration.name === 'Supabase' && <Database className="w-4 h-4 text-muted-foreground" />}
-                {integration.name === 'R2 Storage' && <HardDrive className="w-4 h-4 text-muted-foreground" />}
-                {integration.name === 'VPS Runner' && <HardDrive className="w-4 h-4 text-muted-foreground" />}
+                {integration.name === 'Supabase' && <Database className="w-4 h-4 text-indigo-500" />}
+                {integration.name === 'R2 Storage' && <HardDrive className="w-4 h-4 text-violet-500" />}
+                {integration.name === 'VPS Runner' && <HardDrive className="w-4 h-4 text-emerald-500" />}
                 <div>
                   <div className="font-medium text-foreground">{integration.name}</div>
                   <div className="text-xs text-muted-foreground">{integration.details}</div>
@@ -99,11 +98,14 @@ export default function SettingsPage() {
 
       <div className="bg-card border border-border rounded-lg p-6">
         <div className="flex items-center gap-3 mb-6">
-          <Settings className="w-5 h-5 text-primary" />
+          <Settings className="w-5 h-5 text-amber-500" />
           <h3 className="font-semibold text-foreground">Funzionalità</h3>
         </div>
         <div className="space-y-4">
-          {Object.entries(featureFlags).map(([key, value]) => (
+          {[
+            { key: 'darkMode', value: isDark },
+            ...Object.entries(featureFlags).map(([key, value]) => ({ key, value })),
+          ].map(({ key, value }) => (
             <div key={key} className="flex items-center justify-between py-3 border-b border-border last:border-0">
               <div>
                 <div className="font-medium text-foreground">
@@ -121,7 +123,13 @@ export default function SettingsPage() {
               </div>
               <IphoneToggle
                 enabled={value}
-                onClick={() => toggleFlag(key as keyof typeof featureFlags)}
+                onClick={() => {
+                  if (key === 'darkMode') {
+                    setTheme(isDark ? 'light' : 'dark');
+                    return;
+                  }
+                  toggleFlag(key as keyof typeof featureFlags);
+                }}
               />
             </div>
           ))}
@@ -135,7 +143,7 @@ export default function SettingsPage() {
         className="w-full flex items-center justify-center gap-2 py-3 bg-destructive/10 text-destructive rounded-lg font-medium hover:bg-destructive/20 transition-colors"
       >
         <LogOut className="w-5 h-5" />
-        Esci dall'applicazione
+        Esci dall&apos;applicazione
       </button>
     </div>
   );
