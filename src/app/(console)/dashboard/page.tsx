@@ -287,12 +287,12 @@ export default function DashboardPage() {
         }
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 gap-2 md:gap-3">
         {healthItems.map(item => (
-          <div key={item.label} className="bg-card border border-border rounded-lg px-3 py-2 sm:p-3 flex items-center justify-between gap-2">
+          <div key={item.label} className="bg-card border border-border rounded-lg p-2 sm:p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-2 min-w-0">
             <div className="min-w-0">
-              <div className="text-[11px] sm:text-xs text-muted-foreground">{item.label}</div>
-              <div className="text-xs sm:text-sm font-medium text-foreground truncate">{item.detail}</div>
+              <div className="text-[10px] sm:text-xs text-muted-foreground truncate">{item.label}</div>
+              <div className="text-[11px] sm:text-sm font-medium text-foreground truncate">{item.detail}</div>
             </div>
             <div className={`inline-flex items-center gap-1 px-1.5 py-0.5 sm:px-2 sm:py-1 rounded text-[10px] sm:text-xs shrink-0 ${
               item.status === 'ok'
@@ -302,7 +302,7 @@ export default function DashboardPage() {
                 : 'bg-red-500/10 text-red-600'
             }`}>
               {item.status === 'ok' ? <CheckCircle2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> : <XCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5" />}
-              <span className="hidden sm:inline-flex">{item.icon}</span>
+              <span className="inline-flex">{item.icon}</span>
             </div>
           </div>
         ))}
