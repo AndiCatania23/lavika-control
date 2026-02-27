@@ -354,7 +354,7 @@ export default function AnalyticsPage() {
                       <span className="hidden sm:inline">Altri</span>
                     </span>
                   </th>
-                  <th className="text-right p-1.5 sm:p-2.5 font-medium">Totale</th>
+                  <th className="text-center p-1.5 sm:p-2.5 font-medium">Totale</th>
                   <th className="text-right p-1.5 sm:p-2.5 font-medium">Size</th>
                 </tr>
               </thead>
@@ -365,7 +365,7 @@ export default function AnalyticsPage() {
                     <td className="p-1.5 sm:p-2.5 text-right text-foreground">{row.videos.toLocaleString('it-IT')}</td>
                     <td className="p-1.5 sm:p-2.5 text-right text-foreground">{row.covers.toLocaleString('it-IT')}</td>
                     <td className="p-1.5 sm:p-2.5 text-right text-muted-foreground">{row.other.toLocaleString('it-IT')}</td>
-                    <td className="p-1.5 sm:p-2.5 text-right text-foreground">{row.total.toLocaleString('it-IT')}</td>
+                    <td className="p-1.5 sm:p-2.5 text-center text-foreground">{row.total.toLocaleString('it-IT')}</td>
                     <td className="p-1.5 sm:p-2.5 text-right text-muted-foreground">
                       <span className="sm:hidden">{formatGigabytes(row.sizeBytes)}</span>
                       <span className="hidden sm:inline">{formatBytes(row.sizeBytes)}</span>
