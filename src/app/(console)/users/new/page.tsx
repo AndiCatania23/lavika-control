@@ -67,7 +67,11 @@ export default function NewUserPage() {
         return;
       }
 
-      showToast('success', `Invito inviato a ${trimmedEmail}.`);
+      if (data.mode === 'created-reset-password') {
+        showToast('success', `Utente creato. Email impostazione password inviata a ${trimmedEmail}.`);
+      } else {
+        showToast('success', `Invio completato per ${trimmedEmail}.`);
+      }
       setName('');
       setEmail('');
       router.push('/users');

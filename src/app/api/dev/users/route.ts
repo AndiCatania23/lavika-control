@@ -201,14 +201,37 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Inserisci una email valida.' }, { status: 400 });
   }
 
-  const { data, error } = await supabaseServer.auth.admin.inviteUserByEmail(email, {
-    data: {
+  if (sendResetIfExists) {
+    const { error: resetError } = await supabaseServer.auth.resetPasswordForEmail(email, {
+      redirectTo: 'https://lavikasport.app/reset-password',
+    });
+
+    if (resetError) {
+      return NextResponse.json(
+        { error: `Invio reset password fallito: ${resetError.message}` },
+        { status: 400 }
+      );
+    }
+
+    return NextResponse.json({
+      ok: true,
+      mode: 'reset-password',
+      email,
+    });
+  }
+
+  const generatedPassword = `${crypto.randomUUID()}Aa!9`;
+
+  const { data, error } = await supabaseServer.auth.admin.createUser({
+    email,
+    password: generatedPassword,
+    email_confirm: true,
+    user_metadata: {
       name,
       full_name: name,
       display_name: name,
       is_admin: false,
     },
-    redirectTo: 'https://lavikasport.app/reset-password',
   });
 
   if (error) {
@@ -225,26 +248,9 @@ export async function POST(request: Request) {
           { status: 409 }
         );
       }
-
-      const { error: resetError } = await supabaseServer.auth.resetPasswordForEmail(email, {
-        redirectTo: 'https://lavikasport.app/reset-password',
-      });
-
-      if (resetError) {
-        return NextResponse.json(
-          { error: `Utente gia esistente, ma invio reset password fallito: ${resetError.message}` },
-          { status: 400 }
-        );
-      }
-
-      return NextResponse.json({
-        ok: true,
-        mode: 'reset-password',
-        email,
-      });
     }
 
-    return NextResponse.json({ error: `Invito non inviato: ${error.message}` }, { status: 400 });
+    return NextResponse.json({ error: `Creazione utente fallita: ${error.message}` }, { status: 400 });
   }
 
   const invitedUserId = data.user?.id;
@@ -255,8 +261,20 @@ export async function POST(request: Request) {
       .eq('user_id', invitedUserId);
   }
 
+  const { error: resetError } = await supabaseServer.auth.resetPasswordForEmail(email, {
+    redirectTo: 'https://lavikasport.app/reset-password',
+  });
+
+  if (resetError) {
+    return NextResponse.json(
+      { error: `Utente creato ma invio mail reset password fallito: ${resetError.message}` },
+      { status: 400 }
+    );
+  }
+
   return NextResponse.json({
     ok: true,
+    mode: 'created-reset-password',
     userId: invitedUserId ?? null,
     email,
   });
