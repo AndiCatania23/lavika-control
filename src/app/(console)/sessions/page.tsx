@@ -18,6 +18,16 @@ function extractCityName(session: Session): string {
   return city && city.length > 0 ? city : 'Unknown';
 }
 
+function formatActivityDate(value: string): string {
+  const date = new Date(value);
+  return date.toLocaleString('it-IT', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
 export default function SessionsPage() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
@@ -45,32 +55,37 @@ export default function SessionsPage() {
       render: (session: Session) => (
         <div>
           <div className="font-medium text-foreground">{session.userName}</div>
-          <div className="text-xs text-muted-foreground">{session.userEmail}</div>
+          <div className="text-xs text-muted-foreground hidden md:block">{session.userEmail}</div>
         </div>
       ),
+      className: 'w-[34%]',
     },
     {
       key: 'device',
       header: 'Dispositivo',
       sortable: true,
       render: (session: Session) => extractDeviceName(session),
+      className: 'w-[26%]',
     },
     {
       key: 'browser',
       header: 'Browser',
       sortable: true,
+      className: 'hidden lg:table-cell',
     },
     {
       key: 'location',
       header: 'Posizione',
       sortable: true,
       render: (session: Session) => extractCityName(session),
+      className: 'hidden sm:table-cell w-[16%]',
     },
     {
       key: 'createdAt',
       header: 'Ultima attivita',
       sortable: true,
-      render: (session: Session) => new Date(session.createdAt).toLocaleString('it-IT'),
+      render: (session: Session) => formatActivityDate(session.createdAt),
+      className: 'w-[16%]',
     },
     {
       key: 'duration',
@@ -81,12 +96,14 @@ export default function SessionsPage() {
         const secs = session.duration % 60;
         return `${mins}m ${secs}s`;
       },
+      className: 'hidden lg:table-cell',
     },
     {
       key: 'status',
       header: 'Stato',
       sortable: true,
       render: (session: Session) => <StatusPill status={session.status} size="sm" />,
+      className: 'w-[14%]',
     },
   ];
 
@@ -101,7 +118,8 @@ export default function SessionsPage() {
         data={sessions}
         columns={columns}
         searchPlaceholder="Cerca sessioni..."
-        searchKeys={['userName', 'userEmail', 'location']}
+        searchKeys={['userName', 'userEmail', 'location', 'device', 'deviceLabel', 'browser']}
+        mobileVariant="table"
       />
     </div>
   );

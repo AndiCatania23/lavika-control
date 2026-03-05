@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { UserPlus } from 'lucide-react';
 import { getUsers, User } from '@/lib/data';
 import { DataTable } from '@/components/DataTable';
 import { SectionHeader } from '@/components/SectionHeader';
@@ -108,6 +109,16 @@ export default function UsersPage() {
       <SectionHeader 
         title="Utenti" 
         description="Gestisci e monitora gli utenti"
+        actions={(
+          <button
+            onClick={() => router.push('/users/new')}
+            aria-label="Aggiungi utente"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 sm:h-auto sm:w-auto sm:gap-2 sm:px-3 sm:py-2"
+          >
+            <UserPlus className="h-5 w-5 sm:h-4 sm:w-4" />
+            <span className="hidden sm:inline text-sm font-medium">Aggiungi utente</span>
+          </button>
+        )}
       />
 
       <DataTable

@@ -9,6 +9,7 @@ export interface GithubWorkflow {
 export interface GithubWorkflowRun {
   id: number;
   name: string;
+  display_title?: string;
   status: string;
   conclusion: string | null;
   run_started_at: string | null;
@@ -88,15 +89,24 @@ export async function getGithubRunById(id: string): Promise<GithubWorkflowRun | 
   return response.json() as Promise<GithubWorkflowRun>;
 }
 
-export async function triggerGithubWorkflow(workflowFile: string, ref: string = 'master'): Promise<{ ok: boolean; error?: string }> {
+export async function triggerGithubWorkflow(
+  workflowFile: string,
+  ref: string = 'master',
+  inputs?: Record<string, string>
+): Promise<{ ok: boolean; error?: string }> {
   const headers = getHeaders();
   if (!headers) return { ok: false, error: 'Missing GITHUB_TOKEN' };
 
   const { owner, repoName } = getRepo();
+  const body: { ref: string; inputs?: Record<string, string> } = { ref };
+  if (inputs && Object.keys(inputs).length > 0) {
+    body.inputs = inputs;
+  }
+
   const response = await fetch(`https://api.github.com/repos/${owner}/${repoName}/actions/workflows/${workflowFile}/dispatches`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ ref }),
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {

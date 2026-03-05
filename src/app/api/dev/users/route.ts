@@ -159,3 +159,105 @@ export async function GET() {
   const users = await listAllUsers();
   return NextResponse.json(users);
 }
+
+interface InviteUserPayload {
+  name?: unknown;
+  email?: unknown;
+  sendResetIfExists?: unknown;
+}
+
+function normalizeName(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  return value.trim().replace(/\s+/g, ' ');
+}
+
+function normalizeEmail(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  return value.trim().toLowerCase();
+}
+
+function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+export async function POST(request: Request) {
+  if (!supabaseServer) {
+    return NextResponse.json(
+      { error: 'Supabase non configurato sul server.' },
+      { status: 500 }
+    );
+  }
+
+  const body = await request.json().catch(() => null) as InviteUserPayload | null;
+  const name = normalizeName(body?.name);
+  const email = normalizeEmail(body?.email);
+  const sendResetIfExists = body?.sendResetIfExists === true;
+
+  if (!name) {
+    return NextResponse.json({ error: 'Inserisci il nome utente.' }, { status: 400 });
+  }
+
+  if (!email || !isValidEmail(email)) {
+    return NextResponse.json({ error: 'Inserisci una email valida.' }, { status: 400 });
+  }
+
+  const { data, error } = await supabaseServer.auth.admin.inviteUserByEmail(email, {
+    data: {
+      name,
+      full_name: name,
+      display_name: name,
+      is_admin: false,
+    },
+    redirectTo: 'https://lavikasport.app/reset-password',
+  });
+
+  if (error) {
+    const normalizedError = error.message.toLowerCase();
+    const alreadyRegistered = normalizedError.includes('already') || normalizedError.includes('registered');
+
+    if (alreadyRegistered) {
+      if (!sendResetIfExists) {
+        return NextResponse.json(
+          {
+            error: 'Utente gia registrato. Vuoi mandare reset password?',
+            code: 'user_exists',
+          },
+          { status: 409 }
+        );
+      }
+
+      const { error: resetError } = await supabaseServer.auth.resetPasswordForEmail(email, {
+        redirectTo: 'https://lavikasport.app/reset-password',
+      });
+
+      if (resetError) {
+        return NextResponse.json(
+          { error: `Utente gia esistente, ma invio reset password fallito: ${resetError.message}` },
+          { status: 400 }
+        );
+      }
+
+      return NextResponse.json({
+        ok: true,
+        mode: 'reset-password',
+        email,
+      });
+    }
+
+    return NextResponse.json({ error: `Invito non inviato: ${error.message}` }, { status: 400 });
+  }
+
+  const invitedUserId = data.user?.id;
+  if (invitedUserId) {
+    await supabaseServer
+      .from('dev_admins')
+      .delete()
+      .eq('user_id', invitedUserId);
+  }
+
+  return NextResponse.json({
+    ok: true,
+    userId: invitedUserId ?? null,
+    email,
+  });
+}

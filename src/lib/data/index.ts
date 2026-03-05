@@ -3,10 +3,20 @@ import type { Session } from '@/mocks/sessions';
 import type { Job } from '@/mocks/jobs';
 import type { JobRun } from '@/mocks/jobRuns';
 import type { ErrorLog } from '@/mocks/errors';
+import type { AppNotification } from '@/mocks/notifications';
 import type { UserContentInsights } from '@/lib/metrics/userInsights';
 
 export type { User, Session, Job, JobRun, ErrorLog };
+export type { AppNotification };
 export type { UserContentInsights };
+
+export interface GlobalSearchResult {
+  id: string;
+  type: 'user' | 'job' | 'page';
+  title: string;
+  subtitle: string;
+  href: string;
+}
 
 async function safeJson<T>(response: Response, fallback: T): Promise<T> {
   if (!response.ok) return fallback;
@@ -134,4 +144,20 @@ export async function getErrorByIdData(id: string): Promise<ErrorLog | undefined
   const response = await fetch(`/api/console/errors/${id}`, { cache: 'no-store' });
   if (!response.ok) return undefined;
   return response.json() as Promise<ErrorLog>;
+}
+
+export async function getNotificationsData(limit: number = 3, offset: number = 0): Promise<AppNotification[]> {
+  const response = await fetch(
+    `/api/notifications?limit=${encodeURIComponent(String(limit))}&offset=${encodeURIComponent(String(offset))}`,
+    { cache: 'no-store' }
+  );
+  return safeJson(response, [] as AppNotification[]);
+}
+
+export async function getGlobalSearchData(query: string, limit: number = 12): Promise<GlobalSearchResult[]> {
+  const response = await fetch(
+    `/api/search?q=${encodeURIComponent(query)}&limit=${encodeURIComponent(String(limit))}`,
+    { cache: 'no-store' }
+  );
+  return safeJson(response, [] as GlobalSearchResult[]);
 }

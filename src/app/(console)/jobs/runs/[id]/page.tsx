@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getJobRunByIdData, JobRun } from '@/lib/data';
+import { getRunSourceMapping } from '@/lib/jobRunSourceRegistry';
 import { StatusPill } from '@/components/StatusPill';
 import { ArrowLeft, Clock, User, Play } from 'lucide-react';
 
@@ -41,6 +42,14 @@ export default function JobRunDetailPage() {
       </div>
     );
   }
+
+  const inferredSourcesProcessed = run.sourcesProcessed ?? (getRunSourceMapping(run.id) ? 1 : null);
+  const hasExtraSummary = run.status === 'success' && (
+    inferredSourcesProcessed != null
+    || run.downloadedVideos != null
+    || run.uploadedVideos != null
+    || run.totalDurationSeconds != null
+  );
 
   return (
     <div className="space-y-6">
@@ -118,6 +127,31 @@ export default function JobRunDetailPage() {
           </div>
         </div>
       </div>
+
+      {hasExtraSummary && (
+        <div className="bg-card border border-border rounded-lg p-6">
+          <h3 className="font-semibold text-foreground mb-4">Riepilogo Job</h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-muted/30 rounded-lg p-4">
+              <div className="text-2xl font-semibold text-foreground">{inferredSourcesProcessed ?? '-'}</div>
+              <div className="text-xs text-muted-foreground">Source processate</div>
+            </div>
+            <div className="bg-muted/30 rounded-lg p-4">
+              <div className="text-2xl font-semibold text-foreground">{run.downloadedVideos ?? '-'}</div>
+              <div className="text-xs text-muted-foreground">Video scaricati</div>
+            </div>
+            <div className="bg-green-500/10 rounded-lg p-4">
+              <div className="text-2xl font-semibold text-green-500">{run.uploadedVideos ?? '-'}</div>
+              <div className="text-xs text-muted-foreground">Video caricati</div>
+            </div>
+            <div className="bg-blue-500/10 rounded-lg p-4">
+              <div className="text-2xl font-semibold text-blue-500">{run.totalDurationSeconds ?? '-'}</div>
+              <div className="text-xs text-muted-foreground">Durata totale (s)</div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="bg-card border border-border rounded-lg p-6">
         <h3 className="font-semibold text-foreground mb-2">Logs</h3>
         <p className="text-sm text-muted-foreground">

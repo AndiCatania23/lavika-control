@@ -69,21 +69,65 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const { jobId, triggeredBy = 'manual' } = await request.json();
+  const { jobId, triggeredBy = 'manual', source } = await request.json() as {
+    jobId?: string;
+    triggeredBy?: string;
+    source?: string;
+  };
 
   if (jobId !== 'job_sync_video') {
     return NextResponse.json({ error: 'Unsupported job id' }, { status: 400 });
   }
 
-  const dispatch = await triggerGithubWorkflow('sync-videos.yml');
+  const [workflows, currentRuns] = await Promise.all([listGithubWorkflows(), listGithubRuns()]);
+  const syncWorkflow = workflows.find(workflow => workflow.path.toLowerCase().includes('sync-videos.yml'));
+  const previousRunIds = new Set(currentRuns.map(run => String(run.id)));
+  const hasRunningSync = currentRuns.some(run => {
+    if (run.status === 'completed') return false;
+    if (syncWorkflow) return run.workflow_id === syncWorkflow.id;
+    return run.name.toLowerCase().includes('sync');
+  });
+
+  if (hasRunningSync) {
+    return NextResponse.json(
+      { success: false, error: 'Sync job already running' },
+      { status: 409 }
+    );
+  }
+
+  const workflowInputs = source
+    ? { source }
+    : undefined;
+
+  const dispatch = await triggerGithubWorkflow('sync-videos.yml', 'master', workflowInputs);
   if (!dispatch.ok) {
     return NextResponse.json({ success: false, error: dispatch.error ?? 'Dispatch failed' }, { status: 502 });
   }
 
   await new Promise(resolve => setTimeout(resolve, 1200));
 
-  const runs = await listGithubRuns();
-  const latest = runs.find(run => run.name.toLowerCase().includes('sync')) ?? runs[0];
+  let latest = null as Awaited<ReturnType<typeof listGithubRuns>>[number] | null;
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const runs = await listGithubRuns();
+    latest = runs.find(run => {
+      const isNewRun = !previousRunIds.has(String(run.id));
+      if (!isNewRun) return false;
+      if (syncWorkflow) return run.workflow_id === syncWorkflow.id;
+      return run.name.toLowerCase().includes('sync');
+    }) ?? null;
+
+    if (latest) break;
+    await new Promise(resolve => setTimeout(resolve, 1200));
+  }
+
+  if (!latest) {
+    const runs = await listGithubRuns();
+    latest = runs.find(run => {
+      if (syncWorkflow) return run.workflow_id === syncWorkflow.id;
+      return run.name.toLowerCase().includes('sync');
+    }) ?? runs[0] ?? null;
+  }
 
   let run: JobRun;
   if (latest) {

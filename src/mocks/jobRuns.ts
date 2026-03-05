@@ -11,6 +11,10 @@ export interface JobRun {
   insertedCount: number;
   updatedCount: number;
   errorCount: number;
+  sourcesProcessed?: number | null;
+  downloadedVideos?: number | null;
+  uploadedVideos?: number | null;
+  totalDurationSeconds?: number | null;
 }
 
 let jobRuns: JobRun[] = [];
