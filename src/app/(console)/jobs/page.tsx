@@ -8,12 +8,26 @@ import { SectionHeader } from '@/components/SectionHeader';
 import { StatusPill } from '@/components/StatusPill';
 import { Play, Clock, Calendar, ChevronRight } from 'lucide-react';
 
+type YouTubeCookiesUpdateResponse = {
+  ok?: boolean;
+  message?: string;
+  stats?: {
+    filteredRows?: number;
+    secretLength?: number;
+  };
+};
+
 export default function JobsPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [runningJobId, setRunningJobId] = useState<string | null>(null);
   const [runningSourceId, setRunningSourceId] = useState<string | null>(null);
   const [hasRunningJob, setHasRunningJob] = useState(false);
+  const [cookiesFile, setCookiesFile] = useState<File | null>(null);
+  const [cookiesLoading, setCookiesLoading] = useState(false);
+  const [cookiesError, setCookiesError] = useState<string | null>(null);
+  const [cookiesResult, setCookiesResult] = useState<YouTubeCookiesUpdateResponse | null>(null);
+  const [isCookiesPanelOpen, setIsCookiesPanelOpen] = useState(false);
   const router = useRouter();
 
   const quickSources = [
@@ -122,6 +136,62 @@ export default function JobsPage() {
     });
   };
 
+  const handleUpdateYouTubeCookies = async () => {
+    setCookiesError(null);
+    setCookiesResult(null);
+
+    if (!cookiesFile || !cookiesFile.name.toLowerCase().endsWith('.txt')) {
+      setCookiesError('Seleziona un file cookies.txt valido');
+      return;
+    }
+
+    setCookiesLoading(true);
+
+    try {
+      const cookiesText = await cookiesFile.text();
+      if (!cookiesText.trim()) {
+        setCookiesError('file vuoto/non valido');
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('cookies', cookiesFile);
+
+      const response = await fetch('/api/jobs/update-youtube-cookies', {
+        method: 'POST',
+        body: formData,
+      });
+
+      let payload: YouTubeCookiesUpdateResponse | null = null;
+      try {
+        payload = (await response.json()) as YouTubeCookiesUpdateResponse;
+      } catch {
+        payload = null;
+      }
+
+      if (response.ok) {
+        setCookiesResult(payload ?? { ok: true, message: 'Cookies YouTube aggiornati' });
+        return;
+      }
+
+      if (response.status === 400) {
+        setCookiesError('file vuoto/non valido');
+      } else if (response.status === 401) {
+        setCookiesError('Admin API key errata');
+      } else if (response.status === 503) {
+        setCookiesError('backend non configurato (ADMIN_API_KEY mancante)');
+      } else if (response.status === 500) {
+        setCookiesError(payload?.message ?? 'Errore backend');
+      } else {
+        setCookiesError(payload?.message ?? `Errore ${response.status}`);
+      }
+    } catch {
+      setCookiesError('Errore di rete durante aggiornamento cookies');
+    } finally {
+      setCookiesLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -164,6 +234,56 @@ export default function JobsPage() {
             </div>
           </div>
         ))}
+      </div>
+
+      <div className="bg-card border border-border rounded-lg">
+        <button
+          onClick={() => setIsCookiesPanelOpen((open) => !open)}
+          className="w-full flex items-center justify-between p-4 text-left"
+        >
+          <span className="font-semibold text-foreground text-base">Aggiorna Cookies YouTube</span>
+          <ChevronRight className={`w-4 h-4 text-muted-foreground transition-transform ${isCookiesPanelOpen ? 'rotate-90' : ''}`} />
+        </button>
+
+        {isCookiesPanelOpen && (
+          <div className="px-4 pb-4 space-y-3">
+            <div className="grid grid-cols-1 gap-3">
+              <label className="space-y-1">
+                <span className="block text-sm text-muted-foreground">cookies.txt</span>
+                <input
+                  type="file"
+                  accept=".txt,text/plain"
+                  onChange={(event) => setCookiesFile(event.target.files?.[0] ?? null)}
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground file:mr-3 file:rounded-md file:border-0 file:bg-muted file:px-2 file:py-1 file:text-xs file:font-medium"
+                />
+              </label>
+            </div>
+
+            <button
+              onClick={handleUpdateYouTubeCookies}
+              disabled={cookiesLoading}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50"
+            >
+              {cookiesLoading ? 'Aggiornamento in corso...' : 'Aggiorna Cookies YouTube'}
+            </button>
+
+            <div className="rounded-lg border border-border bg-background p-3 text-sm">
+              {cookiesLoading && <p className="text-muted-foreground">Upload cookies in corso...</p>}
+              {!cookiesLoading && cookiesError && <p className="text-red-500">{cookiesError}</p>}
+              {!cookiesLoading && cookiesResult && (
+                <div className="space-y-1 text-foreground">
+                  <p>ok: {String(Boolean(cookiesResult.ok))}</p>
+                  <p>message: {cookiesResult.message ?? '-'}</p>
+                  <p>filteredRows: {cookiesResult.stats?.filteredRows ?? '-'}</p>
+                  <p>secretLength: {cookiesResult.stats?.secretLength ?? '-'}</p>
+                </div>
+              )}
+              {!cookiesLoading && !cookiesError && !cookiesResult && (
+                <p className="text-muted-foreground">Nessun aggiornamento eseguito.</p>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

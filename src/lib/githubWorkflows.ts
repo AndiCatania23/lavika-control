@@ -23,9 +23,18 @@ export interface GithubWorkflowRun {
 }
 
 function getRepo() {
-  const repo = process.env.GITHUB_REPO || 'AndiCatania23/lavika-video-sync';
-  const [owner, repoName] = repo.split('/');
-  return { owner, repoName };
+  const ownerEnv = process.env.GITHUB_OWNER;
+  const repoEnv = process.env.GITHUB_REPO;
+
+  if (repoEnv && repoEnv.includes('/')) {
+    const [owner, repoName] = repoEnv.split('/');
+    return { owner, repoName };
+  }
+
+  return {
+    owner: ownerEnv || 'AndiCatania23',
+    repoName: repoEnv || 'lavika-video-sync',
+  };
 }
 
 function getHeaders() {
