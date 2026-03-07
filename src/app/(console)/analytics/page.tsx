@@ -623,7 +623,7 @@ export default function AnalyticsPage() {
               : 'Confronti storici pronti: collega le serie temporali per attivare i delta automatici.'}
           </div>
 
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {comparisonCards.map(card => (
               (() => {
                 const metric = card.metricKey
