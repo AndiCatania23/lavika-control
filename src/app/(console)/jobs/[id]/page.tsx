@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import Image from 'next/image';
 import { getJobById, getJobRunsData, getErrorsData, Job, JobRun, ErrorLog } from '@/lib/data';
 import { getRunSourceMapping, saveRunSourceMapping } from '@/lib/jobRunSourceRegistry';
 import { StatusPill } from '@/components/StatusPill';
@@ -13,6 +14,7 @@ type JobSourceSummary = {
   source: string;
   scope: string;
   filters: string;
+  imageUrl: string;
 };
 
 type JobSummary = {
@@ -46,6 +48,7 @@ export default function JobDetailPage() {
         source: 'Facebook (catanista-live)',
         scope: 'Live Catanista con naming a prefisso data.',
         filters: 'Durata 5m-4h, parole chiave CATANISTA LIVE, esclusi Clip/Short.',
+        imageUrl: '/immagini/Format Cover/Catanista/Catanista - card orizzontale.webp',
       },
       {
         id: 'serie-c-2025-2026',
@@ -53,6 +56,7 @@ export default function JobDetailPage() {
         source: 'YouTube playlist Serie C (serie-c-2025-2026)',
         scope: 'Partite categoria highlights stagione 2025/2026.',
         filters: 'Titoli con CATANIA, durata 1m-60m, esclusi Allenamento/Primavera/Under.',
+        imageUrl: '/immagini/Format Cover/highlights/highlights - card orizzontale.webp',
       },
       {
         id: 'catania-press-conference',
@@ -60,6 +64,7 @@ export default function JobDetailPage() {
         source: 'YouTube @officialcataniafc streams (catania-press-conference)',
         scope: 'Conferenze pre-gara con risoluzione match e naming canonico.',
         filters: 'Parole chiave conferenza pre-gara, durata 3m-2h, esclusi Highlights/settori giovanili.',
+        imageUrl: '/immagini/Format Cover/Press Conference/press conference - card orizzontale.webp',
       },
     ];
 
@@ -266,6 +271,15 @@ export default function JobDetailPage() {
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
             {jobSummary.sources.map(source => (
               <div key={source.title} className="border border-border rounded-lg p-3">
+                <div className="mb-2 overflow-hidden rounded-md border border-border bg-muted/20 aspect-video">
+                  <Image
+                    src={source.imageUrl}
+                    alt={`${source.title} card`}
+                    width={640}
+                    height={360}
+                    className="h-full w-full object-cover"
+                  />
+                </div>
                 <div className="text-sm font-semibold text-foreground">{source.title}</div>
                 <div className="text-xs text-muted-foreground mt-1">{source.source}</div>
                 <div className="text-xs text-muted-foreground mt-2">{source.scope}</div>

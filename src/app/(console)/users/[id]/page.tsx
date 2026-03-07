@@ -51,6 +51,7 @@ const emptyInsights: UserContentInsights = {
   topFormats: [],
   topEpisodes: [],
   topSeasons: [],
+  topPages: [],
 };
 
 function formatWatchTime(seconds: number): string {
@@ -285,6 +286,35 @@ export default function UserDetailPage() {
                 ))}
                 {insights.topEpisodes.length === 0 && <div className="text-xs text-muted-foreground">Nessun episodio tracciato.</div>}
               </div>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-border bg-card p-4 sm:p-5">
+            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2 mb-3 sm:mb-4">
+              <Activity className="w-4 h-4" />
+              Top Pagine Navigate
+            </h3>
+            <div className="space-y-2 sm:space-y-2.5">
+              {insights.topPages.map((page, index) => (
+                <div key={page.path} className="rounded-lg border border-border px-2.5 py-2 sm:px-3 sm:py-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="text-[13px] sm:text-sm text-foreground truncate leading-5">{index + 1}. {page.title}</span>
+                    <span className="text-muted-foreground whitespace-nowrap text-[12px] sm:text-sm">{page.views}</span>
+                  </div>
+                  <div className="text-[11px] text-muted-foreground mt-1.5 truncate">{page.path}</div>
+                  <div className="text-[11px] text-muted-foreground mt-2 flex items-center justify-between gap-2">
+                    <span className="inline-flex items-center gap-1">
+                      <span className="sm:hidden text-muted-foreground/80">Share</span>
+                      <span>{(page.share * 100).toFixed(1)}%</span>
+                    </span>
+                    <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                      <span className="sm:hidden text-muted-foreground/80">Ultima</span>
+                      <span>{formatDateTime(page.lastViewedAt)}</span>
+                    </span>
+                  </div>
+                </div>
+              ))}
+              {insights.topPages.length === 0 && <div className="text-xs text-muted-foreground">Nessuna pagina tracciata.</div>}
             </div>
           </div>
 

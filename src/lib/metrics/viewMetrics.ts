@@ -8,6 +8,15 @@ export interface ViewEventRow {
   metadata?: Record<string, unknown> | null;
 }
 
+function pickText(...values: unknown[]): string | null {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+  return null;
+}
+
 function shortId(value: string): string {
   return value.length > 8 ? value.slice(0, 8) : value;
 }
@@ -159,16 +168,39 @@ export async function loadUserNameMap(rows: ViewEventRow[]): Promise<Map<string,
 
 export function groupTotalPerEpisode(rows: ViewEventRow[], episodeNameMap?: Map<string, string>) {
   const map = new Map<string, number>();
+  const uniqueUsersByEpisode = new Map<string, Set<string>>();
+  const formatNameByEpisode = new Map<string, string>();
   for (const row of rows) {
     if (!row.episode_id) continue;
     map.set(row.episode_id, (map.get(row.episode_id) ?? 0) + 1);
+
+    if (row.user_id) {
+      const existing = uniqueUsersByEpisode.get(row.episode_id) ?? new Set<string>();
+      existing.add(row.user_id);
+      uniqueUsersByEpisode.set(row.episode_id, existing);
+    }
+
+    if (!formatNameByEpisode.has(row.episode_id)) {
+      const metadata = row.metadata ?? {};
+      const formatName = pickText(
+        metadata.format_title,
+        metadata.format_name,
+        metadata.format_key,
+        row.format_id,
+      );
+      if (formatName) {
+        formatNameByEpisode.set(row.episode_id, formatName);
+      }
+    }
   }
 
   return Array.from(map.entries())
     .map(([episode_id, total_views]) => ({
       episode_id,
       episode_name: episodeNameMap?.get(episode_id) ?? `Episodio ${shortId(episode_id)}`,
+      format_name: formatNameByEpisode.get(episode_id) ?? 'Format n/d',
       total_views,
+      unique_users: uniqueUsersByEpisode.get(episode_id)?.size ?? 0,
     }))
     .sort((a, b) => b.total_views - a.total_views);
 }

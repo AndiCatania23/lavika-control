@@ -12,6 +12,11 @@ interface ContentWatchTimeRow {
   watch_time_seconds: number | null;
 }
 
+interface ContentEventPathRow {
+  occurred_at: string;
+  metadata: Record<string, unknown> | null;
+}
+
 type DayPart = 'notte' | 'mattina' | 'pomeriggio' | 'sera' | 'n/d';
 
 export interface UserTopFormat {
@@ -34,6 +39,14 @@ export interface UserTopSeason {
   seasonId: string;
   seasonName: string;
   views: number;
+}
+
+export interface UserTopPage {
+  title: string;
+  path: string;
+  views: number;
+  share: number;
+  lastViewedAt: string | null;
 }
 
 export interface UserContentInsights {
@@ -59,6 +72,12 @@ export interface UserContentInsights {
   topFormats: UserTopFormat[];
   topEpisodes: UserTopEpisode[];
   topSeasons: UserTopSeason[];
+  topPages: UserTopPage[];
+}
+
+interface UserTopPagesResult {
+  items: UserTopPage[];
+  lastEventAt: string | null;
 }
 
 function shortId(value: string): string {
@@ -72,6 +91,214 @@ function pickText(...values: unknown[]): string | undefined {
     }
   }
   return undefined;
+}
+
+function readText(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function readMetadataPath(metadata: Record<string, unknown> | null): string | null {
+  if (!metadata) return null;
+
+  const keys = ['path', 'pathname', 'route', 'screen', 'last_path', 'page', 'page_path'];
+  for (const key of keys) {
+    const direct = readText(metadata[key]);
+    if (direct) return direct;
+  }
+
+  const nestedCandidates = [metadata.device, metadata.client, metadata.context, metadata.navigation];
+  for (const nestedCandidate of nestedCandidates) {
+    const nested = nestedCandidate as Record<string, unknown> | undefined;
+    if (!nested) continue;
+
+    for (const key of keys) {
+      const nestedValue = readText(nested[key]);
+      if (nestedValue) return nestedValue;
+    }
+  }
+
+  return null;
+}
+
+function normalizePath(rawPath: string): string | null {
+  const trimmed = rawPath.trim();
+  if (!trimmed) return null;
+
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    try {
+      const parsed = new URL(trimmed);
+      return parsed.pathname || '/';
+    } catch {
+      return null;
+    }
+  }
+
+  const withoutHash = trimmed.split('#')[0] ?? trimmed;
+  const withoutQuery = withoutHash.split('?')[0] ?? withoutHash;
+
+  if (!withoutQuery) return null;
+  return withoutQuery.startsWith('/') ? withoutQuery : `/${withoutQuery}`;
+}
+
+function isExcludedTopPagePath(path: string): boolean {
+  return path === '/' || path === '/home' || path === '/on-demand';
+}
+
+function toTitleCase(value: string): string {
+  return value
+    .split(' ')
+    .filter(Boolean)
+    .map(word => word[0] ? `${word[0].toUpperCase()}${word.slice(1).toLowerCase()}` : word)
+    .join(' ');
+}
+
+function humanizePathSegment(segment: string): string {
+  const decoded = decodeURIComponent(segment);
+  const normalized = decoded.replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!normalized) return '';
+  return toTitleCase(normalized);
+}
+
+function titleFromPath(path: string): string {
+  if (path === '/') return 'Home';
+
+  const parts = path.split('/').filter(Boolean);
+  if (parts.length === 0) return 'Home';
+
+  const section = humanizePathSegment(parts[0]);
+  const tail = parts[parts.length - 1] ?? '';
+  const detail = humanizePathSegment(tail);
+
+  if (!detail) return section || path;
+  if (parts.length === 1) return detail;
+  if (!section) return detail;
+  if (section.toLowerCase() === detail.toLowerCase()) return detail;
+  return `${section}: ${detail}`;
+}
+
+function readMetadataTitle(metadata: Record<string, unknown> | null): string | null {
+  if (!metadata) return null;
+
+  const keys = [
+    'page_title',
+    'title',
+    'screen_title',
+    'content_title',
+    'news_title',
+    'episode_title',
+    'format_title',
+  ];
+
+  for (const key of keys) {
+    const direct = readText(metadata[key]);
+    if (direct) return direct;
+  }
+
+  const nestedCandidates = [metadata.device, metadata.client, metadata.context, metadata.navigation];
+  for (const nestedCandidate of nestedCandidates) {
+    const nested = nestedCandidate as Record<string, unknown> | undefined;
+    if (!nested) continue;
+
+    for (const key of keys) {
+      const nestedValue = readText(nested[key]);
+      if (nestedValue) return nestedValue;
+    }
+  }
+
+  return null;
+}
+
+function resolvePageTitle(metadata: Record<string, unknown> | null, path: string): string {
+  return readMetadataTitle(metadata) ?? titleFromPath(path);
+}
+
+async function loadPathRowsByEventNameForUser(userId: string, eventName: string): Promise<ContentEventPathRow[]> {
+  if (!supabaseServer) return [];
+
+  const rows: ContentEventPathRow[] = [];
+  const pageSize = 1000;
+  const maxPages = 100;
+
+  for (let page = 0; page < maxPages; page += 1) {
+    const from = page * pageSize;
+    const to = from + pageSize - 1;
+
+    const { data, error } = await supabaseServer
+      .from('content_events')
+      .select('occurred_at,metadata')
+      .eq('event_name', eventName)
+      .eq('user_id', userId)
+      .order('occurred_at', { ascending: false })
+      .range(from, to);
+
+    if (error || !data || data.length === 0) break;
+
+    rows.push(...(data as ContentEventPathRow[]));
+
+    if (data.length < pageSize) break;
+  }
+
+  return rows;
+}
+
+function buildTopPagesFromRows(rows: ContentEventPathRow[]): UserTopPagesResult {
+  const pageViews = new Map<string, number>();
+  const pageLastViewed = new Map<string, string>();
+  const pageTitleByPath = new Map<string, string>();
+  let totalTrackedViews = 0;
+  let lastEventAt: string | null = null;
+
+  for (const row of rows) {
+    if (!lastEventAt) {
+      lastEventAt = row.occurred_at;
+    }
+
+    const rawPath = readMetadataPath(row.metadata);
+    if (!rawPath) continue;
+
+    const normalizedPath = normalizePath(rawPath);
+    if (!normalizedPath) continue;
+    if (isExcludedTopPagePath(normalizedPath)) continue;
+
+    pageViews.set(normalizedPath, (pageViews.get(normalizedPath) ?? 0) + 1);
+    totalTrackedViews += 1;
+
+    if (!pageTitleByPath.has(normalizedPath)) {
+      pageTitleByPath.set(normalizedPath, resolvePageTitle(row.metadata, normalizedPath));
+    }
+
+    if (!pageLastViewed.has(normalizedPath)) {
+      pageLastViewed.set(normalizedPath, row.occurred_at);
+    }
+  }
+
+  const items = Array.from(pageViews.entries())
+    .map(([path, views]) => ({
+      title: pageTitleByPath.get(path) ?? titleFromPath(path),
+      path,
+      views,
+      share: totalTrackedViews > 0 ? views / totalTrackedViews : 0,
+      lastViewedAt: pageLastViewed.get(path) ?? null,
+    }))
+    .sort((a, b) => b.views - a.views)
+    .slice(0, 5);
+
+  return {
+    items,
+    lastEventAt,
+  };
+}
+
+async function loadTopPagesForUser(userId: string): Promise<UserTopPagesResult> {
+  const pageViewRows = await loadPathRowsByEventNameForUser(userId, 'page_view');
+  if (pageViewRows.length > 0) {
+    return buildTopPagesFromRows(pageViewRows);
+  }
+
+  const legacyRows = await loadPathRowsByEventNameForUser(userId, 'view_start');
+  return buildTopPagesFromRows(legacyRows);
 }
 
 function getDayPart(occurredAt: string): DayPart {
@@ -131,6 +358,7 @@ export function emptyUserInsights(userId: string): UserContentInsights {
     topFormats: [],
     topEpisodes: [],
     topSeasons: [],
+    topPages: [],
   };
 }
 
@@ -138,6 +366,8 @@ export async function loadUserContentInsights(userId: string): Promise<UserConte
   if (!supabaseServer) {
     return emptyUserInsights(userId);
   }
+
+  const topPagesPromise = loadTopPagesForUser(userId);
 
   const allRows: ContentEventRow[] = [];
   const pageSize = 1000;
@@ -211,13 +441,15 @@ export async function loadUserContentInsights(userId: string): Promise<UserConte
   ]);
 
   if (allRows.length === 0) {
+    const topPagesResult = await topPagesPromise;
     const empty = emptyUserInsights(userId);
     empty.favoritesCount = favoritesCount ?? 0;
     empty.watchTimeSeconds = watchTimeSeconds;
-    empty.lastActivityAt = lastActivityAtFromSecondary;
+    empty.topPages = topPagesResult.items;
+    empty.lastActivityAt = maxTimestamp([lastActivityAtFromSecondary, topPagesResult.lastEventAt]);
 
-    if (lastActivityAtFromSecondary) {
-      const lastMs = new Date(lastActivityAtFromSecondary).getTime();
+    if (empty.lastActivityAt) {
+      const lastMs = new Date(empty.lastActivityAt).getTime();
       if (Number.isFinite(lastMs)) {
         const now = Date.now();
         empty.activeNow = now - lastMs <= 30 * 60 * 1000;
@@ -228,6 +460,8 @@ export async function loadUserContentInsights(userId: string): Promise<UserConte
 
     return empty;
   }
+
+  const topPagesResult = await topPagesPromise;
 
   const formatViews = new Map<string, number>();
   const formatNames = new Map<string, string>();
@@ -332,6 +566,7 @@ export async function loadUserContentInsights(userId: string): Promise<UserConte
   const lastActivityAt = maxTimestamp([
     lastViewAt,
     lastActivityAtFromSecondary,
+    topPagesResult.lastEventAt,
   ]);
   const lastActivityMs = lastActivityAt ? new Date(lastActivityAt).getTime() : Number.NaN;
   const now = Date.now();
@@ -363,5 +598,6 @@ export async function loadUserContentInsights(userId: string): Promise<UserConte
     topFormats,
     topEpisodes,
     topSeasons,
+    topPages: topPagesResult.items,
   };
 }

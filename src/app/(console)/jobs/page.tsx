@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { getJobs, Job } from '@/lib/data';
 import { saveRunSourceMapping } from '@/lib/jobRunSourceRegistry';
 import { SectionHeader } from '@/components/SectionHeader';
@@ -31,9 +32,21 @@ export default function JobsPage() {
   const router = useRouter();
 
   const quickSources = [
-    { id: 'catanista-live', title: 'CATANISTA LIVE' },
-    { id: 'serie-c-2025-2026', title: 'HIGHLIGHTS' },
-    { id: 'catania-press-conference', title: 'PRESS CONFERENCE' },
+    {
+      id: 'catanista-live',
+      title: 'CATANISTA LIVE',
+      imageUrl: '/immagini/Format Cover/Catanista/Catanista - card orizzontale.webp',
+    },
+    {
+      id: 'serie-c-2025-2026',
+      title: 'HIGHLIGHTS',
+      imageUrl: '/immagini/Format Cover/highlights/highlights - card orizzontale.webp',
+    },
+    {
+      id: 'catania-press-conference',
+      title: 'PRESS CONFERENCE',
+      imageUrl: '/immagini/Format Cover/Press Conference/press conference - card orizzontale.webp',
+    },
   ];
 
   useEffect(() => {
@@ -213,6 +226,15 @@ export default function JobsPage() {
             key={source.id}
             className="bg-card border border-border rounded-lg p-4 w-full"
           >
+            <div className="mb-3 overflow-hidden rounded-md border border-border bg-muted/20 aspect-video">
+              <Image
+                src={source.imageUrl}
+                alt={`${source.title} card`}
+                width={640}
+                height={360}
+                className="h-full w-full object-cover"
+              />
+            </div>
             <h3 className="font-semibold text-foreground text-base">{source.title}</h3>
             <div className="text-xs text-muted-foreground mt-1">Sync Video</div>
             <div className="flex items-center gap-2 pt-3 mt-3 border-t border-border">

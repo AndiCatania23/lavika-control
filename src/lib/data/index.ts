@@ -18,6 +18,14 @@ export interface GlobalSearchResult {
   href: string;
 }
 
+export interface TopViewedPage {
+  path: string;
+  views: number;
+  uniqueUsers: number;
+  share: number;
+  lastViewedAt: string | null;
+}
+
 async function safeJson<T>(response: Response, fallback: T): Promise<T> {
   if (!response.ok) return fallback;
   return response.json() as Promise<T>;
@@ -26,6 +34,12 @@ async function safeJson<T>(response: Response, fallback: T): Promise<T> {
 export async function getUsers(): Promise<User[]> {
   const response = await fetch('/api/dev/users', { cache: 'no-store' });
   return safeJson(response, [] as User[]);
+}
+
+export async function getTopViewedPages(limit: number = 5): Promise<TopViewedPage[]> {
+  const response = await fetch(`/api/dev/users/top-pages?limit=${encodeURIComponent(String(limit))}`, { cache: 'no-store' });
+  const payload = await safeJson(response, { items: [] as TopViewedPage[] });
+  return Array.isArray(payload.items) ? payload.items : [];
 }
 
 export async function getUserById(id: string): Promise<User | undefined> {
@@ -59,6 +73,7 @@ export async function getUserInsights(id: string): Promise<UserContentInsights> 
     topFormats: [],
     topEpisodes: [],
     topSeasons: [],
+    topPages: [],
   } as UserContentInsights);
 }
 
