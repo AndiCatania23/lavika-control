@@ -12,9 +12,12 @@ import { Play, Clock, Calendar, ChevronRight } from 'lucide-react';
 type YouTubeCookiesUpdateResponse = {
   ok?: boolean;
   message?: string;
+  missing?: string[];
+  hint?: string;
   stats?: {
     filteredRows?: number;
     secretLength?: number;
+    updatedSecrets?: string[];
   };
 };
 
@@ -183,18 +186,26 @@ export default function JobsPage() {
       }
 
       if (response.ok) {
-        setCookiesResult(payload ?? { ok: true, message: 'Cookies YouTube aggiornati' });
+        setCookiesResult(payload ?? { ok: true, message: 'Cookies YouTube/Google aggiornati' });
         return;
       }
 
       if (response.status === 400) {
         setCookiesError('file vuoto/non valido');
       } else if (response.status === 401) {
-        setCookiesError('Admin API key errata');
+        setCookiesError(payload?.message ?? 'Token GitHub non valido');
+      } else if (response.status === 403) {
+        setCookiesError(payload?.message ?? 'Permessi GitHub insufficienti per secrets/workflow');
       } else if (response.status === 503) {
         setCookiesError('backend non configurato (ADMIN_API_KEY mancante)');
       } else if (response.status === 500) {
-        setCookiesError(payload?.message ?? 'Errore backend');
+        if (payload?.missing?.length) {
+          const missingList = payload.missing.join(', ');
+          const hint = payload.hint ? ` (${payload.hint})` : '';
+          setCookiesError(`${payload.message ?? 'Config GitHub mancante'}: ${missingList}${hint}`);
+        } else {
+          setCookiesError(payload?.message ?? 'Errore backend');
+        }
       } else {
         setCookiesError(payload?.message ?? `Errore ${response.status}`);
       }
@@ -263,7 +274,7 @@ export default function JobsPage() {
           onClick={() => setIsCookiesPanelOpen((open) => !open)}
           className="w-full flex items-center justify-between p-4 text-left"
         >
-          <span className="font-semibold text-foreground text-base">Aggiorna Cookies YouTube</span>
+          <span className="font-semibold text-foreground text-base">Aggiorna Cookies YouTube/Google</span>
           <ChevronRight className={`w-4 h-4 text-muted-foreground transition-transform ${isCookiesPanelOpen ? 'rotate-90' : ''}`} />
         </button>
 
@@ -286,7 +297,7 @@ export default function JobsPage() {
               disabled={cookiesLoading}
               className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50"
             >
-              {cookiesLoading ? 'Aggiornamento in corso...' : 'Aggiorna Cookies YouTube'}
+              {cookiesLoading ? 'Aggiornamento in corso...' : 'Aggiorna Cookies YouTube/Google'}
             </button>
 
             <div className="rounded-lg border border-border bg-background p-3 text-sm">

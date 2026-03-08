@@ -2,7 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { gzipSync } from 'zlib';
 import { seal } from 'tweetsodium';
 
-const SECRET_NAME = 'YTDLP_COOKIES_YOUTUBE_GZ_B64';
+const TARGET_SECRETS = ['YTDLP_COOKIES_YOUTUBE_GZ_B64', 'YTDLP_COOKIES_GOOGLE_GZ_B64'] as const;
+
+class HttpError extends Error {
+  status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
 
 function getOwnerAndRepo() {
   const owner = process.env.GITHUB_OWNER?.trim();
@@ -21,6 +30,16 @@ function getOwnerAndRepo() {
   }
 
   return { owner: owner || '', repo: repo || '' };
+}
+
+function getMissingGithubConfig(owner: string, repo: string, token: string) {
+  const missing: string[] = [];
+
+  if (!token) missing.push('GITHUB_TOKEN');
+  if (!repo) missing.push('GITHUB_REPO');
+  if (!owner) missing.push('GITHUB_OWNER (oppure owner/repo in GITHUB_REPO)');
+
+  return missing;
 }
 
 function isAllowedDomain(domain: string) {
@@ -84,7 +103,7 @@ async function gh<T>(path: string, token: string, init?: RequestInit): Promise<T
 
   if (!res.ok) {
     const txt = await res.text();
-    throw new Error(`GitHub API ${res.status}: ${txt}`);
+    throw new HttpError(res.status, `GitHub API ${res.status}: ${txt}`);
   }
 
   if (res.status === 204) return null;
@@ -96,10 +115,16 @@ export async function POST(req: NextRequest) {
     const token = process.env.GITHUB_TOKEN?.trim() ?? '';
     const ref = process.env.GITHUB_REF?.trim() || 'master';
     const { owner, repo } = getOwnerAndRepo();
+    const missing = getMissingGithubConfig(owner, repo, token);
 
-    if (!token || !owner || !repo) {
+    if (missing.length) {
       return NextResponse.json(
-        { ok: false, message: 'Config GitHub mancante lato server' },
+        {
+          ok: false,
+          message: 'Config GitHub mancante lato server',
+          missing,
+          hint: 'Imposta le variabili e riavvia/redeploy il server',
+        },
         { status: 500 }
       );
     }
@@ -139,13 +164,15 @@ export async function POST(req: NextRequest) {
     const encryptedBytes = seal(messageBytes, keyBytes);
     const encryptedValue = Buffer.from(encryptedBytes).toString('base64');
 
-    await gh(`/repos/${owner}/${repo}/actions/secrets/${SECRET_NAME}`, token, {
-      method: 'PUT',
-      body: JSON.stringify({
-        encrypted_value: encryptedValue,
-        key_id: keyId,
-      }),
-    });
+    for (const secretName of TARGET_SECRETS) {
+      await gh(`/repos/${owner}/${repo}/actions/secrets/${secretName}`, token, {
+        method: 'PUT',
+        body: JSON.stringify({
+          encrypted_value: encryptedValue,
+          key_id: keyId,
+        }),
+      });
+    }
 
     await gh(`/repos/${owner}/${repo}/actions/workflows/check-cookies.yml/dispatches`, token, {
       method: 'POST',
@@ -154,10 +181,18 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       ok: true,
-      message: 'Secret aggiornata e workflow check-cookies avviato',
-      stats: { filteredRows, secretLength },
+      message: 'Secrets YouTube/Google aggiornati e workflow check-cookies avviato',
+      stats: {
+        filteredRows,
+        secretLength,
+        updatedSecrets: [...TARGET_SECRETS],
+      },
     });
   } catch (error: unknown) {
+    if (error instanceof HttpError) {
+      return NextResponse.json({ ok: false, message: error.message }, { status: error.status });
+    }
+
     const message = error instanceof Error ? error.message : 'Errore interno';
     return NextResponse.json({ ok: false, message }, { status: 500 });
   }
