@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { SectionHeader } from '@/components/SectionHeader';
-import { ArrowLeft, Eye, Film, FolderTree, HardDrive, Image as ImageIcon, Percent, User } from 'lucide-react';
+import { ArrowLeft, Eye, Film, FolderTree, HardDrive, Image as ImageIcon, Layers, Percent, User } from 'lucide-react';
 
 interface SeasonStat {
   season: string;
@@ -125,6 +125,18 @@ interface FormatMetricsData {
   userPerFormat: UserPerFormatRow[];
 }
 
+// Generic episode row from Supabase (we select * so columns may vary)
+interface EpisodeRow {
+  id: string;
+  title?: string | null;
+  name?: string | null;
+  season_id?: string | null;
+  season?: string | null;
+  episode_number?: number | null;
+  thumbnail_url?: string | null;
+  [key: string]: unknown;
+}
+
 const emptyMetrics: FormatMetricsData = {
   totalPerFormat: null,
   totalPerEpisode: [],
@@ -141,21 +153,34 @@ export default function AnalyticsFormatDetailPage() {
   const [metrics, setMetrics] = useState<FormatMetricsData>(emptyMetrics);
   const [loading, setLoading] = useState(true);
   const [metricsLoading, setMetricsLoading] = useState(false);
+  const [episodes, setEpisodes] = useState<EpisodeRow[]>([]);
+  const [episodesLoading, setEpisodesLoading] = useState(false);
+  const [selectedSeason, setSelectedSeason] = useState<string>('all');
 
   useEffect(() => {
     const load = async () => {
       setLoading(true);
+      setEpisodesLoading(true);
       try {
-        const response = await fetch(`/api/dev/r2/formats/${encodeURIComponent(rawFormat)}`, { cache: 'no-store' });
-        if (!response.ok) {
+        const [r2Response, episodesResponse] = await Promise.all([
+          fetch(`/api/dev/r2/formats/${encodeURIComponent(rawFormat)}`, { cache: 'no-store' }),
+          fetch(`/api/media/formats/${encodeURIComponent(rawFormat)}/episodes`, { cache: 'no-store' }),
+        ]);
+
+        if (!r2Response.ok) {
           setData(null);
-          return;
+        } else {
+          const payload = (await r2Response.json()) as FormatDetail;
+          setData(payload);
         }
 
-        const payload = (await response.json()) as FormatDetail;
-        setData(payload);
+        if (episodesResponse.ok) {
+          const eps = (await episodesResponse.json()) as EpisodeRow[];
+          setEpisodes(Array.isArray(eps) ? eps : []);
+        }
       } finally {
         setLoading(false);
+        setEpisodesLoading(false);
       }
     };
 
@@ -235,6 +260,42 @@ export default function AnalyticsFormatDetailPage() {
       topUserShare,
     };
   }, [metrics]);
+
+  // Build season list and filtered episodes for the episode browser
+  const episodeDerived = useMemo(() => {
+    // Determine season label for each episode
+    const getSeasonLabel = (ep: EpisodeRow): string => {
+      const raw = ep.season_id ?? ep.season ?? null;
+      if (raw) return String(raw);
+      // Fallback: try to derive from episode id pattern or metrics
+      return 'Stagione 1';
+    };
+
+    // Build sorted unique season list
+    const seasonSet = new Set<string>();
+    for (const ep of episodes) {
+      seasonSet.add(getSeasonLabel(ep));
+    }
+    const seasons = Array.from(seasonSet).sort((a, b) => b.localeCompare(a));
+
+    // Filter episodes by selected season
+    const filtered = selectedSeason === 'all'
+      ? episodes
+      : episodes.filter(ep => getSeasonLabel(ep) === selectedSeason);
+
+    // Enrich episode names: prefer title/name column, fallback to stripping format prefix from id
+    const enriched = filtered.map(ep => {
+      const displayName = (typeof ep.title === 'string' && ep.title)
+        ? ep.title
+        : (typeof ep.name === 'string' && ep.name)
+          ? ep.name
+          : ep.id.replace(`${rawFormat}-`, '');
+      const season = getSeasonLabel(ep);
+      return { ...ep, displayName, season };
+    });
+
+    return { seasons, enriched };
+  }, [episodes, selectedSeason, rawFormat]);
 
   if (loading) {
     return (
@@ -439,6 +500,94 @@ export default function AnalyticsFormatDetailPage() {
             <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500/80" />Altri</span>
           </div>
         </div>
+      </div>
+
+      {/* ── Elenco Puntate ─────────────────────────────────────────── */}
+      <div className="rounded-lg border border-border bg-card p-3">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Layers className="w-4 h-4 text-violet-500" />
+            <h3 className="text-sm font-semibold text-foreground">Elenco Puntate</h3>
+          </div>
+          <span className="text-xs text-muted-foreground">
+            {episodesLoading ? 'caricamento...' : `${episodeDerived.enriched.length} / ${episodes.length}`}
+          </span>
+        </div>
+
+        {/* Season filter tabs */}
+        {!episodesLoading && episodeDerived.seasons.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-3">
+            <button
+              onClick={() => setSelectedSeason('all')}
+              className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors ${
+                selectedSeason === 'all'
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'bg-muted/40 text-muted-foreground border-border hover:border-primary/40'
+              }`}
+            >
+              Tutte ({episodes.length})
+            </button>
+            {episodeDerived.seasons.map(season => {
+              const count = episodes.filter(ep => {
+                const raw = ep.season_id ?? ep.season ?? 'Stagione 1';
+                return String(raw) === season;
+              }).length;
+              return (
+                <button
+                  key={season}
+                  onClick={() => setSelectedSeason(season)}
+                  className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors ${
+                    selectedSeason === season
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'bg-muted/40 text-muted-foreground border-border hover:border-primary/40'
+                  }`}
+                >
+                  {season} ({count})
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {episodesLoading ? (
+          <div className="flex items-center justify-center h-20">
+            <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : episodes.length === 0 ? (
+          <div className="text-xs text-muted-foreground text-center py-4">Nessuna puntata trovata nel database.</div>
+        ) : (
+          <div className="overflow-auto rounded-md border border-border">
+            <table className="w-full text-xs md:text-sm">
+              <thead className="bg-muted/40 text-muted-foreground">
+                <tr>
+                  <th className="text-left p-2 font-medium w-10">#</th>
+                  <th className="text-left p-2 font-medium">Titolo</th>
+                  <th className="text-left p-2 font-medium w-32 hidden sm:table-cell">Stagione</th>
+                  <th className="text-center p-2 font-medium w-16">Cover</th>
+                </tr>
+              </thead>
+              <tbody>
+                {episodeDerived.enriched.map((ep, index) => (
+                  <tr key={ep.id} className="border-t border-border hover:bg-muted/20">
+                    <td className="p-2 text-muted-foreground">{index + 1}</td>
+                    <td className="p-2 text-foreground">
+                      <div className="truncate max-w-[220px] sm:max-w-[360px]">{ep.displayName}</div>
+                      <div className="text-[10px] text-muted-foreground font-mono mt-0.5 truncate max-w-[220px]">{ep.id}</div>
+                    </td>
+                    <td className="p-2 text-muted-foreground hidden sm:table-cell truncate max-w-[120px]">{ep.season}</td>
+                    <td className="p-2 text-center">
+                      {ep.thumbnail_url ? (
+                        <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" title="Cover presente" />
+                      ) : (
+                        <span className="inline-block w-2 h-2 rounded-full bg-muted-foreground/30" title="Nessuna cover" />
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

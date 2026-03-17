@@ -249,6 +249,8 @@ export default function AnalyticsPage() {
   const [overviewKpis, setOverviewKpis] = useState<OverviewKpi[]>([]);
   const [r2Summary, setR2Summary] = useState<R2Summary>(emptyR2Summary);
   const [r2Loading, setR2Loading] = useState(false);
+  // formatId → cover_horizontal_url from Supabase content_formats (R2 lavika-media)
+  const [formatCovers, setFormatCovers] = useState<Record<string, string>>({});
   const [comparisonMetrics, setComparisonMetrics] = useState<ComparisonMetric[]>([]);
   const [comparisonSnapshotDate, setComparisonSnapshotDate] = useState<string | null>(null);
   const [comparisonLoading, setComparisonLoading] = useState(false);
@@ -271,7 +273,21 @@ export default function AnalyticsPage() {
   const loadR2Summary = async () => {
     setR2Loading(true);
     try {
-      const response = await fetch('/api/dev/r2/summary', { cache: 'no-store' });
+      const [response, formatsResponse] = await Promise.all([
+        fetch('/api/dev/r2/summary', { cache: 'no-store' }),
+        fetch('/api/media/formats', { cache: 'no-store' }),
+      ]);
+
+      // Load format cover URLs from Supabase
+      if (formatsResponse.ok) {
+        const formatsData = await formatsResponse.json() as Array<{ id: string; cover_horizontal_url: string | null }>;
+        const covers: Record<string, string> = {};
+        for (const fmt of formatsData) {
+          if (fmt.cover_horizontal_url) covers[fmt.id] = fmt.cover_horizontal_url;
+        }
+        setFormatCovers(covers);
+      }
+
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
         setR2Summary({
@@ -885,9 +901,9 @@ export default function AnalyticsPage() {
                     className="bg-card border border-border rounded-lg p-2 flex items-center gap-2 hover:border-primary/40 transition-colors"
                   >
                     <div className="w-32 sm:w-40 md:w-36 xl:w-40 aspect-video rounded-md overflow-hidden border border-border bg-muted/20 shrink-0">
-                      {row.coverHorizontalUrl ? (
+                      {(formatCovers[row.format] ?? row.coverHorizontalUrl) ? (
                         <Image
-                          src={row.coverHorizontalUrl}
+                          src={formatCovers[row.format] ?? row.coverHorizontalUrl!}
                           alt={`${row.format} orizzontale`}
                           width={320}
                           height={180}
