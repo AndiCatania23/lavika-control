@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { SectionHeader } from '@/components/SectionHeader';
 import {
   Upload,
-  Image as ImageIcon,
+  ImageIcon,
   Film,
   AlertTriangle,
   CheckCircle2,

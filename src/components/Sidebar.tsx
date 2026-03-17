@@ -14,7 +14,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Home,
-  Images,
+  ImageIcon,
 } from 'lucide-react';
 
 const navItems = [
@@ -24,7 +24,7 @@ const navItems = [
   { href: '/sessions', label: 'Sessioni', icon: Activity },
   { href: '/jobs', label: 'Job', icon: Workflow },
   { href: '/errors', label: 'Errori', icon: AlertTriangle },
-  { href: '/media', label: 'Media', icon: Images },
+  { href: '/media', label: 'Media', icon: ImageIcon },
   { href: '/settings', label: 'Impostazioni', icon: Settings },
 ];
 
@@ -33,7 +33,7 @@ const mobileNavItems = [
   { href: '/analytics', label: 'Analisi', icon: BarChart3 },
   { href: '/users', label: 'Utenti', icon: Users },
   { href: '/jobs', label: 'Job', icon: Workflow },
-  { href: '/media', label: 'Media', icon: Images },
+  { href: '/media', label: 'Media', icon: ImageIcon },
 ];
 
 export function Sidebar() {
