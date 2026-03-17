@@ -15,35 +15,48 @@ import {
   HardDrive,
   X,
   Send,
+  Square,
+  Layers,
+  Search,
 } from 'lucide-react';
 
 const MEDIA_PUBLIC_BASE_URL = 'https://pub-caae50e77b854437b46967f95fd48914.r2.dev';
+const PRESS_CONF_RE = /press.?conf|conferenza/i;
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
-interface Episode {
+type FormatImageColumn = 'cover_vertical_url' | 'cover_horizontal_url' | 'hero_url';
+
+interface SupaFormat {
+  id: string;
+  title: string | null;
+  cover_vertical_url: string | null;
+  cover_horizontal_url: string | null;
+  hero_url: string | null;
+}
+
+interface ManifestEpisode {
   id: string;
   name?: string;
   title?: string;
   episodeNumber?: number;
   thumbnailUrl?: string;
-  videoUrl?: string;
 }
 
-interface Season {
+interface ManifestSeason {
   id: string;
   name?: string;
-  episodes: Episode[];
+  episodes: ManifestEpisode[];
 }
 
-interface Format {
+interface ManifestFormat {
   id: string;
   name?: string;
-  seasons: Season[];
+  seasons: ManifestSeason[];
 }
 
 interface Manifest {
-  formats?: Format[];
+  formats?: ManifestFormat[];
   [key: string]: unknown;
 }
 
@@ -53,7 +66,46 @@ interface UploadState {
   done: boolean;
 }
 
-type ActiveSection = 'formats' | 'episodes';
+interface LibraryItem {
+  key: string;
+  url: string;
+  size: number;
+  lastModified?: string;
+}
+
+type PickerTarget =
+  | { kind: 'format'; formatId: string; column: FormatImageColumn }
+  | { kind: 'episode-single'; episodeId: string; seasonId: string }
+  | { kind: 'episode-batch' };
+
+// ── Slot definitions ───────────────────────────────────────────────────────────
+
+const FORMAT_SLOTS = [
+  {
+    key: 'cover_vertical_url' as FormatImageColumn,
+    label: 'Cover Verticale',
+    note: 'Con titolo · 2:3',
+    aspect: 'aspect-[2/3]',
+    minDim: '400×600',
+    uploadType: 'format-cover-vertical',
+  },
+  {
+    key: 'cover_horizontal_url' as FormatImageColumn,
+    label: 'Cover Orizzontale',
+    note: 'Con titolo · 16:9',
+    aspect: 'aspect-video',
+    minDim: '640×360',
+    uploadType: 'format-cover-horizontal',
+  },
+  {
+    key: 'hero_url' as FormatImageColumn,
+    label: 'Hero',
+    note: 'Senza titolo · 16:9',
+    aspect: 'aspect-video',
+    minDim: '1280×720',
+    uploadType: 'format-hero',
+  },
+] as const;
 
 // ── Utilities ──────────────────────────────────────────────────────────────────
 
@@ -61,595 +113,857 @@ async function convertToWebP(file: File): Promise<Blob> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     const url = URL.createObjectURL(file);
-
     img.onload = () => {
       const canvas = document.createElement('canvas');
       canvas.width = img.naturalWidth;
       canvas.height = img.naturalHeight;
-
       const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        URL.revokeObjectURL(url);
-        reject(new Error('Canvas non disponibile'));
-        return;
-      }
-
+      if (!ctx) { URL.revokeObjectURL(url); reject(new Error('Canvas non disponibile')); return; }
       ctx.drawImage(img, 0, 0);
-
       canvas.toBlob(
-        (blob) => {
-          URL.revokeObjectURL(url);
-          if (blob) resolve(blob);
-          else reject(new Error('Conversione WebP fallita'));
-        },
+        (blob) => { URL.revokeObjectURL(url); blob ? resolve(blob) : reject(new Error('Conversione WebP fallita')); },
         'image/webp',
         0.88
       );
     };
-
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error('Impossibile caricare l\'immagine'));
-    };
-
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Impossibile caricare l'immagine")); };
     img.src = url;
   });
 }
 
-async function uploadImage(
+async function uploadFile(
   file: File,
-  type: 'format-cover' | 'format-hero' | 'episode-thumbnail',
-  formatId: string,
-  season?: string,
-  episodeId?: string,
+  type: string,
+  params: Record<string, string>,
   onProgress?: (p: number) => void
 ): Promise<string> {
-  onProgress?.(10);
-
-  const webpBlob = await convertToWebP(file);
-  onProgress?.(35);
-
+  onProgress?.(5);
+  const webp = await convertToWebP(file);
+  onProgress?.(40);
   const fd = new FormData();
   fd.append('type', type);
-  fd.append('formatId', formatId);
-  if (season) fd.append('season', season);
-  if (episodeId) fd.append('episodeId', episodeId);
-  fd.append('file', new File([webpBlob], 'image.webp', { type: 'image/webp' }));
-
-  onProgress?.(55);
-
-  const response = await fetch('/api/media/upload', { method: 'POST', body: fd });
+  fd.append('file', new File([webp], 'image.webp', { type: 'image/webp' }));
+  Object.entries(params).forEach(([k, v]) => fd.append(k, v));
+  onProgress?.(60);
+  const res = await fetch('/api/media/upload', { method: 'POST', body: fd });
   onProgress?.(90);
-
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({})) as { error?: string };
-    throw new Error(err.error ?? `Errore upload (${response.status})`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({})) as { error?: string };
+    throw new Error(err.error ?? `Errore upload (${res.status})`);
   }
-
-  const result = await response.json() as { url: string };
+  const { url } = await res.json() as { url: string };
   onProgress?.(100);
-  return result.url;
+  return url;
 }
 
-function isMediaUrl(url: string | undefined): boolean {
-  return Boolean(url?.startsWith(MEDIA_PUBLIC_BASE_URL));
+function epLabel(ep: ManifestEpisode): string {
+  return ep.name ?? ep.title ?? ep.id;
 }
 
-function episodeLabel(ep: Episode): string {
-  if (ep.name) return ep.name;
-  if (ep.title) return ep.title;
-  if (ep.episodeNumber != null) return `Episodio ${ep.episodeNumber}`;
-  return ep.id;
-}
+// ── ImageSlot ──────────────────────────────────────────────────────────────────
 
-// ── UploadZone ─────────────────────────────────────────────────────────────────
-
-function UploadZone({
-  label,
-  aspectClass,
-  currentUrl,
-  uploadState,
-  onFile,
+function ImageSlot({
+  label, note, aspect, minDim,
+  url, uploadState,
+  onUpload, onPicker, onRemove,
 }: {
-  label: string;
-  aspectClass: string;
-  currentUrl?: string;
-  uploadState?: UploadState;
-  onFile: (file: File) => void;
+  label: string; note: string; aspect: string; minDim: string;
+  url: string | null; uploadState: UploadState | null;
+  onUpload: (f: File) => void; onPicker: () => void; onRemove: () => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [imgError, setImgError] = useState(false);
-
-  const resolvedUrl = uploadState?.done && currentUrl ? currentUrl : currentUrl;
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setDragging(false);
-    const file = e.dataTransfer.files[0];
-    if (file && /\.(jpe?g|png|webp)$/i.test(file.name)) onFile(file);
-  };
-
   const uploading = uploadState && !uploadState.done && uploadState.progress > 0;
 
+  // reset error when url changes
+  useEffect(() => { setImgError(false); }, [url]);
+
   return (
-    <div className="flex flex-col gap-1">
-      <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">{label}</span>
+    <div className="space-y-2">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className="text-xs font-semibold text-foreground">{label}</p>
+          <p className="text-[10px] text-muted-foreground">{note} · min {minDim}px</p>
+        </div>
+        {url && !uploading && (
+          <button onClick={onRemove} className="text-[10px] text-red-500 hover:underline shrink-0">
+            Rimuovi
+          </button>
+        )}
+      </div>
+
       <div
-        className={`relative ${aspectClass} rounded-lg border-2 overflow-hidden cursor-pointer transition-all ${
-          dragging
-            ? 'border-primary bg-primary/10'
-            : 'border-dashed border-border hover:border-primary/50 hover:bg-muted/20'
-        } ${uploadState?.error ? 'border-red-500/50' : ''}`}
+        className={`relative ${aspect} rounded-lg border-2 overflow-hidden cursor-pointer transition-colors ${
+          dragging ? 'border-primary bg-primary/10'
+            : url && !imgError ? 'border-border hover:border-primary/40'
+            : 'border-dashed border-border hover:border-primary/40 bg-muted/10'
+        } ${uploadState?.error ? 'border-red-500/40' : ''}`}
         onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
         onDragLeave={() => setDragging(false)}
-        onDrop={handleDrop}
-        onClick={() => inputRef.current?.click()}
+        onDrop={(e) => {
+          e.preventDefault(); setDragging(false);
+          const f = e.dataTransfer.files[0]; if (f) onUpload(f);
+        }}
+        onClick={() => { if (!uploading) inputRef.current?.click(); }}
       >
-        {/* Current image */}
-        {resolvedUrl && !imgError && !uploading && (
-          <img
-            src={resolvedUrl}
-            alt={label}
-            className="absolute inset-0 w-full h-full object-cover"
-            onError={() => setImgError(true)}
-          />
+        {url && !imgError && (
+          <img src={url} alt={label} className="absolute inset-0 w-full h-full object-cover"
+            onError={() => setImgError(true)} />
         )}
-
-        {/* Overlay */}
-        <div className={`absolute inset-0 flex flex-col items-center justify-center gap-1 transition-opacity ${
-          uploading ? 'bg-background/80' : resolvedUrl && !imgError ? 'opacity-0 hover:opacity-100 bg-background/70' : ''
+        <div className={`absolute inset-0 flex flex-col items-center justify-center gap-2 transition-opacity ${
+          uploading ? 'bg-background/80 opacity-100'
+            : url && !imgError ? 'opacity-0 hover:opacity-100 bg-background/60'
+            : 'opacity-100'
         }`}>
           {uploading ? (
-            <div className="w-full px-4 flex flex-col items-center gap-2">
-              <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            <div className="w-full px-4 space-y-2 text-center">
+              <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
               <div className="w-full bg-muted rounded-full h-1">
-                <div
-                  className="bg-primary h-1 rounded-full transition-all duration-300"
-                  style={{ width: `${uploadState!.progress}%` }}
-                />
+                <div className="bg-primary h-1 rounded-full transition-all" style={{ width: `${uploadState!.progress}%` }} />
               </div>
               <span className="text-[10px] text-muted-foreground">{uploadState!.progress}%</span>
             </div>
           ) : (
             <>
-              <Upload className="w-4 h-4 text-muted-foreground" />
-              <span className="text-[10px] text-muted-foreground text-center px-1">
-                {dragging ? 'Rilascia qui' : 'Clicca o trascina'}
-              </span>
+              <Upload className="w-5 h-5 text-muted-foreground/60" />
+              <span className="text-[10px] text-muted-foreground">{dragging ? 'Rilascia' : 'Clicca o trascina'}</span>
             </>
           )}
         </div>
-
-        {/* Done badge */}
         {uploadState?.done && (
-          <div className="absolute top-1 right-1">
+          <div className="absolute top-2 right-2">
             <CheckCircle2 className="w-4 h-4 text-green-500 drop-shadow" />
           </div>
         )}
       </div>
 
-      {/* Error */}
-      {uploadState?.error && (
-        <p className="text-[10px] text-red-500 line-clamp-2">{uploadState.error}</p>
-      )}
+      {uploadState?.error && <p className="text-[10px] text-red-500">{uploadState.error}</p>}
 
-      <input
-        ref={inputRef}
-        type="file"
-        accept=".jpg,.jpeg,.png,.webp"
-        className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) { onFile(file); e.target.value = ''; }
-        }}
-      />
+      <div className="grid grid-cols-2 gap-1.5">
+        <button
+          disabled={!!uploading}
+          onClick={() => inputRef.current?.click()}
+          className="inline-flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md border border-border text-xs text-foreground hover:bg-muted/40 disabled:opacity-40 transition-colors"
+        >
+          <Upload className="w-3 h-3" /> Carica nuova
+        </button>
+        <button
+          disabled={!!uploading}
+          onClick={onPicker}
+          className="inline-flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md border border-border text-xs text-foreground hover:bg-muted/40 disabled:opacity-40 transition-colors"
+        >
+          <ImageIcon className="w-3 h-3" /> Libreria
+        </button>
+      </div>
+
+      <input ref={inputRef} type="file" accept=".jpg,.jpeg,.png,.webp" className="hidden"
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) { onUpload(f); e.target.value = ''; } }} />
     </div>
   );
 }
 
-// ── EpisodeBadge ───────────────────────────────────────────────────────────────
+// ── EpisodeCard ────────────────────────────────────────────────────────────────
 
-function EpisodeBadge({ thumbnailUrl }: { thumbnailUrl?: string }) {
-  const isMedia = isMediaUrl(thumbnailUrl);
+function EpisodeCard({
+  episode, dbThumb, checked,
+  onCheck, uploadState, onUpload, onPicker,
+}: {
+  episode: ManifestEpisode;
+  dbThumb: string | undefined;
+  checked: boolean;
+  onCheck: (v: boolean) => void;
+  uploadState?: UploadState;
+  onUpload: (f: File) => void;
+  onPicker: () => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
+  const [imgError, setImgError] = useState(false);
+  const uploading = uploadState && !uploadState.done && uploadState.progress > 0;
+  const displayUrl = dbThumb ?? episode.thumbnailUrl;
+  const isEditorial = Boolean(dbThumb);
+
+  useEffect(() => { setImgError(false); }, [displayUrl]);
+
   return (
-    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-medium ${
-      isMedia
-        ? 'bg-green-500/10 text-green-500'
-        : thumbnailUrl
-        ? 'bg-muted text-muted-foreground'
-        : 'bg-muted text-muted-foreground/60'
+    <div className={`relative rounded-lg border bg-card overflow-hidden transition-colors ${
+      checked ? 'border-primary/60 ring-1 ring-primary/20' : 'border-border'
     }`}>
-      <span className={`w-1.5 h-1.5 rounded-full ${isMedia ? 'bg-green-500' : 'bg-muted-foreground/40'}`} />
-      {isMedia ? 'lavika-media' : thumbnailUrl ? 'lavika-videos' : 'Nessuna'}
-    </span>
+      {/* Checkbox */}
+      <button
+        onClick={() => onCheck(!checked)}
+        className={`absolute top-2 left-2 z-10 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+          checked ? 'bg-primary border-primary' : 'bg-background/80 border-muted-foreground/40 hover:border-primary/60'
+        }`}
+      >
+        {checked && <CheckCircle2 className="w-3 h-3 text-primary-foreground" />}
+      </button>
+
+      {/* Thumbnail */}
+      <div
+        className={`relative aspect-video cursor-pointer overflow-hidden ${dragging ? 'bg-primary/10' : 'bg-muted/20'}`}
+        onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => {
+          e.preventDefault(); setDragging(false);
+          const f = e.dataTransfer.files[0]; if (f) onUpload(f);
+        }}
+        onClick={() => { if (!uploading) inputRef.current?.click(); }}
+      >
+        {displayUrl && !imgError && !uploading && (
+          <img src={displayUrl} alt={epLabel(episode)}
+            className="absolute inset-0 w-full h-full object-cover" onError={() => setImgError(true)} />
+        )}
+        <div className={`absolute inset-0 flex flex-col items-center justify-center gap-1 transition-opacity ${
+          uploading ? 'bg-background/80' : displayUrl && !imgError ? 'opacity-0 hover:opacity-100 bg-background/60' : ''
+        }`}>
+          {uploading ? (
+            <div className="w-full px-4 space-y-1.5">
+              <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+              <div className="w-full bg-muted rounded-full h-1">
+                <div className="bg-primary h-1 rounded-full" style={{ width: `${uploadState!.progress}%` }} />
+              </div>
+            </div>
+          ) : (
+            <>
+              <Upload className="w-4 h-4 text-muted-foreground" />
+              <span className="text-[10px] text-muted-foreground">Carica thumbnail</span>
+            </>
+          )}
+        </div>
+        {uploadState?.done && (
+          <div className="absolute top-1 right-1"><CheckCircle2 className="w-4 h-4 text-green-500 drop-shadow" /></div>
+        )}
+      </div>
+
+      {/* Info */}
+      <div className="p-2.5 space-y-1.5">
+        <div className="flex items-start justify-between gap-1">
+          <p className="text-xs font-medium text-foreground line-clamp-2 leading-tight">{epLabel(episode)}</p>
+          {episode.episodeNumber != null && (
+            <span className="shrink-0 text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
+              #{episode.episodeNumber}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center justify-between">
+          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-medium ${
+            isEditorial
+              ? 'bg-green-500/10 text-green-600 dark:text-green-400'
+              : displayUrl ? 'bg-muted text-muted-foreground' : 'bg-muted/50 text-muted-foreground/50'
+          }`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${isEditorial ? 'bg-green-500' : 'bg-muted-foreground/40'}`} />
+            {isEditorial ? 'Editoriale' : displayUrl ? 'Manifest' : 'Nessuna'}
+          </span>
+          <button onClick={(e) => { e.stopPropagation(); onPicker(); }}
+            className="text-muted-foreground hover:text-foreground transition-colors">
+            <ImageIcon className="w-3.5 h-3.5" />
+          </button>
+        </div>
+        {uploadState?.error && <p className="text-[10px] text-red-500 line-clamp-2">{uploadState.error}</p>}
+      </div>
+
+      <input ref={inputRef} type="file" accept=".jpg,.jpeg,.png,.webp" className="hidden"
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) { onUpload(f); e.target.value = ''; } }} />
+    </div>
+  );
+}
+
+// ── MediaPicker ────────────────────────────────────────────────────────────────
+
+function MediaPicker({
+  open, onClose, onSelect,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onSelect: (url: string) => void;
+}) {
+  const [items, setItems] = useState<LibraryItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [filter, setFilter] = useState<'all' | 'formats' | 'episodes'>('all');
+  const [search, setSearch] = useState('');
+  const [pickerUpload, setPickerUpload] = useState<UploadState | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const loadItems = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/media/library');
+      const data = await res.json() as { items: LibraryItem[] };
+      setItems(Array.isArray(data.items) ? data.items : []);
+    } catch { /* ignore */ } finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => {
+    if (open) { loadItems(); setSearch(''); setFilter('all'); setPickerUpload(null); }
+  }, [open, loadItems]);
+
+  const filtered = items.filter(item => {
+    if (filter === 'formats' && !item.key.startsWith('formats/')) return false;
+    if (filter === 'episodes' && !item.key.startsWith('episodes/')) return false;
+    if (search && !item.key.toLowerCase().includes(search.toLowerCase())) return false;
+    return true;
+  });
+
+  const handlePickerUpload = async (file: File) => {
+    setPickerUpload({ progress: 10, error: null, done: false });
+    try {
+      const webp = await convertToWebP(file);
+      setPickerUpload({ progress: 40, error: null, done: false });
+      const fd = new FormData();
+      fd.append('type', 'library-upload');
+      fd.append('formatId', '_');
+      fd.append('file', new File([webp], 'image.webp', { type: 'image/webp' }));
+      setPickerUpload({ progress: 70, error: null, done: false });
+      const res = await fetch('/api/media/upload', { method: 'POST', body: fd });
+      if (!res.ok) throw new Error('Upload fallito');
+      const { url } = await res.json() as { url: string };
+      setPickerUpload({ progress: 100, error: null, done: true });
+      const key = url.replace(MEDIA_PUBLIC_BASE_URL + '/', '');
+      setItems(prev => [{ key, url, size: webp.size }, ...prev]);
+      onSelect(url);
+      onClose();
+    } catch (err) {
+      setPickerUpload({ progress: 0, error: err instanceof Error ? err.message : 'Errore', done: false });
+    }
+  };
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
+      <div
+        className="relative z-10 w-full max-w-4xl max-h-[85vh] bg-card border border-border rounded-xl flex flex-col shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
+          <h2 className="text-sm font-semibold text-foreground">Libreria Media · lavika-media</h2>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Controls */}
+        <div className="flex items-center gap-2 px-3 py-2 border-b border-border shrink-0 flex-wrap">
+          {(['all', 'formats', 'episodes'] as const).map(f => (
+            <button key={f} onClick={() => setFilter(f)}
+              className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                filter === f ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted/40'
+              }`}>
+              {f === 'all' ? 'Tutto' : f === 'formats' ? 'Format' : 'Episodi'}
+            </button>
+          ))}
+          <div className="flex-1" />
+          <div className="relative">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
+            <input type="text" placeholder="Cerca..." value={search} onChange={(e) => setSearch(e.target.value)}
+              className="bg-muted/40 border border-border rounded-md pl-6 pr-2 py-1 text-xs text-foreground placeholder:text-muted-foreground w-36" />
+          </div>
+          <button onClick={() => fileRef.current?.click()}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors">
+            <Upload className="w-3 h-3" /> Carica nuova
+          </button>
+        </div>
+
+        {/* Upload progress */}
+        {pickerUpload && !pickerUpload.done && (
+          <div className="px-3 py-2 border-b border-border shrink-0 flex items-center gap-2">
+            <div className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin shrink-0" />
+            <div className="flex-1 bg-muted rounded-full h-1">
+              <div className="bg-primary h-1 rounded-full" style={{ width: `${pickerUpload.progress}%` }} />
+            </div>
+            <span className="text-[10px] text-muted-foreground shrink-0">{pickerUpload.progress}%</span>
+          </div>
+        )}
+        {pickerUpload?.error && (
+          <div className="px-3 py-2 border-b border-border shrink-0">
+            <p className="text-[10px] text-red-500">{pickerUpload.error}</p>
+          </div>
+        )}
+
+        {/* Grid */}
+        <div className="flex-1 overflow-y-auto p-3">
+          {loading ? (
+            <div className="flex items-center justify-center h-48">
+              <div className="w-7 h-7 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
+              <ImageIcon className="w-10 h-10 mb-3 opacity-30" />
+              <p className="text-sm">
+                {items.length === 0 ? 'La libreria è vuota — carica la prima immagine.' : 'Nessun risultato per questa ricerca.'}
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2">
+              {filtered.map(item => (
+                <button key={item.key} title={item.key}
+                  onClick={() => { onSelect(item.url); onClose(); }}
+                  className="group relative aspect-square rounded-lg overflow-hidden border-2 border-transparent hover:border-primary transition-all bg-muted/20">
+                  <img src={item.url} alt={item.key} className="w-full h-full object-cover" loading="lazy"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                  <div className="absolute inset-0 bg-background/0 group-hover:bg-background/40 transition-colors" />
+                  <p className="absolute bottom-0 inset-x-0 px-1 py-0.5 text-[8px] text-white bg-black/50 truncate opacity-0 group-hover:opacity-100 transition-opacity">
+                    {item.key.split('/').pop()}
+                  </p>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="px-3 py-2 border-t border-border shrink-0">
+          <p className="text-[10px] text-muted-foreground">{filtered.length} immagini · Clicca per selezionare</p>
+        </div>
+
+        <input ref={fileRef} type="file" accept=".jpg,.jpeg,.png,.webp" className="hidden"
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) { handlePickerUpload(f); e.target.value = ''; } }} />
+      </div>
+    </div>
   );
 }
 
 // ── Main Page ──────────────────────────────────────────────────────────────────
 
 export default function MediaPage() {
-  const [activeSection, setActiveSection] = useState<ActiveSection>('formats');
+  const [activeSection, setActiveSection] = useState<'formats' | 'episodes'>('formats');
+
+  // Section 1: Supabase formats
+  const [supaFormats, setSupaFormats] = useState<SupaFormat[]>([]);
+  const [formatsLoading, setFormatsLoading] = useState(true);
+  const [formatsError, setFormatsError] = useState<string | null>(null);
+  const [formatUploadStates, setFormatUploadStates] = useState<Record<string, UploadState>>({});
+
+  // Section 2: Manifest + Supabase episodes
   const [manifest, setManifest] = useState<Manifest | null>(null);
+  const [manifestLoading, setManifestLoading] = useState(true);
+  const [epDb, setEpDb] = useState<Record<string, string>>({});
+  const [epDbLoading, setEpDbLoading] = useState(true);
+  const [selectedFormatId, setSelectedFormatId] = useState('');
+  const [selectedSeasonId, setSelectedSeasonId] = useState('');
+  const [selectedEpIds, setSelectedEpIds] = useState<Set<string>>(new Set());
+  const [epUploadStates, setEpUploadStates] = useState<Record<string, UploadState>>({});
+  const [bulkUploading, setBulkUploading] = useState(false);
+  const batchFileRef = useRef<HTMLInputElement>(null);
+
+  // Manifest publish
   const [workingManifest, setWorkingManifest] = useState<Manifest | null>(null);
-  const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [pendingManifestIds, setPendingManifestIds] = useState<Set<string>>(new Set());
   const [publishLoading, setPublishLoading] = useState(false);
   const [publishResult, setPublishResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
-  // Format image uploads
-  const [formatUploads, setFormatUploads] = useState<Record<string, UploadState>>({});
-  // Format image current URLs (updated after successful upload)
-  const [formatImageUrls, setFormatImageUrls] = useState<Record<string, string>>({});
+  // Media picker
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerTarget, setPickerTarget] = useState<PickerTarget | null>(null);
 
-  // Episode thumbnail uploads
-  const [episodeUploads, setEpisodeUploads] = useState<Record<string, UploadState>>({});
+  // ── Data loading ─────────────────────────────────────────────────────────────
 
-  // Section 2 selectors
-  const [selectedFormatId, setSelectedFormatId] = useState<string>('');
-  const [selectedSeasonId, setSelectedSeasonId] = useState<string>('');
-
-  // Load manifest
-  const loadManifest = useCallback(async () => {
-    setLoading(true);
-    setLoadError(null);
+  const loadFormats = useCallback(async () => {
+    setFormatsLoading(true); setFormatsError(null);
     try {
-      const response = await fetch('/api/media/manifest', { cache: 'no-store' });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data = await response.json() as Manifest;
-      setManifest(data);
-      setWorkingManifest(structuredClone(data));
-      // Set default selectors
-      const formats = Array.isArray(data.formats) ? data.formats : [];
-      if (formats.length > 0) {
-        setSelectedFormatId(formats[0].id);
-        if (formats[0].seasons.length > 0) {
-          setSelectedSeasonId(formats[0].seasons[0].id);
-        }
-      }
+      const res = await fetch('/api/media/formats');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json() as SupaFormat[];
+      setSupaFormats(Array.isArray(data) ? data : []);
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Errore caricamento manifest');
-    } finally {
-      setLoading(false);
-    }
+      setFormatsError(err instanceof Error ? err.message : 'Errore');
+    } finally { setFormatsLoading(false); }
   }, []);
 
-  useEffect(() => { loadManifest(); }, [loadManifest]);
-
-  // Sync selectedSeasonId when format changes
-  useEffect(() => {
-    const fmt = Array.isArray(workingManifest?.formats)
-      ? workingManifest!.formats.find(f => f.id === selectedFormatId)
-      : undefined;
-    if (fmt && fmt.seasons.length > 0) {
-      setSelectedSeasonId(fmt.seasons[0].id);
-    } else {
-      setSelectedSeasonId('');
-    }
-  }, [selectedFormatId, workingManifest]);
-
-  const formats = Array.isArray(workingManifest?.formats) ? workingManifest!.formats : [];
-  const selectedFormat = formats.find(f => f.id === selectedFormatId);
-  const selectedSeason = selectedFormat?.seasons.find(s => s.id === selectedSeasonId);
-
-  // ── Format image upload ───────────────────────────────────────────────────
-
-  function handleFormatImageUpload(
-    formatId: string,
-    imageType: 'cover' | 'hero',
-    file: File
-  ) {
-    const key = `${formatId}-${imageType}`;
-    setFormatUploads(prev => ({ ...prev, [key]: { progress: 0, error: null, done: false } }));
-
-    const type = imageType === 'cover' ? 'format-cover' : 'format-hero';
-
-    uploadImage(file, type, formatId, undefined, undefined, (p) => {
-      setFormatUploads(prev => ({ ...prev, [key]: { progress: p, error: null, done: false } }));
-    })
-      .then((url) => {
-        setFormatUploads(prev => ({ ...prev, [key]: { progress: 100, error: null, done: true } }));
-        setFormatImageUrls(prev => ({ ...prev, [key]: url }));
-      })
-      .catch((err: Error) => {
-        setFormatUploads(prev => ({
-          ...prev,
-          [key]: { progress: 0, error: err.message, done: false },
-        }));
-      });
-  }
-
-  // ── Episode thumbnail upload ──────────────────────────────────────────────
-
-  function handleEpisodeThumbnailUpload(
-    episode: Episode,
-    seasonId: string,
-    formatId: string,
-    file: File
-  ) {
-    const key = `ep-${episode.id}`;
-    setEpisodeUploads(prev => ({ ...prev, [key]: { progress: 0, error: null, done: false } }));
-
-    uploadImage(file, 'episode-thumbnail', formatId, seasonId, episode.id, (p) => {
-      setEpisodeUploads(prev => ({ ...prev, [key]: { progress: p, error: null, done: false } }));
-    })
-      .then((url) => {
-        setEpisodeUploads(prev => ({ ...prev, [key]: { progress: 100, error: null, done: true } }));
-        // Update working manifest in memory
-        setWorkingManifest(prev => {
-          if (!prev) return prev;
-          const clone = structuredClone(prev);
-          const fmt = Array.isArray(clone.formats) ? clone.formats.find(f => f.id === formatId) : undefined;
-          const ssn = fmt?.seasons.find(s => s.id === seasonId);
-          const ep = ssn?.episodes.find(e => e.id === episode.id);
-          if (ep) ep.thumbnailUrl = url;
-          return clone;
-        });
-        setPendingIds(prev => new Set(prev).add(episode.id));
-      })
-      .catch((err: Error) => {
-        setEpisodeUploads(prev => ({
-          ...prev,
-          [key]: { progress: 0, error: err.message, done: false },
-        }));
-      });
-  }
-
-  // ── Publish manifest ─────────────────────────────────────────────────────
-
-  async function handlePublish() {
-    if (!workingManifest) return;
-    setPublishLoading(true);
-    setPublishResult(null);
+  const loadManifest = useCallback(async () => {
+    setManifestLoading(true);
     try {
-      const response = await fetch('/api/media/manifest', {
+      const res = await fetch('/api/media/manifest', { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json() as Manifest;
+      setManifest(data);
+      setWorkingManifest(structuredClone(data));
+      const fmts = Array.isArray(data.formats) ? data.formats : [];
+      if (fmts.length > 0) {
+        setSelectedFormatId(fmts[0].id);
+        const s0 = Array.isArray(fmts[0].seasons) ? fmts[0].seasons : [];
+        if (s0.length > 0) setSelectedSeasonId(s0[0].id);
+      }
+    } catch { /* ignore */ } finally { setManifestLoading(false); }
+  }, []);
+
+  const loadEpDb = useCallback(async () => {
+    setEpDbLoading(true);
+    try {
+      const res = await fetch('/api/media/episodes');
+      if (!res.ok) return;
+      const data = await res.json() as Array<{ id: string; thumbnail_url: string | null }>;
+      const map: Record<string, string> = {};
+      (Array.isArray(data) ? data : []).forEach(ep => {
+        if (ep.thumbnail_url) map[ep.id] = ep.thumbnail_url;
+      });
+      setEpDb(map);
+    } catch { /* ignore */ } finally { setEpDbLoading(false); }
+  }, []);
+
+  useEffect(() => { loadFormats(); loadManifest(); loadEpDb(); }, [loadFormats, loadManifest, loadEpDb]);
+
+  // Sync season when format changes
+  const manifestFormats = Array.isArray(manifest?.formats) ? manifest!.formats : [];
+  useEffect(() => {
+    const fmt = manifestFormats.find(f => f.id === selectedFormatId);
+    const seasons = Array.isArray(fmt?.seasons) ? fmt!.seasons : [];
+    setSelectedSeasonId(seasons[0]?.id ?? '');
+    setSelectedEpIds(new Set());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedFormatId]);
+
+  const selectedManifestFormat = manifestFormats.find(f => f.id === selectedFormatId);
+  const manifestSeasons = Array.isArray(selectedManifestFormat?.seasons) ? selectedManifestFormat!.seasons : [];
+  const selectedSeason = manifestSeasons.find(s => s.id === selectedSeasonId);
+  const seasonEpisodes = Array.isArray(selectedSeason?.episodes) ? selectedSeason!.episodes : [];
+
+  // ── Format upload handlers ────────────────────────────────────────────────
+
+  const handleFormatUpload = async (formatId: string, column: FormatImageColumn, uploadType: string, file: File) => {
+    const stateKey = `${formatId}-${column}`;
+    setFormatUploadStates(prev => ({ ...prev, [stateKey]: { progress: 0, error: null, done: false } }));
+    try {
+      const url = await uploadFile(file, uploadType, { formatId }, (p) => {
+        setFormatUploadStates(prev => ({ ...prev, [stateKey]: { progress: p, error: null, done: false } }));
+      });
+      const res = await fetch('/api/media/formats', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: formatId, column, value: url }),
+      });
+      if (!res.ok) throw new Error('Errore salvataggio DB');
+      setFormatUploadStates(prev => ({ ...prev, [stateKey]: { progress: 100, error: null, done: true } }));
+      setSupaFormats(prev => prev.map(f => f.id === formatId ? { ...f, [column]: url } : f));
+    } catch (err) {
+      setFormatUploadStates(prev => ({
+        ...prev, [stateKey]: { progress: 0, error: err instanceof Error ? err.message : 'Errore', done: false },
+      }));
+    }
+  };
+
+  const handleFormatRemove = async (formatId: string, column: FormatImageColumn) => {
+    await fetch('/api/media/formats', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: formatId, column, value: null }),
+    });
+    setSupaFormats(prev => prev.map(f => f.id === formatId ? { ...f, [column]: null } : f));
+  };
+
+  // ── Episode upload handlers ───────────────────────────────────────────────
+
+  const handleEpUpload = async (ep: ManifestEpisode, seasonId: string, file: File) => {
+    const stateKey = `ep-${ep.id}`;
+    setEpUploadStates(prev => ({ ...prev, [stateKey]: { progress: 0, error: null, done: false } }));
+    try {
+      const url = await uploadFile(
+        file, 'episode-thumbnail',
+        { formatId: selectedFormatId, season: seasonId, episodeId: ep.id },
+        (p) => { setEpUploadStates(prev => ({ ...prev, [stateKey]: { progress: p, error: null, done: false } })); }
+      );
+      await fetch('/api/media/episodes', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [ep.id], thumbnail_url: url }),
+      });
+      setEpUploadStates(prev => ({ ...prev, [stateKey]: { progress: 100, error: null, done: true } }));
+      setEpDb(prev => ({ ...prev, [ep.id]: url }));
+      // also update working manifest for publish
+      setWorkingManifest(prev => {
+        if (!prev) return prev;
+        const clone = structuredClone(prev);
+        const fmt = Array.isArray(clone.formats) ? clone.formats.find(f => f.id === selectedFormatId) : undefined;
+        const ssn = fmt?.seasons?.find(s => s.id === seasonId);
+        const episode = ssn?.episodes?.find(e => e.id === ep.id);
+        if (episode) episode.thumbnailUrl = url;
+        return clone;
+      });
+      setPendingManifestIds(prev => new Set(prev).add(ep.id));
+    } catch (err) {
+      setEpUploadStates(prev => ({
+        ...prev, [stateKey]: { progress: 0, error: err instanceof Error ? err.message : 'Errore', done: false },
+      }));
+    }
+  };
+
+  // ── Batch upload ──────────────────────────────────────────────────────────
+
+  const applyBatchUrl = async (url: string) => {
+    const ids = Array.from(selectedEpIds);
+    await fetch('/api/media/episodes', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids, thumbnail_url: url }),
+    });
+    setEpDb(prev => { const next = { ...prev }; ids.forEach(id => { next[id] = url; }); return next; });
+    setSelectedEpIds(new Set());
+  };
+
+  const handleBatchUpload = async (file: File) => {
+    setBulkUploading(true);
+    try {
+      const url = await uploadFile(file, 'batch-thumbnail', { formatId: selectedFormatId });
+      await applyBatchUrl(url);
+    } catch (err) {
+      console.error('Batch upload error:', err);
+    } finally { setBulkUploading(false); }
+  };
+
+  // ── Media Picker handlers ─────────────────────────────────────────────────
+
+  const openPicker = (target: PickerTarget) => { setPickerTarget(target); setPickerOpen(true); };
+
+  const handlePickerSelect = async (url: string) => {
+    setPickerOpen(false);
+    if (!pickerTarget) return;
+    if (pickerTarget.kind === 'format') {
+      await fetch('/api/media/formats', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: pickerTarget.formatId, column: pickerTarget.column, value: url }),
+      });
+      setSupaFormats(prev => prev.map(f =>
+        f.id === pickerTarget.formatId ? { ...f, [pickerTarget.column]: url } : f
+      ));
+    } else if (pickerTarget.kind === 'episode-single') {
+      await fetch('/api/media/episodes', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [pickerTarget.episodeId], thumbnail_url: url }),
+      });
+      setEpDb(prev => ({ ...prev, [pickerTarget.episodeId]: url }));
+    } else if (pickerTarget.kind === 'episode-batch') {
+      await applyBatchUrl(url);
+    }
+  };
+
+  // ── Publish manifest ──────────────────────────────────────────────────────
+
+  const handlePublish = async () => {
+    if (!workingManifest) return;
+    setPublishLoading(true); setPublishResult(null);
+    try {
+      const res = await fetch('/api/media/manifest', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(workingManifest),
       });
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({})) as { error?: string };
-        throw new Error(err.error ?? `Errore (${response.status})`);
-      }
+      if (!res.ok) throw new Error(`Errore (${res.status})`);
       setManifest(structuredClone(workingManifest));
-      setPendingIds(new Set());
-      setPublishResult({ ok: true, msg: 'Manifest pubblicato con successo' });
+      setPendingManifestIds(new Set());
+      setPublishResult({ ok: true, msg: 'Manifest pubblicato su lavika-videos' });
     } catch (err) {
-      setPublishResult({
-        ok: false,
-        msg: err instanceof Error ? err.message : 'Errore pubblicazione',
-      });
-    } finally {
-      setPublishLoading(false);
-    }
-  }
+      setPublishResult({ ok: false, msg: err instanceof Error ? err.message : 'Errore' });
+    } finally { setPublishLoading(false); }
+  };
+
+  // ── Derived ───────────────────────────────────────────────────────────────
+
+  const episodesWithoutEditorial = seasonEpisodes.filter(ep => !epDb[ep.id]);
+  const allSelected = seasonEpisodes.length > 0 && seasonEpisodes.every(ep => selectedEpIds.has(ep.id));
+  const isPressConf = selectedManifestFormat
+    ? PRESS_CONF_RE.test(selectedManifestFormat.id + (selectedManifestFormat.name ?? ''))
+    : false;
 
   // ── Render ────────────────────────────────────────────────────────────────
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
-
-  if (loadError) {
-    return (
-      <div className="space-y-4">
-        <SectionHeader title="Media" description="Gestione immagini lavika-media" />
-        <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 flex items-start gap-3">
-          <AlertTriangle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
-          <div>
-            <p className="text-sm font-medium text-red-500">Errore caricamento manifest</p>
-            <p className="text-xs text-muted-foreground mt-1">{loadError}</p>
-            <button
-              onClick={loadManifest}
-              className="mt-2 text-xs text-primary hover:underline"
-            >
-              Riprova
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-6 pb-32">
+    <div className="space-y-6 pb-48">
       <SectionHeader
         title="Media"
-        description="Gestione immagini pubbliche su lavika-media · Manifest episodi su lavika-videos"
+        description="Immagini su lavika-media · Catalogo su lavika-videos"
         actions={
-          <button
-            onClick={loadManifest}
-            className="inline-flex items-center gap-2 px-3 py-2 text-sm border border-border rounded-lg hover:bg-muted/40"
-          >
-            <RefreshCw className="w-4 h-4" />
-            Ricarica
+          <button onClick={() => { loadFormats(); loadManifest(); loadEpDb(); }}
+            className="inline-flex items-center gap-2 px-3 py-2 text-sm border border-border rounded-lg hover:bg-muted/40 transition-colors">
+            <RefreshCw className="w-4 h-4" /> Ricarica
           </button>
         }
       />
 
-      {/* Bucket context banner */}
+      {/* Bucket banners */}
       <div className="grid grid-cols-2 gap-2">
         <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2">
           <Cloud className="w-4 h-4 text-violet-500 shrink-0" />
           <div className="min-w-0">
             <p className="text-[10px] text-muted-foreground">Immagini su</p>
-            <p className="text-xs font-medium text-foreground truncate">lavika-media (pubblico)</p>
+            <p className="text-xs font-medium truncate">lavika-media (pubblico)</p>
           </div>
         </div>
         <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2">
           <HardDrive className="w-4 h-4 text-amber-500 shrink-0" />
           <div className="min-w-0">
             <p className="text-[10px] text-muted-foreground">Catalogo su</p>
-            <p className="text-xs font-medium text-foreground truncate">lavika-videos (privato)</p>
+            <p className="text-xs font-medium truncate">lavika-videos (privato)</p>
           </div>
         </div>
       </div>
 
-      {/* Section tab switcher */}
+      {/* Section tabs */}
       <div className="rounded-xl border border-border bg-card/70 p-1">
         <nav className="grid grid-cols-2 gap-1">
-          {([
+          {[
             { id: 'formats' as const, label: 'Immagini Format', icon: <ImageIcon className="h-3.5 w-3.5" /> },
             { id: 'episodes' as const, label: 'Thumbnail Episodi', icon: <Film className="h-3.5 w-3.5" /> },
-          ]).map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveSection(tab.id)}
+          ].map(tab => (
+            <button key={tab.id} onClick={() => setActiveSection(tab.id)}
               className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-sm font-medium transition-colors ${
                 activeSection === tab.id
                   ? 'bg-background text-foreground shadow-sm'
                   : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
-              }`}
-            >
-              {tab.icon}
-              {tab.label}
+              }`}>
+              {tab.icon} {tab.label}
             </button>
           ))}
         </nav>
       </div>
 
-      {/* ── Section 1: Format Images ─────────────────────────────────────── */}
+      {/* ── Section 1: Format Images ─────────────────────────────────────────── */}
       {activeSection === 'formats' && (
         <div className="space-y-4">
           <div className="rounded-lg border border-border bg-card/60 p-3 text-xs text-muted-foreground space-y-1">
-            <p>
-              Le immagini vengono caricate su{' '}
-              <span className="text-foreground font-medium">lavika-media</span> al percorso{' '}
-              <code className="bg-muted px-1 rounded text-[10px]">formats/&#123;id&#125;/cover.webp</code> e{' '}
-              <code className="bg-muted px-1 rounded text-[10px]">formats/&#123;id&#125;/hero.webp</code>.
-            </p>
+            <p>Le immagini vengono caricate su <span className="text-foreground font-medium">lavika-media</span> e salvate
+              nella tabella <code className="bg-muted px-1 rounded text-[10px]">content_formats</code>.</p>
             <p>Formati accettati: JPG, PNG, WebP · Convertiti automaticamente in WebP prima del caricamento.</p>
           </div>
 
-          {formats.length === 0 ? (
+          {formatsLoading ? (
+            <div className="flex items-center justify-center h-32">
+              <div className="w-7 h-7 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : formatsError ? (
+            <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 flex items-start gap-3">
+              <AlertTriangle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-red-500">Errore caricamento format</p>
+                <p className="text-xs text-muted-foreground mt-1">{formatsError}</p>
+                <button onClick={loadFormats} className="mt-2 text-xs text-primary hover:underline">Riprova</button>
+              </div>
+            </div>
+          ) : supaFormats.length === 0 ? (
             <div className="rounded-lg border border-border bg-card p-8 text-center">
               <BookOpen className="w-8 h-8 text-muted-foreground/40 mx-auto mb-3" />
-              <p className="text-sm text-muted-foreground">Nessun format trovato nel manifest.</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Assicurati che il bucket lavika-videos contenga un manifest.json valido con un array <code>formats</code>.
-              </p>
+              <p className="text-sm text-muted-foreground">Nessun format trovato in <code>content_formats</code>.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {formats.map(fmt => {
-                const coverKey = `${fmt.id}-cover`;
-                const heroKey = `${fmt.id}-hero`;
-                const coverUrl = formatImageUrls[coverKey] ?? `${MEDIA_PUBLIC_BASE_URL}/formats/${fmt.id}/cover.webp`;
-                const heroUrl = formatImageUrls[heroKey] ?? `${MEDIA_PUBLIC_BASE_URL}/formats/${fmt.id}/hero.webp`;
-
-                return (
-                  <div key={fmt.id} className="rounded-lg border border-border bg-card p-4 space-y-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <div>
-                        <p className="text-sm font-semibold text-foreground">{fmt.name ?? fmt.id}</p>
-                        <p className="text-[10px] text-muted-foreground font-mono">{fmt.id}</p>
-                      </div>
-                      <span className="text-[10px] text-muted-foreground bg-muted px-2 py-0.5 rounded">
-                        {fmt.seasons.length} stagion{fmt.seasons.length === 1 ? 'e' : 'i'}
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      {/* Cover 2:3 */}
-                      <UploadZone
-                        label="Cover 2:3"
-                        aspectClass="aspect-[2/3]"
-                        currentUrl={coverUrl}
-                        uploadState={formatUploads[coverKey]}
-                        onFile={(file) => handleFormatImageUpload(fmt.id, 'cover', file)}
-                      />
-                      {/* Hero 16:9 */}
-                      <UploadZone
-                        label="Hero 16:9"
-                        aspectClass="aspect-video"
-                        currentUrl={heroUrl}
-                        uploadState={formatUploads[heroKey]}
-                        onFile={(file) => handleFormatImageUpload(fmt.id, 'hero', file)}
-                      />
-                    </div>
-
-                    <div className="text-[10px] text-muted-foreground space-y-0.5">
-                      <p>cover: <span className="text-foreground/60 font-mono">formats/{fmt.id}/cover.webp</span></p>
-                      <p>hero: <span className="text-foreground/60 font-mono">formats/{fmt.id}/hero.webp</span></p>
-                    </div>
+            <div className="space-y-6">
+              {supaFormats.map(fmt => (
+                <div key={fmt.id} className="rounded-xl border border-border bg-card p-5 space-y-4">
+                  <div>
+                    <h3 className="text-sm font-semibold text-foreground">{fmt.title ?? fmt.id}</h3>
+                    <p className="text-[10px] text-muted-foreground font-mono">{fmt.id}</p>
                   </div>
-                );
-              })}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                    {FORMAT_SLOTS.map(slot => {
+                      const stateKey = `${fmt.id}-${slot.key}`;
+                      return (
+                        <ImageSlot
+                          key={slot.key}
+                          label={slot.label}
+                          note={slot.note}
+                          aspect={slot.aspect}
+                          minDim={slot.minDim}
+                          url={fmt[slot.key]}
+                          uploadState={formatUploadStates[stateKey] ?? null}
+                          onUpload={(file) => handleFormatUpload(fmt.id, slot.key, slot.uploadType, file)}
+                          onPicker={() => openPicker({ kind: 'format', formatId: fmt.id, column: slot.key })}
+                          onRemove={() => handleFormatRemove(fmt.id, slot.key)}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
       )}
 
-      {/* ── Section 2: Episode Thumbnails ────────────────────────────────── */}
+      {/* ── Section 2: Episode Thumbnails ────────────────────────────────────── */}
       {activeSection === 'episodes' && (
         <div className="space-y-4">
           <div className="rounded-lg border border-border bg-card/60 p-3 text-xs text-muted-foreground space-y-1">
             <p>
-              Le thumbnail vengono caricate su{' '}
-              <span className="text-foreground font-medium">lavika-media</span> al percorso{' '}
-              <code className="bg-muted px-1 rounded text-[10px]">episodes/&#123;season&#125;/thumbnails/&#123;id&#125;.webp</code>.
+              Badge <span className="text-green-500 font-medium">Editoriale</span>: thumbnail salvata in{' '}
+              <code className="bg-muted px-1 rounded text-[10px]">content_episodes</code> → scrittura immediata, nessuna pubblicazione.
             </p>
             <p>
-              Il campo <code className="bg-muted px-1 rounded text-[10px]">thumbnailUrl</code> viene aggiornato in memoria — premi{' '}
-              <strong className="text-foreground">Pubblica Manifest</strong> per salvare su lavika-videos.
+              Badge <span className="text-muted-foreground font-medium">Manifest</span>: thumbnail nel manifest.json su lavika-videos.{' '}
+              Usa <strong className="text-foreground">Pubblica Manifest</strong> per sincronizzare.
             </p>
           </div>
 
           {/* Format + Season selectors */}
           <div className="flex flex-col sm:flex-row gap-2">
-            {/* Format selector */}
             <div className="relative flex-1">
-              <select
-                value={selectedFormatId}
-                onChange={e => setSelectedFormatId(e.target.value)}
-                className="w-full appearance-none bg-card border border-border rounded-lg px-3 py-2 text-sm text-foreground pr-8"
-              >
-                {formats.length === 0 && (
-                  <option value="">Nessun format disponibile</option>
-                )}
-                {formats.map(f => (
+              <select value={selectedFormatId} onChange={e => setSelectedFormatId(e.target.value)}
+                className="w-full appearance-none bg-card border border-border rounded-lg px-3 py-2 text-sm text-foreground pr-8">
+                {manifestLoading && <option value="">Caricamento...</option>}
+                {!manifestLoading && manifestFormats.length === 0 && <option value="">Nessun format</option>}
+                {manifestFormats.map(f => (
                   <option key={f.id} value={f.id}>{f.name ?? f.id}</option>
                 ))}
               </select>
               <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
             </div>
-
-            {/* Season selector */}
             <div className="relative flex-1">
-              <select
-                value={selectedSeasonId}
-                onChange={e => setSelectedSeasonId(e.target.value)}
-                className="w-full appearance-none bg-card border border-border rounded-lg px-3 py-2 text-sm text-foreground pr-8"
-                disabled={!selectedFormat || selectedFormat.seasons.length === 0}
-              >
-                {(!selectedFormat || selectedFormat.seasons.length === 0) && (
-                  <option value="">Nessuna stagione</option>
-                )}
-                {selectedFormat?.seasons.map(s => (
-                  <option key={s.id} value={s.id}>{s.name ?? s.id}</option>
-                ))}
+              <select value={selectedSeasonId} onChange={e => setSelectedSeasonId(e.target.value)}
+                disabled={manifestSeasons.length === 0}
+                className="w-full appearance-none bg-card border border-border rounded-lg px-3 py-2 text-sm text-foreground pr-8 disabled:opacity-50">
+                {manifestSeasons.length === 0 && <option value="">Nessuna stagione</option>}
+                {manifestSeasons.map(s => <option key={s.id} value={s.id}>{s.name ?? s.id}</option>)}
               </select>
               <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
             </div>
           </div>
 
           {/* Press Conference warning */}
-          {selectedFormat && /press.?conf|conferenza/i.test(selectedFormat.id + (selectedFormat.name ?? '')) && (
+          {isPressConf && (
             <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
               <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
               <p className="text-xs text-amber-700 dark:text-amber-400">
-                Assicurati che la thumbnail rispecchi il soggetto dell&apos;episodio (allenatore, giocatore, ecc.)
+                Le thumbnail di questo format devono riflettere il soggetto reale dell&apos;episodio (allenatore, giocatore).
+                Evita di assegnare la stessa immagine a episodi con soggetti diversi.
               </p>
             </div>
           )}
 
+          {/* Bulk actions (top bar) */}
+          {seasonEpisodes.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => setSelectedEpIds(allSelected ? new Set() : new Set(seasonEpisodes.map(ep => ep.id)))}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-border text-xs text-foreground hover:bg-muted/40 transition-colors"
+              >
+                <Square className="w-3 h-3" />
+                {allSelected ? 'Deseleziona tutti' : 'Seleziona tutti'}
+              </button>
+              {episodesWithoutEditorial.length > 0 && (
+                <button
+                  onClick={() => setSelectedEpIds(new Set(episodesWithoutEditorial.map(ep => ep.id)))}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-border text-xs text-foreground hover:bg-muted/40 transition-colors"
+                >
+                  <Layers className="w-3 h-3" />
+                  Senza editoriale ({episodesWithoutEditorial.length})
+                </button>
+              )}
+              {selectedEpIds.size > 0 && (
+                <span className="ml-auto text-xs text-muted-foreground">
+                  {selectedEpIds.size} selezionat{selectedEpIds.size === 1 ? 'o' : 'i'}
+                </span>
+              )}
+            </div>
+          )}
+
           {/* Episodes grid */}
-          {!selectedSeason || selectedSeason.episodes.length === 0 ? (
+          {(manifestLoading || epDbLoading) ? (
+            <div className="flex items-center justify-center h-32">
+              <div className="w-7 h-7 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : seasonEpisodes.length === 0 ? (
             <div className="rounded-lg border border-border bg-card p-8 text-center">
               <Film className="w-8 h-8 text-muted-foreground/40 mx-auto mb-3" />
               <p className="text-sm text-muted-foreground">
@@ -658,48 +972,39 @@ export default function MediaPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-              {selectedSeason.episodes.map(ep => {
-                const epKey = `ep-${ep.id}`;
-                const epState = episodeUploads[epKey];
-                const uploading = epState && !epState.done && epState.progress > 0;
-                const isPending = pendingIds.has(ep.id);
-
-                return (
-                  <EpisodeCard
-                    key={ep.id}
-                    episode={ep}
-                    seasonId={selectedSeasonId}
-                    formatId={selectedFormatId}
-                    uploadState={epState}
-                    uploading={!!uploading}
-                    isPending={isPending}
-                    onFile={(file) =>
-                      handleEpisodeThumbnailUpload(ep, selectedSeasonId, selectedFormatId, file)
-                    }
-                  />
-                );
-              })}
+              {seasonEpisodes.map(ep => (
+                <EpisodeCard
+                  key={ep.id}
+                  episode={ep}
+                  dbThumb={epDb[ep.id]}
+                  checked={selectedEpIds.has(ep.id)}
+                  onCheck={(v) => {
+                    setSelectedEpIds(prev => {
+                      const next = new Set(prev);
+                      v ? next.add(ep.id) : next.delete(ep.id);
+                      return next;
+                    });
+                  }}
+                  uploadState={epUploadStates[`ep-${ep.id}`]}
+                  onUpload={(file) => handleEpUpload(ep, selectedSeasonId, file)}
+                  onPicker={() => openPicker({ kind: 'episode-single', episodeId: ep.id, seasonId: selectedSeasonId })}
+                />
+              ))}
             </div>
           )}
 
           {/* Publish result feedback */}
           {publishResult && (
             <div className={`flex items-center gap-2 rounded-lg border p-3 ${
-              publishResult.ok
-                ? 'border-green-500/30 bg-green-500/10'
-                : 'border-red-500/30 bg-red-500/10'
+              publishResult.ok ? 'border-green-500/30 bg-green-500/10' : 'border-red-500/30 bg-red-500/10'
             }`}>
               {publishResult.ok
                 ? <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
-                : <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
-              }
+                : <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />}
               <span className={`text-xs ${publishResult.ok ? 'text-green-600' : 'text-red-500'}`}>
                 {publishResult.msg}
               </span>
-              <button
-                onClick={() => setPublishResult(null)}
-                className="ml-auto text-muted-foreground hover:text-foreground"
-              >
+              <button onClick={() => setPublishResult(null)} className="ml-auto text-muted-foreground hover:text-foreground">
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -707,172 +1012,83 @@ export default function MediaPage() {
         </div>
       )}
 
-      {/* ── Sticky publish button (episodes section only) ─────────────────── */}
-      {activeSection === 'episodes' && (
-        <div className="fixed bottom-20 lg:bottom-6 left-0 lg:left-64 right-0 px-4 lg:px-6 pointer-events-none">
+      {/* ── Sticky bottom: Batch action bar ─────────────────────────────────── */}
+      {activeSection === 'episodes' && selectedEpIds.size > 0 && (
+        <div className="fixed bottom-20 lg:bottom-6 left-0 lg:left-64 right-0 px-4 lg:px-6 pointer-events-none z-30">
           <div className="max-w-4xl mx-auto pointer-events-auto">
-            <div className={`flex items-center gap-3 rounded-xl border shadow-lg px-4 py-3 transition-all duration-300 ${
-              pendingIds.size > 0
-                ? 'bg-card border-primary/30 opacity-100 translate-y-0'
-                : 'bg-card border-border opacity-60 translate-y-0'
+            <div className="flex items-center gap-3 rounded-xl border border-primary/30 bg-card shadow-xl px-4 py-3">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-foreground">
+                  {selectedEpIds.size} episod{selectedEpIds.size === 1 ? 'io' : 'i'} selezionat{selectedEpIds.size === 1 ? 'o' : 'i'}
+                </p>
+                <p className="text-[10px] text-muted-foreground">
+                  Carica o scegli dalla libreria — lo stesso URL viene assegnato a tutti
+                </p>
+              </div>
+              <button
+                onClick={() => batchFileRef.current?.click()}
+                disabled={bulkUploading}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border text-xs font-medium hover:bg-muted/40 disabled:opacity-40 transition-colors shrink-0"
+              >
+                {bulkUploading
+                  ? <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  : <Upload className="w-3.5 h-3.5" />}
+                Carica per tutti
+              </button>
+              <button
+                onClick={() => openPicker({ kind: 'episode-batch' })}
+                disabled={bulkUploading}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border text-xs font-medium hover:bg-muted/40 disabled:opacity-40 transition-colors shrink-0"
+              >
+                <ImageIcon className="w-3.5 h-3.5" /> Libreria
+              </button>
+              <button
+                onClick={() => setSelectedEpIds(new Set())}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Sticky bottom: Publish manifest ─────────────────────────────────── */}
+      {activeSection === 'episodes' && selectedEpIds.size === 0 && (
+        <div className="fixed bottom-20 lg:bottom-6 left-0 lg:left-64 right-0 px-4 lg:px-6 pointer-events-none z-30">
+          <div className="max-w-4xl mx-auto pointer-events-auto">
+            <div className={`flex items-center gap-3 rounded-xl border shadow-lg px-4 py-3 transition-all ${
+              pendingManifestIds.size > 0 ? 'bg-card border-primary/30' : 'bg-card border-border opacity-50'
             }`}>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-foreground">
-                  {pendingIds.size > 0
-                    ? `${pendingIds.size} modifica${pendingIds.size === 1 ? '' : 'he'} in attesa`
-                    : 'Nessuna modifica pendente'}
+                  {pendingManifestIds.size > 0
+                    ? `${pendingManifestIds.size} thumbnail da sincronizzare nel manifest`
+                    : 'Nessuna modifica pendente al manifest'}
                 </p>
                 <p className="text-[10px] text-muted-foreground">
-                  Le thumbnail sono già su lavika-media — pubblica per aggiornare il manifest su lavika-videos
+                  Le thumbnail editoriali sono già su Supabase — pubblica per aggiornare anche il manifest su lavika-videos
                 </p>
               </div>
               <button
                 onClick={handlePublish}
-                disabled={publishLoading || pendingIds.size === 0}
+                disabled={publishLoading || pendingManifestIds.size === 0}
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
               >
-                {publishLoading ? (
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Send className="w-4 h-4" />
-                )}
+                {publishLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                 Pubblica Manifest
               </button>
             </div>
           </div>
         </div>
       )}
-    </div>
-  );
-}
 
-// ── EpisodeCard ────────────────────────────────────────────────────────────────
+      {/* ── Media Picker Modal ───────────────────────────────────────────────── */}
+      <MediaPicker open={pickerOpen} onClose={() => setPickerOpen(false)} onSelect={handlePickerSelect} />
 
-function EpisodeCard({
-  episode,
-  seasonId,
-  formatId,
-  uploadState,
-  uploading,
-  isPending,
-  onFile,
-}: {
-  episode: Episode;
-  seasonId: string;
-  formatId: string;
-  uploadState?: UploadState;
-  uploading: boolean;
-  isPending: boolean;
-  onFile: (file: File) => void;
-}) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [dragging, setDragging] = useState(false);
-  const [imgError, setImgError] = useState(false);
-
-  void seasonId;
-  void formatId;
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setDragging(false);
-    const file = e.dataTransfer.files[0];
-    if (file && /\.(jpe?g|png|webp)$/i.test(file.name)) onFile(file);
-  };
-
-  return (
-    <div className={`rounded-lg border bg-card overflow-hidden transition-colors ${
-      isPending ? 'border-primary/40' : 'border-border'
-    }`}>
-      {/* Thumbnail area */}
-      <div
-        className={`relative aspect-video cursor-pointer overflow-hidden ${
-          dragging ? 'bg-primary/10' : 'bg-muted/20'
-        }`}
-        onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={handleDrop}
-        onClick={() => inputRef.current?.click()}
-      >
-        {episode.thumbnailUrl && !imgError && !uploading && (
-          <img
-            src={episode.thumbnailUrl}
-            alt={episodeLabel(episode)}
-            className="absolute inset-0 w-full h-full object-cover"
-            onError={() => setImgError(true)}
-          />
-        )}
-
-        {/* Overlay */}
-        <div className={`absolute inset-0 flex flex-col items-center justify-center gap-1 transition-opacity ${
-          uploading ? 'bg-background/80' : episode.thumbnailUrl && !imgError ? 'opacity-0 hover:opacity-100 bg-background/60' : ''
-        }`}>
-          {uploading ? (
-            <div className="w-full px-4 flex flex-col items-center gap-2">
-              <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-              <div className="w-full bg-muted rounded-full h-1">
-                <div
-                  className="bg-primary h-1 rounded-full transition-all"
-                  style={{ width: `${uploadState!.progress}%` }}
-                />
-              </div>
-            </div>
-          ) : (
-            <>
-              <Upload className="w-4 h-4 text-muted-foreground" />
-              <span className="text-[10px] text-muted-foreground">
-                {dragging ? 'Rilascia' : 'Carica thumbnail'}
-              </span>
-            </>
-          )}
-        </div>
-
-        {/* Done indicator */}
-        {uploadState?.done && (
-          <div className="absolute top-1 right-1">
-            <CheckCircle2 className="w-4 h-4 text-green-500 drop-shadow" />
-          </div>
-        )}
-
-        {/* Pending indicator */}
-        {isPending && (
-          <div className="absolute top-1 left-1">
-            <span className="text-[9px] font-medium bg-primary text-primary-foreground px-1.5 py-0.5 rounded">
-              Pendente
-            </span>
-          </div>
-        )}
-      </div>
-
-      {/* Episode info */}
-      <div className="p-2.5 space-y-1.5">
-        <div className="flex items-start justify-between gap-1">
-          <p className="text-xs font-medium text-foreground line-clamp-2 leading-tight">
-            {episodeLabel(episode)}
-          </p>
-          {episode.episodeNumber != null && (
-            <span className="text-[10px] text-muted-foreground shrink-0 bg-muted px-1.5 py-0.5 rounded">
-              #{episode.episodeNumber}
-            </span>
-          )}
-        </div>
-
-        <EpisodeBadge thumbnailUrl={episode.thumbnailUrl} />
-
-        {uploadState?.error && (
-          <p className="text-[10px] text-red-500 line-clamp-2">{uploadState.error}</p>
-        )}
-      </div>
-
-      <input
-        ref={inputRef}
-        type="file"
-        accept=".jpg,.jpeg,.png,.webp"
-        className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) { onFile(file); e.target.value = ''; }
-        }}
-      />
+      {/* Batch file input (hidden) */}
+      <input ref={batchFileRef} type="file" accept=".jpg,.jpeg,.png,.webp" className="hidden"
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) { handleBatchUpload(f); e.target.value = ''; } }} />
     </div>
   );
 }

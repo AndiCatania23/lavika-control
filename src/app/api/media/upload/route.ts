@@ -1,10 +1,6 @@
 import { NextResponse } from 'next/server';
 import { PutObjectCommand } from '@aws-sdk/client-s3';
-import {
-  r2MediaClient,
-  MEDIA_BUCKET_NAME,
-  MEDIA_PUBLIC_BASE_URL,
-} from '@/lib/r2MediaClient';
+import { r2MediaClient, MEDIA_BUCKET_NAME, MEDIA_PUBLIC_BASE_URL } from '@/lib/r2MediaClient';
 
 export async function POST(request: Request) {
   if (!r2MediaClient) {
@@ -19,25 +15,40 @@ export async function POST(request: Request) {
     const episodeId = formData.get('episodeId') as string | null;
     const file = formData.get('file') as File | null;
 
-    if (!type || !formatId || !file) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    if (!type || !file) {
+      return NextResponse.json({ error: 'Missing type or file' }, { status: 400 });
     }
 
+    const ts = Date.now();
     let key: string;
-    if (type === 'format-cover') {
-      key = `formats/${formatId}/cover.webp`;
-    } else if (type === 'format-hero') {
-      key = `formats/${formatId}/hero.webp`;
-    } else if (type === 'episode-thumbnail') {
-      if (!season || !episodeId) {
-        return NextResponse.json(
-          { error: 'Missing season or episodeId for episode-thumbnail' },
-          { status: 400 }
-        );
-      }
-      key = `episodes/${season}/thumbnails/${episodeId}.webp`;
-    } else {
-      return NextResponse.json({ error: 'Invalid type' }, { status: 400 });
+
+    switch (type) {
+      case 'format-cover-vertical':
+        if (!formatId) return NextResponse.json({ error: 'Missing formatId' }, { status: 400 });
+        key = `formats/${formatId}/cover-vertical.webp`;
+        break;
+      case 'format-cover-horizontal':
+        if (!formatId) return NextResponse.json({ error: 'Missing formatId' }, { status: 400 });
+        key = `formats/${formatId}/cover-horizontal.webp`;
+        break;
+      case 'format-hero':
+        if (!formatId) return NextResponse.json({ error: 'Missing formatId' }, { status: 400 });
+        key = `formats/${formatId}/hero.webp`;
+        break;
+      case 'episode-thumbnail':
+        if (!season || !episodeId) {
+          return NextResponse.json({ error: 'Missing season or episodeId' }, { status: 400 });
+        }
+        key = `episodes/${season}/thumbnails/${episodeId}.webp`;
+        break;
+      case 'batch-thumbnail':
+        key = `episodes/batch/${ts}.webp`;
+        break;
+      case 'library-upload':
+        key = `library/${ts}.webp`;
+        break;
+      default:
+        return NextResponse.json({ error: `Invalid type: ${type}` }, { status: 400 });
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
@@ -52,8 +63,7 @@ export async function POST(request: Request) {
       })
     );
 
-    const url = `${MEDIA_PUBLIC_BASE_URL}/${key}`;
-    return NextResponse.json({ ok: true, url });
+    return NextResponse.json({ ok: true, url: `${MEDIA_PUBLIC_BASE_URL}/${key}` });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json({ error: message }, { status: 500 });
