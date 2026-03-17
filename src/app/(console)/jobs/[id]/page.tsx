@@ -24,6 +24,14 @@ type JobSummary = {
   sources: JobSourceSummary[];
 };
 
+// Map from quickSource.id → Supabase content_formats.id
+const SOURCE_FORMAT_MAP: Record<string, string> = {
+  'catanista-live':          'catanista',
+  'serie-c-2025-2026':       'highlights',
+  'catania-press-conference':'press-conference',
+  'unica-sport-live':        'unica-sport',
+};
+
 export default function JobDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -37,6 +45,8 @@ export default function JobDetailPage() {
   const [visibleErrors, setVisibleErrors] = useState(10);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
+  // formatId → cover_horizontal_url from Supabase/R2
+  const [formatCovers, setFormatCovers] = useState<Record<string, string>>({});
 
   const getJobSummary = (id: string, sourceId?: string | null): JobSummary | null => {
     if (id !== 'job_sync_video') return null;
@@ -97,7 +107,10 @@ export default function JobDetailPage() {
       getJobById(jobId),
       getJobRunsData({ jobId }),
       getErrorsData(),
-    ]).then(([jobData, runsData, errorsData]) => {
+      fetch('/api/media/formats')
+        .then(r => r.ok ? r.json() as Promise<Array<{ id: string; cover_horizontal_url: string | null }>> : [])
+        .catch(() => [] as Array<{ id: string; cover_horizontal_url: string | null }>),
+    ]).then(([jobData, runsData, errorsData, formatsData]) => {
       setJob(jobData || null);
       setRuns(runsData);
       const filteredErrors = jobData
@@ -106,6 +119,11 @@ export default function JobDetailPage() {
       setErrors(filteredErrors);
       setVisibleErrors(10);
       setLoading(false);
+      const covers: Record<string, string> = {};
+      for (const fmt of formatsData) {
+        if (fmt.cover_horizontal_url) covers[fmt.id] = fmt.cover_horizontal_url;
+      }
+      setFormatCovers(covers);
     });
   }, [jobId]);
 
@@ -281,7 +299,7 @@ export default function JobDetailPage() {
               <div key={source.title} className="border border-border rounded-lg p-3">
                 <div className="mb-2 overflow-hidden rounded-md border border-border bg-muted/20 aspect-video">
                   <Image
-                    src={source.imageUrl}
+                    src={formatCovers[SOURCE_FORMAT_MAP[source.id]] ?? source.imageUrl}
                     alt={`${source.title} card`}
                     width={640}
                     height={360}

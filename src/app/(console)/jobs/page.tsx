@@ -33,6 +33,22 @@ type YouTubeCookiesUpdateResponse = {
   };
 };
 
+// Map from quickSource.id → Supabase content_formats.id
+const SOURCE_FORMAT_MAP: Record<string, string> = {
+  'catanista-live':          'catanista',
+  'serie-c-2025-2026':       'highlights',
+  'catania-press-conference':'press-conference',
+  'unica-sport-live':        'unica-sport',
+};
+
+// Fallback local images (used if R2 cover not yet uploaded)
+const SOURCE_LOCAL_IMAGE: Record<string, string> = {
+  'catanista-live':          '/immagini/Format Cover/Catanista/Catanista - card orizzontale.webp',
+  'serie-c-2025-2026':       '/immagini/Format Cover/highlights/highlights - card orizzontale.webp',
+  'catania-press-conference':'/immagini/Format Cover/Press Conference/press conference - card orizzontale.webp',
+  'unica-sport-live':        '/immagini/Format Cover/Unica Sport/unica_sport-_card_orizzontale.png',
+};
+
 export default function JobsPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,29 +60,15 @@ export default function JobsPage() {
   const [cookiesError, setCookiesError] = useState<string | null>(null);
   const [cookiesResult, setCookiesResult] = useState<YouTubeCookiesUpdateResponse | null>(null);
   const [isCookiesPanelOpen, setIsCookiesPanelOpen] = useState(false);
+  // formatId → cover_horizontal_url from Supabase/R2
+  const [formatCovers, setFormatCovers] = useState<Record<string, string>>({});
   const router = useRouter();
 
   const quickSources = [
-    {
-      id: 'catanista-live',
-      title: 'CATANISTA LIVE',
-      imageUrl: '/immagini/Format Cover/Catanista/Catanista - card orizzontale.webp',
-    },
-    {
-      id: 'serie-c-2025-2026',
-      title: 'HIGHLIGHTS',
-      imageUrl: '/immagini/Format Cover/highlights/highlights - card orizzontale.webp',
-    },
-    {
-      id: 'catania-press-conference',
-      title: 'PRESS CONFERENCE',
-      imageUrl: '/immagini/Format Cover/Press Conference/press conference - card orizzontale.webp',
-    },
-    {
-      id: 'unica-sport-live',
-      title: 'UNICA SPORT',
-      imageUrl: '/immagini/Format Cover/Unica Sport/unica_sport-_card_orizzontale.png',
-    },
+    { id: 'catanista-live',          title: 'CATANISTA LIVE'  },
+    { id: 'serie-c-2025-2026',       title: 'HIGHLIGHTS'      },
+    { id: 'catania-press-conference',title: 'PRESS CONFERENCE' },
+    { id: 'unica-sport-live',        title: 'UNICA SPORT'     },
   ];
 
   useEffect(() => {
@@ -75,9 +77,17 @@ export default function JobsPage() {
       fetch('/api/jobs/runs?status=running', { cache: 'no-store' })
         .then(response => response.ok ? response.json() as Promise<Array<{ id: string }>> : [])
         .catch(() => []),
-    ]).then(([jobsData, runningRuns]) => {
+      fetch('/api/media/formats')
+        .then(r => r.ok ? r.json() as Promise<Array<{ id: string; cover_horizontal_url: string | null }>> : [])
+        .catch(() => []),
+    ]).then(([jobsData, runningRuns, formatsData]) => {
       setJobs(jobsData);
       setHasRunningJob(runningRuns.length > 0);
+      const covers: Record<string, string> = {};
+      for (const fmt of formatsData) {
+        if (fmt.cover_horizontal_url) covers[fmt.id] = fmt.cover_horizontal_url;
+      }
+      setFormatCovers(covers);
       setLoading(false);
     });
   }, []);
@@ -256,7 +266,7 @@ export default function JobsPage() {
           >
             <div className="mb-3 overflow-hidden rounded-md border border-border bg-muted/20 aspect-video">
               <Image
-                src={source.imageUrl}
+                src={formatCovers[SOURCE_FORMAT_MAP[source.id]] ?? SOURCE_LOCAL_IMAGE[source.id]}
                 alt={`${source.title} card`}
                 width={640}
                 height={360}
