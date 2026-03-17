@@ -301,7 +301,7 @@ export default function MediaPage() {
       setManifest(data);
       setWorkingManifest(structuredClone(data));
       // Set default selectors
-      const formats = data.formats ?? [];
+      const formats = Array.isArray(data.formats) ? data.formats : [];
       if (formats.length > 0) {
         setSelectedFormatId(formats[0].id);
         if (formats[0].seasons.length > 0) {
@@ -319,7 +319,9 @@ export default function MediaPage() {
 
   // Sync selectedSeasonId when format changes
   useEffect(() => {
-    const fmt = workingManifest?.formats?.find(f => f.id === selectedFormatId);
+    const fmt = Array.isArray(workingManifest?.formats)
+      ? workingManifest!.formats.find(f => f.id === selectedFormatId)
+      : undefined;
     if (fmt && fmt.seasons.length > 0) {
       setSelectedSeasonId(fmt.seasons[0].id);
     } else {
@@ -327,7 +329,7 @@ export default function MediaPage() {
     }
   }, [selectedFormatId, workingManifest]);
 
-  const formats = workingManifest?.formats ?? [];
+  const formats = Array.isArray(workingManifest?.formats) ? workingManifest!.formats : [];
   const selectedFormat = formats.find(f => f.id === selectedFormatId);
   const selectedSeason = selectedFormat?.seasons.find(s => s.id === selectedSeasonId);
 
@@ -378,7 +380,7 @@ export default function MediaPage() {
         setWorkingManifest(prev => {
           if (!prev) return prev;
           const clone = structuredClone(prev);
-          const fmt = clone.formats?.find(f => f.id === formatId);
+          const fmt = Array.isArray(clone.formats) ? clone.formats.find(f => f.id === formatId) : undefined;
           const ssn = fmt?.seasons.find(s => s.id === seasonId);
           const ep = ssn?.episodes.find(e => e.id === episode.id);
           if (ep) ep.thumbnailUrl = url;
