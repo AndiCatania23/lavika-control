@@ -8,13 +8,13 @@ import { supabaseServer } from '@/lib/supabaseServer';
  */
 export async function GET(
   _request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   if (!supabaseServer) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
   }
 
-  const formatId = params.id;
+  const { id: formatId } = await params;
 
   const { data, error } = await supabaseServer
     .from('content_episodes')
