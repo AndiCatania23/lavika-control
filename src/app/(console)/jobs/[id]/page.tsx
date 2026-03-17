@@ -66,6 +66,14 @@ export default function JobDetailPage() {
         filters: 'Parole chiave conferenza pre-gara, durata 3m-2h, esclusi Highlights/settori giovanili.',
         imageUrl: '/immagini/Format Cover/Press Conference/press conference - card orizzontale.webp',
       },
+      {
+        id: 'unica-sport-live',
+        title: 'UNICA SPORT',
+        source: 'YouTube @unicasport2025 streams (unica-sport-live)',
+        scope: 'Live Unica Sport con naming stile Catanista e stagione per anno upload.',
+        filters: 'Titoli LIVE UNICA SPORT con data, durata 20m-4h, esclusi Clip/Short, ingest da 2026 in poi.',
+        imageUrl: '/immagini/Format Cover/Unica Sport/unica_sport-_card_orizzontale.png',
+      },
     ];
 
     const filteredSources = sourceId
@@ -268,7 +276,7 @@ export default function JobDetailPage() {
             <p><span className="text-foreground font-medium">Modalita:</span> {jobSummary.mode}</p>
           </div>
 
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {jobSummary.sources.map(source => (
               <div key={source.title} className="border border-border rounded-lg p-3">
                 <div className="mb-2 overflow-hidden rounded-md border border-border bg-muted/20 aspect-video">

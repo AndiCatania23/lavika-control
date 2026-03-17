@@ -12,12 +12,24 @@ import { Play, Clock, Calendar, ChevronRight } from 'lucide-react';
 type YouTubeCookiesUpdateResponse = {
   ok?: boolean;
   message?: string;
+  warning?: string;
   missing?: string[];
   hint?: string;
   stats?: {
     filteredRows?: number;
     secretLength?: number;
     updatedSecrets?: string[];
+    missingPlatforms?: string[];
+    platformStats?: {
+      youtubeGoogle?: {
+        filteredRows?: number;
+        secretLength?: number;
+      };
+      facebook?: {
+        filteredRows?: number;
+        secretLength?: number;
+      } | null;
+    };
   };
 };
 
@@ -49,6 +61,11 @@ export default function JobsPage() {
       id: 'catania-press-conference',
       title: 'PRESS CONFERENCE',
       imageUrl: '/immagini/Format Cover/Press Conference/press conference - card orizzontale.webp',
+    },
+    {
+      id: 'unica-sport-live',
+      title: 'UNICA SPORT',
+      imageUrl: '/immagini/Format Cover/Unica Sport/unica_sport-_card_orizzontale.png',
     },
   ];
 
@@ -186,7 +203,7 @@ export default function JobsPage() {
       }
 
       if (response.ok) {
-        setCookiesResult(payload ?? { ok: true, message: 'Cookies YouTube/Google aggiornati' });
+        setCookiesResult(payload ?? { ok: true, message: 'Cookies YouTube/Google/Facebook aggiornati' });
         return;
       }
 
@@ -231,7 +248,7 @@ export default function JobsPage() {
         description="Lista job dalla piattaforma"
       />
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {quickSources.map(source => (
           <div
             key={source.id}
@@ -274,7 +291,7 @@ export default function JobsPage() {
           onClick={() => setIsCookiesPanelOpen((open) => !open)}
           className="w-full flex items-center justify-between p-4 text-left"
         >
-          <span className="font-semibold text-foreground text-base">Aggiorna Cookies YouTube/Google</span>
+          <span className="font-semibold text-foreground text-base">Aggiorna Cookies YouTube/Google/Facebook</span>
           <ChevronRight className={`w-4 h-4 text-muted-foreground transition-transform ${isCookiesPanelOpen ? 'rotate-90' : ''}`} />
         </button>
 
@@ -297,7 +314,7 @@ export default function JobsPage() {
               disabled={cookiesLoading}
               className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50"
             >
-              {cookiesLoading ? 'Aggiornamento in corso...' : 'Aggiorna Cookies YouTube/Google'}
+              {cookiesLoading ? 'Aggiornamento in corso...' : 'Aggiorna Cookies YouTube/Google/Facebook'}
             </button>
 
             <div className="rounded-lg border border-border bg-background p-3 text-sm">
@@ -307,8 +324,13 @@ export default function JobsPage() {
                 <div className="space-y-1 text-foreground">
                   <p>ok: {String(Boolean(cookiesResult.ok))}</p>
                   <p>message: {cookiesResult.message ?? '-'}</p>
-                  <p>filteredRows: {cookiesResult.stats?.filteredRows ?? '-'}</p>
-                  <p>secretLength: {cookiesResult.stats?.secretLength ?? '-'}</p>
+                  {cookiesResult.warning && <p>warning: {cookiesResult.warning}</p>}
+                  <p>filteredRows (yt/google): {cookiesResult.stats?.platformStats?.youtubeGoogle?.filteredRows ?? cookiesResult.stats?.filteredRows ?? '-'}</p>
+                  <p>secretLength (yt/google): {cookiesResult.stats?.platformStats?.youtubeGoogle?.secretLength ?? cookiesResult.stats?.secretLength ?? '-'}</p>
+                  <p>filteredRows (facebook): {cookiesResult.stats?.platformStats?.facebook?.filteredRows ?? '-'}</p>
+                  <p>secretLength (facebook): {cookiesResult.stats?.platformStats?.facebook?.secretLength ?? '-'}</p>
+                  <p>updatedSecrets: {cookiesResult.stats?.updatedSecrets?.join(', ') ?? '-'}</p>
+                  <p>missingPlatforms: {cookiesResult.stats?.missingPlatforms?.join(', ') || '-'}</p>
                 </div>
               )}
               {!cookiesLoading && !cookiesError && !cookiesResult && (
