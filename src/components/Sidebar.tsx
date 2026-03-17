@@ -3,17 +3,18 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { 
-  LayoutDashboard, 
-  BarChart3, 
-  Users, 
-  Activity, 
-  Workflow, 
-  AlertTriangle, 
+import {
+  LayoutDashboard,
+  BarChart3,
+  Users,
+  Activity,
+  Workflow,
+  AlertTriangle,
   Settings,
   ChevronLeft,
   ChevronRight,
-  Home
+  Home,
+  Images,
 } from 'lucide-react';
 
 const navItems = [
@@ -23,6 +24,7 @@ const navItems = [
   { href: '/sessions', label: 'Sessioni', icon: Activity },
   { href: '/jobs', label: 'Job', icon: Workflow },
   { href: '/errors', label: 'Errori', icon: AlertTriangle },
+  { href: '/media', label: 'Media', icon: Images },
   { href: '/settings', label: 'Impostazioni', icon: Settings },
 ];
 
@@ -30,9 +32,8 @@ const mobileNavItems = [
   { href: '/dashboard', label: 'Home', icon: Home },
   { href: '/analytics', label: 'Analisi', icon: BarChart3 },
   { href: '/users', label: 'Utenti', icon: Users },
-  { href: '/sessions', label: 'Sessioni', icon: Activity },
   { href: '/jobs', label: 'Job', icon: Workflow },
-  { href: '/errors', label: 'Errori', icon: AlertTriangle },
+  { href: '/media', label: 'Media', icon: Images },
 ];
 
 export function Sidebar() {
