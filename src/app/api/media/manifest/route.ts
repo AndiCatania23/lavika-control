@@ -151,6 +151,65 @@ async function buildManifestFromBucket(): Promise<ManifestData> {
   return { formats };
 }
 
+// ── Legacy manifest converter ──────────────────────────────────────────────────
+// The existing manifest.json uses { formats: { [id]: { videos: [...] } } }
+// (object, not array). This converter transforms it to the array-based format
+// the page expects, preserving YouTube IDs so they match Supabase episode IDs.
+
+interface LegacyVideo {
+  id?: string;
+  youtubeId?: string;
+  title?: string;
+  season?: string;
+  episode?: number;
+}
+
+function parseLegacyManifest(raw: unknown): ManifestData | null {
+  const data = raw as { formats?: Record<string, { videos?: LegacyVideo[] }> };
+  if (!data?.formats || typeof data.formats !== 'object' || Array.isArray(data.formats)) {
+    return null;
+  }
+
+  const formats: Format[] = [];
+
+  for (const [formatId, formatData] of Object.entries(data.formats)) {
+    const videos = Array.isArray(formatData?.videos) ? formatData.videos : [];
+    if (videos.length === 0) continue;
+
+    // Group episodes by season
+    const seasonMap = new Map<string, Episode[]>();
+
+    for (const video of videos) {
+      const id = video.id ?? video.youtubeId;
+      if (!id) continue;
+
+      // "2025/2026" → seasonId "2025-2026", seasonName "2025/2026"
+      const rawSeason = typeof video.season === 'string' ? video.season.trim() : 'Stagione 1';
+      const seasonId = rawSeason.replace(/\//g, '-');
+
+      if (!seasonMap.has(seasonId)) seasonMap.set(seasonId, []);
+      seasonMap.get(seasonId)!.push({
+        id,
+        name: typeof video.title === 'string' ? video.title : id,
+        episodeNumber: typeof video.episode === 'number' ? video.episode : undefined,
+        // thumbnailUrl omitted intentionally: legacy URLs point to private R2 bucket
+      });
+    }
+
+    const seasons: Season[] = [];
+    for (const [seasonId, episodes] of seasonMap.entries()) {
+      episodes.sort((a, b) => (b.episodeNumber ?? 0) - (a.episodeNumber ?? 0));
+      seasons.push({ id: seasonId, name: seasonId.replace(/-/g, '/'), episodes });
+    }
+    seasons.sort((a, b) => b.id.localeCompare(a.id));
+
+    formats.push({ id: formatId, name: prettyName(formatId), seasons });
+  }
+
+  formats.sort((a, b) => a.id.localeCompare(b.id));
+  return formats.length > 0 ? { formats } : null;
+}
+
 // ── Route handlers ─────────────────────────────────────────────────────────────
 
 export async function GET() {
@@ -167,9 +226,13 @@ export async function GET() {
       const body = await res.Body?.transformToString();
       if (body) {
         const parsed = JSON.parse(body) as ManifestData;
+        // New format: formats is an array
         if (Array.isArray(parsed.formats) && parsed.formats.length > 0) {
           return NextResponse.json(parsed);
         }
+        // Legacy format: formats is an object { [id]: { videos: [...] } }
+        const legacy = parseLegacyManifest(parsed);
+        if (legacy) return NextResponse.json(legacy);
       }
     } catch (err) {
       const code =
