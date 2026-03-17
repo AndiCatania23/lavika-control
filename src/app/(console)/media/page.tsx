@@ -668,10 +668,10 @@ export default function MediaPage() {
       await fetch('/api/media/episodes', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: [ep.id], thumbnail_url: url }),
+        body: JSON.stringify({ ids: [`${selectedFormatId}-${ep.id}`], thumbnail_url: url }),
       });
       setEpUploadStates(prev => ({ ...prev, [stateKey]: { progress: 100, error: null, done: true } }));
-      setEpDb(prev => ({ ...prev, [ep.id]: url }));
+      setEpDb(prev => ({ ...prev, [`${selectedFormatId}-${ep.id}`]: url }));
       // also update working manifest for publish
       setWorkingManifest(prev => {
         if (!prev) return prev;
@@ -694,12 +694,13 @@ export default function MediaPage() {
 
   const applyBatchUrl = async (url: string) => {
     const ids = Array.from(selectedEpIds);
+    const supaIds = ids.map(id => `${selectedFormatId}-${id}`);
     await fetch('/api/media/episodes', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ids, thumbnail_url: url }),
+      body: JSON.stringify({ ids: supaIds, thumbnail_url: url }),
     });
-    setEpDb(prev => { const next = { ...prev }; ids.forEach(id => { next[id] = url; }); return next; });
+    setEpDb(prev => { const next = { ...prev }; ids.forEach(id => { next[`${selectedFormatId}-${id}`] = url; }); return next; });
     setSelectedEpIds(new Set());
   };
 
@@ -733,9 +734,9 @@ export default function MediaPage() {
       await fetch('/api/media/episodes', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: [pickerTarget.episodeId], thumbnail_url: url }),
+        body: JSON.stringify({ ids: [`${selectedFormatId}-${pickerTarget.episodeId}`], thumbnail_url: url }),
       });
-      setEpDb(prev => ({ ...prev, [pickerTarget.episodeId]: url }));
+      setEpDb(prev => ({ ...prev, [`${selectedFormatId}-${pickerTarget.episodeId}`]: url }));
     } else if (pickerTarget.kind === 'episode-batch') {
       await applyBatchUrl(url);
     }
@@ -763,7 +764,7 @@ export default function MediaPage() {
 
   // ── Derived ───────────────────────────────────────────────────────────────
 
-  const episodesWithoutEditorial = seasonEpisodes.filter(ep => !epDb[ep.id]);
+  const episodesWithoutEditorial = seasonEpisodes.filter(ep => !epDb[`${selectedFormatId}-${ep.id}`]);
   const allSelected = seasonEpisodes.length > 0 && seasonEpisodes.every(ep => selectedEpIds.has(ep.id));
   const isPressConf = selectedManifestFormat
     ? PRESS_CONF_RE.test(selectedManifestFormat.id + (selectedManifestFormat.name ?? ''))
@@ -976,7 +977,7 @@ export default function MediaPage() {
                 <EpisodeCard
                   key={ep.id}
                   episode={ep}
-                  dbThumb={epDb[ep.id]}
+                  dbThumb={epDb[`${selectedFormatId}-${ep.id}`]}
                   checked={selectedEpIds.has(ep.id)}
                   onCheck={(v) => {
                     setSelectedEpIds(prev => {
