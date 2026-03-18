@@ -6,6 +6,7 @@ import { mapAuthUserToDevUser, type UserSessionAggregate } from '@/lib/devContro
 interface ProfileOverride {
   displayName?: string;
   avatarUrl?: string;
+  badge?: string;
 }
 
 function mapProfileRow(row: Record<string, unknown>): { userId: string; profile: ProfileOverride } | null {
@@ -22,6 +23,7 @@ function mapProfileRow(row: Record<string, unknown>): { userId: string; profile:
     profile: {
       displayName: typeof displayNameRaw === 'string' ? displayNameRaw : undefined,
       avatarUrl: typeof avatarRaw === 'string' ? avatarRaw : undefined,
+      badge: typeof row.badge === 'string' && row.badge ? row.badge : undefined,
     },
   };
 }
@@ -203,7 +205,7 @@ export async function POST(request: Request) {
 
   if (sendResetIfExists) {
     const { error: resetError } = await supabaseServer.auth.resetPasswordForEmail(email, {
-      redirectTo: 'https://lavikasport.app/reset-password',
+      redirectTo: 'https://lavikasport.app/reset-password?type=recovery',
     });
 
     if (resetError) {
@@ -227,7 +229,7 @@ export async function POST(request: Request) {
       display_name: name,
       is_admin: false,
     },
-    redirectTo: 'https://lavikasport.app/reset-password',
+    redirectTo: 'https://lavikasport.app/reset-password?type=invite',
   });
 
   if (error) {

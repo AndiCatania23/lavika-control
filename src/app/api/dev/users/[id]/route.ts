@@ -5,6 +5,7 @@ import { mapAuthUserToDevUser, type UserSessionAggregate } from '@/lib/devContro
 interface ProfileOverride {
   displayName?: string;
   avatarUrl?: string;
+  badge?: string;
 }
 
 async function loadProfileByUserId(userId: string): Promise<ProfileOverride | undefined> {
@@ -18,6 +19,7 @@ async function loadProfileByUserId(userId: string): Promise<ProfileOverride | un
     avatarUrl: typeof (row.avatarUrl ?? row.avatar_url ?? row.picture) === 'string'
       ? String(row.avatarUrl ?? row.avatar_url ?? row.picture)
       : undefined,
+    badge: typeof row.badge === 'string' && row.badge ? row.badge : undefined,
   });
 
   const tryTable = async (tableName: 'user_profile' | 'user_profiles') => {

@@ -16,6 +16,7 @@ interface FeedRow {
 interface UserProfileOverride {
   displayName?: string;
   avatarUrl?: string;
+  badge?: string;
 }
 
 export interface UserSessionAggregate {
@@ -126,7 +127,16 @@ function inferUserStatus(user: AuthUser, lastSeenAt?: string): User['status'] {
   return 'active';
 }
 
-function inferBadge(user: AuthUser): User['badge'] {
+function inferBadge(user: AuthUser, profileBadge?: string): User['badge'] {
+  // 1. Use badge from user_profiles table (source of truth)
+  if (profileBadge) {
+    const normalized = profileBadge.toLowerCase();
+    if (normalized === 'gold') return 'gold';
+    if (normalized === 'silver') return 'silver';
+    if (normalized === 'bronze') return 'bronze';
+  }
+
+  // 2. Fallback: auth metadata
   const userMeta = user.user_metadata as Record<string, unknown> | undefined;
   const appMeta = user.app_metadata as Record<string, unknown> | undefined;
   const rawPlan = userMeta?.plan ?? userMeta?.tier ?? appMeta?.plan ?? appMeta?.tier;
@@ -137,10 +147,6 @@ function inferBadge(user: AuthUser): User['badge'] {
     if (normalized.includes('silver') || normalized.includes('plus')) return 'silver';
   }
 
-  if (!user.created_at) return 'bronze';
-  const accountAgeDays = (Date.now() - new Date(user.created_at).getTime()) / (1000 * 60 * 60 * 24);
-  if (accountAgeDays > 365) return 'gold';
-  if (accountAgeDays > 120) return 'silver';
   return 'bronze';
 }
 
@@ -176,7 +182,7 @@ export function mapAuthUserToDevUser(user: AuthUser, profile?: UserProfileOverri
     name,
     avatar: createInitials(name),
     avatarUrl,
-    badge: inferBadge(user),
+    badge: inferBadge(user, profile?.badge),
     status: inferUserStatus(user, sessionAggregate?.lastSeenAt),
     createdAt: user.created_at,
     lastLogin,
