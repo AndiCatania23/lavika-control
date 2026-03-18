@@ -354,12 +354,48 @@ export default function AnalyticsFormatDetailPage() {
 
   // ── Auto-open most recent year when episodes load ────────────────────────
   const episodeDerived = useMemo(() => {
+    /**
+     * Try to extract a structured date from the episode id.
+     * IDs follow the pattern: {format}-...-DD-MM-YYYY-{videoId}
+     * e.g. "unica-sport-live-27-02-2026-OfhJDLxiReg"
+     */
+    const extractDateFromId = (id: string): { day: number; month: number; year: number } | null => {
+      const m = id.match(/(\d{2})-(\d{2})-(\d{4})/);
+      if (!m) return null;
+      return { day: parseInt(m[1]), month: parseInt(m[2]), year: parseInt(m[3]) };
+    };
+
     const getYear = (ep: EpisodeRow): string => {
+      // 1. Try published_at
       if (ep.published_at) {
         const y = new Date(ep.published_at).getFullYear();
         if (!isNaN(y)) return String(y);
       }
+      // 2. Try to extract year from title (e.g. "Live 27 febbraio 2026" → "2026")
+      if (ep.title) {
+        const m = ep.title.match(/\b(20\d{2})\b/);
+        if (m) return m[1];
+      }
+      // 3. Try to extract date from id (pattern: ...-DD-MM-YYYY-...)
+      const d = extractDateFromId(ep.id);
+      if (d) return String(d.year);
       return '—';
+    };
+
+    const getDateLabel = (ep: EpisodeRow): string | null => {
+      if (ep.published_at) {
+        return new Date(ep.published_at).toLocaleDateString('it-IT', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+        });
+      }
+      // Fallback: extract date from id
+      const d = extractDateFromId(ep.id);
+      if (d) {
+        return `${String(d.day).padStart(2, '0')}/${String(d.month).padStart(2, '0')}/${d.year}`;
+      }
+      return null;
     };
 
     // Sorted unique years (descending)
@@ -375,15 +411,19 @@ export default function AnalyticsFormatDetailPage() {
           : typeof ep.video_id === 'string' && ep.video_id
           ? ep.video_id
           : ep.id.replace(`${rawFormat}-`, '');
-      const year = getYear(ep);
-      const dateLabel = ep.published_at
-        ? new Date(ep.published_at).toLocaleDateString('it-IT', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric',
-          })
-        : null;
-      return { ...ep, displayName, year, dateLabel };
+      return { ...ep, displayName, year: getYear(ep), dateLabel: getDateLabel(ep) };
+    });
+
+    // Sort by date descending using numeric sort key extracted from id
+    enriched.sort((a, b) => {
+      const da = extractDateFromId(a.id);
+      const db = extractDateFromId(b.id);
+      if (!da && !db) return 0;
+      if (!da) return 1;
+      if (!db) return -1;
+      const numA = da.year * 10000 + da.month * 100 + da.day;
+      const numB = db.year * 10000 + db.month * 100 + db.day;
+      return numB - numA; // descending
     });
 
     // Group by year (descending)
