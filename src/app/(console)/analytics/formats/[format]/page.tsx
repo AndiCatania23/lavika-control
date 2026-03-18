@@ -96,7 +96,7 @@ interface FormatMetricsData {
   userPerFormat: UserPerFormatRow[];
 }
 
-// Episode row from content_episodes
+// Episode row from content_episodes (enriched with Video.season)
 interface EpisodeRow {
   id: string;
   format_id?: string | null;
@@ -106,6 +106,7 @@ interface EpisodeRow {
   published_at?: string | null;
   is_active?: boolean | null;
   min_badge?: string | null;
+  season?: string | null; // from Video.season via externalId
 }
 
 // Enriched episode (derived)
@@ -352,34 +353,16 @@ export default function AnalyticsFormatDetailPage() {
     loadMetrics();
   }, [data]);
 
-  // ── Auto-open most recent year when episodes load ────────────────────────
+  // ── Build season accordion data ──────────────────────────────────────────
   const episodeDerived = useMemo(() => {
     /**
-     * Try to extract a structured date from the episode id.
-     * IDs follow the pattern: {format}-...-DD-MM-YYYY-{videoId}
-     * e.g. "unica-sport-live-27-02-2026-OfhJDLxiReg"
+     * Extract a date from the episode id for sorting and display.
+     * IDs follow: {format}-...-DD-MM-YYYY-{youtubeId}
      */
     const extractDateFromId = (id: string): { day: number; month: number; year: number } | null => {
       const m = id.match(/(\d{2})-(\d{2})-(\d{4})/);
       if (!m) return null;
       return { day: parseInt(m[1]), month: parseInt(m[2]), year: parseInt(m[3]) };
-    };
-
-    const getYear = (ep: EpisodeRow): string => {
-      // 1. Try published_at
-      if (ep.published_at) {
-        const y = new Date(ep.published_at).getFullYear();
-        if (!isNaN(y)) return String(y);
-      }
-      // 2. Try to extract year from title (e.g. "Live 27 febbraio 2026" → "2026")
-      if (ep.title) {
-        const m = ep.title.match(/\b(20\d{2})\b/);
-        if (m) return m[1];
-      }
-      // 3. Try to extract date from id (pattern: ...-DD-MM-YYYY-...)
-      const d = extractDateFromId(ep.id);
-      if (d) return String(d.year);
-      return '—';
     };
 
     const getDateLabel = (ep: EpisodeRow): string | null => {
@@ -390,18 +373,22 @@ export default function AnalyticsFormatDetailPage() {
           year: 'numeric',
         });
       }
-      // Fallback: extract date from id
       const d = extractDateFromId(ep.id);
-      if (d) {
-        return `${String(d.day).padStart(2, '0')}/${String(d.month).padStart(2, '0')}/${d.year}`;
-      }
+      if (d) return `${String(d.day).padStart(2, '0')}/${String(d.month).padStart(2, '0')}/${d.year}`;
       return null;
     };
 
-    // Sorted unique years (descending)
-    const yearSet = new Set<string>();
-    for (const ep of episodes) yearSet.add(getYear(ep));
-    const years = Array.from(yearSet).sort((a, b) => b.localeCompare(a));
+    // Use Video.season as the grouping key; fallback to year from id/title
+    const getSeasonLabel = (ep: EpisodeRow): string => {
+      if (ep.season) return ep.season;
+      if (ep.title) {
+        const m = ep.title.match(/\b(20\d{2})\b/);
+        if (m) return m[1];
+      }
+      const d = extractDateFromId(ep.id);
+      if (d) return String(d.year);
+      return '—';
+    };
 
     // Enrich episodes
     const enriched: EnrichedEpisode[] = episodes.map(ep => {
@@ -411,10 +398,15 @@ export default function AnalyticsFormatDetailPage() {
           : typeof ep.video_id === 'string' && ep.video_id
           ? ep.video_id
           : ep.id.replace(`${rawFormat}-`, '');
-      return { ...ep, displayName, year: getYear(ep), dateLabel: getDateLabel(ep) };
+      return {
+        ...ep,
+        displayName,
+        year: getSeasonLabel(ep),   // reuse "year" field as season label
+        dateLabel: getDateLabel(ep),
+      };
     });
 
-    // Sort by date descending using numeric sort key extracted from id
+    // Sort episodes by date descending within each season
     enriched.sort((a, b) => {
       const da = extractDateFromId(a.id);
       const db = extractDateFromId(b.id);
@@ -423,13 +415,18 @@ export default function AnalyticsFormatDetailPage() {
       if (!db) return -1;
       const numA = da.year * 10000 + da.month * 100 + da.day;
       const numB = db.year * 10000 + db.month * 100 + db.day;
-      return numB - numA; // descending
+      return numB - numA;
     });
 
-    // Group by year (descending)
-    const groups = years.map(year => ({
-      year,
-      episodes: enriched.filter(ep => ep.year === year),
+    // Collect unique seasons preserving sort order (most recent first)
+    const seasonSet = new Set<string>();
+    for (const ep of enriched) seasonSet.add(ep.year);
+    const years = Array.from(seasonSet);
+
+    // Group by season
+    const groups = years.map(season => ({
+      year: season,
+      episodes: enriched.filter(ep => ep.year === season),
     }));
 
     return { years, groups, enriched };
@@ -772,7 +769,7 @@ export default function AnalyticsFormatDetailPage() {
             <h3 className="text-sm font-semibold text-foreground">Elenco Puntate</h3>
           </div>
           <span className="text-xs text-muted-foreground">
-            {episodesLoading ? 'caricamento...' : `${episodes.length} puntate · ${episodeDerived.years.length} anni`}
+            {episodesLoading ? 'caricamento...' : `${episodes.length} puntate · ${episodeDerived.years.length} ${episodeDerived.years.length === 1 ? 'stagione' : 'stagioni'}`}
           </span>
         </div>
 
