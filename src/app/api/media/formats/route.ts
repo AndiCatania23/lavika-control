@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabaseServer';
 
-type FormatImageColumn = 'cover_vertical_url' | 'cover_horizontal_url' | 'hero_url';
-const VALID_COLUMNS: FormatImageColumn[] = ['cover_vertical_url', 'cover_horizontal_url', 'hero_url'];
+type FormatColumn = 'cover_vertical_url' | 'cover_horizontal_url' | 'hero_url' | 'default_min_badge';
+const VALID_COLUMNS: FormatColumn[] = ['cover_vertical_url', 'cover_horizontal_url', 'hero_url', 'default_min_badge'];
+
+const VALID_BADGE_VALUES = ['bronze', 'silver', 'gold'];
 
 export async function GET() {
   if (!supabaseServer) {
@@ -10,7 +12,7 @@ export async function GET() {
   }
   const { data, error } = await supabaseServer
     .from('content_formats')
-    .select('id, title, cover_vertical_url, cover_horizontal_url, hero_url')
+    .select('id, title, cover_vertical_url, cover_horizontal_url, hero_url, default_min_badge')
     .order('title');
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json(data ?? []);
@@ -26,8 +28,14 @@ export async function PATCH(request: Request) {
   if (!id || !column) {
     return NextResponse.json({ error: 'Missing id or column' }, { status: 400 });
   }
-  if (!VALID_COLUMNS.includes(column as FormatImageColumn)) {
+  if (!VALID_COLUMNS.includes(column as FormatColumn)) {
     return NextResponse.json({ error: `Invalid column: ${column}` }, { status: 400 });
+  }
+  // default_min_badge is NOT NULL — validate it
+  if (column === 'default_min_badge') {
+    if (!value || !VALID_BADGE_VALUES.includes(value)) {
+      return NextResponse.json({ error: `Invalid badge value: ${value}` }, { status: 400 });
+    }
   }
 
   const { error } = await supabaseServer
