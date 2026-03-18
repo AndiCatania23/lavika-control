@@ -125,16 +125,16 @@ interface FormatMetricsData {
   userPerFormat: UserPerFormatRow[];
 }
 
-// Generic episode row from Supabase (we select * so columns may vary)
+// Episode row from content_episodes table
 interface EpisodeRow {
   id: string;
+  format_id?: string | null;
+  video_id?: string | null;
   title?: string | null;
-  name?: string | null;
-  season_id?: string | null;
-  season?: string | null;
-  episode_number?: number | null;
   thumbnail_url?: string | null;
-  [key: string]: unknown;
+  published_at?: string | null;
+  is_active?: boolean | null;
+  min_badge?: string | null;
 }
 
 const emptyMetrics: FormatMetricsData = {
@@ -263,15 +263,16 @@ export default function AnalyticsFormatDetailPage() {
 
   // Build season list and filtered episodes for the episode browser
   const episodeDerived = useMemo(() => {
-    // Determine season label for each episode
+    // Derive a season label from published_at year (e.g. "2025", "2026")
     const getSeasonLabel = (ep: EpisodeRow): string => {
-      const raw = ep.season_id ?? ep.season ?? null;
-      if (raw) return String(raw);
-      // Fallback: try to derive from episode id pattern or metrics
-      return 'Stagione 1';
+      if (ep.published_at) {
+        const year = new Date(ep.published_at).getFullYear();
+        if (!isNaN(year)) return String(year);
+      }
+      return '—';
     };
 
-    // Build sorted unique season list
+    // Build sorted unique season list (descending)
     const seasonSet = new Set<string>();
     for (const ep of episodes) {
       seasonSet.add(getSeasonLabel(ep));
@@ -283,15 +284,18 @@ export default function AnalyticsFormatDetailPage() {
       ? episodes
       : episodes.filter(ep => getSeasonLabel(ep) === selectedSeason);
 
-    // Enrich episode names: prefer title/name column, fallback to stripping format prefix from id
+    // Enrich episode names: prefer title column, fallback to video_id / id suffix
     const enriched = filtered.map(ep => {
       const displayName = (typeof ep.title === 'string' && ep.title)
         ? ep.title
-        : (typeof ep.name === 'string' && ep.name)
-          ? ep.name
+        : (typeof ep.video_id === 'string' && ep.video_id)
+          ? ep.video_id
           : ep.id.replace(`${rawFormat}-`, '');
       const season = getSeasonLabel(ep);
-      return { ...ep, displayName, season };
+      const dateLabel = ep.published_at
+        ? new Date(ep.published_at).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' })
+        : null;
+      return { ...ep, displayName, season, dateLabel };
     });
 
     return { seasons, enriched };
@@ -514,8 +518,8 @@ export default function AnalyticsFormatDetailPage() {
           </span>
         </div>
 
-        {/* Season filter tabs */}
-        {!episodesLoading && episodeDerived.seasons.length > 0 && (
+        {/* Season filter tabs (year-based from published_at) */}
+        {!episodesLoading && episodeDerived.seasons.length > 1 && (
           <div className="flex flex-wrap gap-1.5 mb-3">
             <button
               onClick={() => setSelectedSeason('all')}
@@ -529,8 +533,9 @@ export default function AnalyticsFormatDetailPage() {
             </button>
             {episodeDerived.seasons.map(season => {
               const count = episodes.filter(ep => {
-                const raw = ep.season_id ?? ep.season ?? 'Stagione 1';
-                return String(raw) === season;
+                if (!ep.published_at) return season === '—';
+                const y = new Date(ep.published_at).getFullYear();
+                return !isNaN(y) ? String(y) === season : season === '—';
               }).length;
               return (
                 <button
@@ -562,19 +567,21 @@ export default function AnalyticsFormatDetailPage() {
                 <tr>
                   <th className="text-left p-2 font-medium w-10">#</th>
                   <th className="text-left p-2 font-medium">Titolo</th>
-                  <th className="text-left p-2 font-medium w-32 hidden sm:table-cell">Stagione</th>
-                  <th className="text-center p-2 font-medium w-16">Cover</th>
+                  <th className="text-left p-2 font-medium w-24 hidden sm:table-cell">Data</th>
+                  <th className="text-center p-2 font-medium w-14">Cover</th>
                 </tr>
               </thead>
               <tbody>
                 {episodeDerived.enriched.map((ep, index) => (
-                  <tr key={ep.id} className="border-t border-border hover:bg-muted/20">
+                  <tr key={ep.id} className={`border-t border-border hover:bg-muted/20 ${ep.is_active === false ? 'opacity-50' : ''}`}>
                     <td className="p-2 text-muted-foreground">{index + 1}</td>
                     <td className="p-2 text-foreground">
-                      <div className="truncate max-w-[220px] sm:max-w-[360px]">{ep.displayName}</div>
-                      <div className="text-[10px] text-muted-foreground font-mono mt-0.5 truncate max-w-[220px]">{ep.id}</div>
+                      <div className="truncate max-w-[200px] sm:max-w-[380px]">{ep.displayName}</div>
+                      <div className="text-[10px] text-muted-foreground font-mono mt-0.5 truncate max-w-[200px]">{ep.video_id ?? ep.id}</div>
                     </td>
-                    <td className="p-2 text-muted-foreground hidden sm:table-cell truncate max-w-[120px]">{ep.season}</td>
+                    <td className="p-2 text-muted-foreground text-[11px] hidden sm:table-cell whitespace-nowrap">
+                      {ep.dateLabel ?? '—'}
+                    </td>
                     <td className="p-2 text-center">
                       {ep.thumbnail_url ? (
                         <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" title="Cover presente" />
