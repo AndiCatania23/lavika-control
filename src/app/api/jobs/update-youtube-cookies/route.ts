@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { gzipSync } from 'zlib';
 import { seal } from 'tweetsodium';
 
-const TARGET_SECRETS = ['YTDLP_COOKIES_YOUTUBE_GZ_B64', 'YTDLP_COOKIES_GOOGLE_GZ_B64'] as const;
+const YOUTUBE_GOOGLE_SECRETS = ['YTDLP_COOKIES_YOUTUBE_GZ_B64', 'YTDLP_COOKIES_GOOGLE_GZ_B64'] as const;
+const FACEBOOK_SECRET = 'YTDLP_COOKIES_FACEBOOK_GZ_B64' as const;
 
 class HttpError extends Error {
   status: number;
@@ -42,7 +43,7 @@ function getMissingGithubConfig(owner: string, repo: string, token: string) {
   return missing;
 }
 
-function isAllowedDomain(domain: string) {
+function isYouTubeGoogleDomain(domain: string) {
   const d = domain.toLowerCase();
   return (
     d === 'youtu.be' ||
@@ -54,20 +55,41 @@ function isAllowedDomain(domain: string) {
   );
 }
 
-function buildSecretFromCookies(cookiesText: string) {
+function isFacebookDomain(domain: string) {
+  const d = domain.toLowerCase();
+  return d === 'facebook.com' || d.endsWith('.facebook.com') || d === 'fbcdn.net' || d.endsWith('.fbcdn.net');
+}
+
+function buildSecretFromCookies(
+  cookiesText: string,
+  domainPredicate: (domain: string) => boolean,
+  emptyMessage: string
+) {
   const lines = cookiesText.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
   const filtered: string[] = [];
 
   for (const raw of lines) {
     const line = raw.trim();
-    if (!line || line.startsWith('#')) continue;
+    if (!line) continue;
+
+    // #HttpOnly_ is NOT a comment — it is a standard prefix emitted by many browser
+    // cookie-export extensions (e.g. "Get cookies.txt LOCALLY") to mark HttpOnly cookies.
+    // Facebook's essential auth cookies (datr, sb, c_user, xs …) are all HttpOnly, so
+    // without this handling the Facebook block is always empty.
+    const isHttpOnly = /^#httponly_/i.test(line);
+    if (!isHttpOnly && line.startsWith('#')) continue; // skip real comment lines
+
     const parts = line.split('\t');
     if (parts.length < 7) continue;
-    if (isAllowedDomain(parts[0])) filtered.push(line);
+
+    // Strip the prefix before passing to the domain predicate, but keep the original
+    // line in `filtered` so yt-dlp receives the file exactly as expected.
+    const domainField = isHttpOnly ? parts[0].replace(/^#httponly_/i, '') : parts[0];
+    if (domainPredicate(domainField)) filtered.push(line);
   }
 
   if (!filtered.length) {
-    throw new Error('Nessun cookie YouTube/Google trovato nel file');
+    throw new Error(emptyMessage);
   }
 
   const netscape = [
@@ -147,7 +169,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { value, filteredRows, secretLength } = buildSecretFromCookies(cookiesText);
+    const ytGoogle = buildSecretFromCookies(
+      cookiesText,
+      isYouTubeGoogleDomain,
+      'Nessun cookie YouTube/Google trovato nel file'
+    );
 
     const keyResp = await gh<{ key: string; key_id: string }>(
       `/repos/${owner}/${repo}/actions/secrets/public-key`,
@@ -159,19 +185,50 @@ export async function POST(req: NextRequest) {
     const key = keyResp.key;
     const keyId = keyResp.key_id;
 
-    const messageBytes = Buffer.from(value);
-    const keyBytes = Buffer.from(key, 'base64');
-    const encryptedBytes = seal(messageBytes, keyBytes);
-    const encryptedValue = Buffer.from(encryptedBytes).toString('base64');
+    const encryptSecret = (plainValue: string) => {
+      const messageBytes = Buffer.from(plainValue);
+      const keyBytes = Buffer.from(key, 'base64');
+      const encryptedBytes = seal(messageBytes, keyBytes);
+      return Buffer.from(encryptedBytes).toString('base64');
+    };
 
-    for (const secretName of TARGET_SECRETS) {
+    const updatedSecrets: string[] = [];
+    const ytGoogleEncryptedValue = encryptSecret(ytGoogle.value);
+
+    for (const secretName of YOUTUBE_GOOGLE_SECRETS) {
       await gh(`/repos/${owner}/${repo}/actions/secrets/${secretName}`, token, {
         method: 'PUT',
         body: JSON.stringify({
-          encrypted_value: encryptedValue,
+          encrypted_value: ytGoogleEncryptedValue,
           key_id: keyId,
         }),
       });
+      updatedSecrets.push(secretName);
+    }
+
+    let facebook: ReturnType<typeof buildSecretFromCookies> | null = null;
+    const missingPlatforms: string[] = [];
+    try {
+      facebook = buildSecretFromCookies(
+        cookiesText,
+        isFacebookDomain,
+        'Nessun cookie Facebook trovato nel file'
+      );
+    } catch {
+      facebook = null;
+      missingPlatforms.push('facebook');
+    }
+
+    if (facebook) {
+      const facebookEncryptedValue = encryptSecret(facebook.value);
+      await gh(`/repos/${owner}/${repo}/actions/secrets/${FACEBOOK_SECRET}`, token, {
+        method: 'PUT',
+        body: JSON.stringify({
+          encrypted_value: facebookEncryptedValue,
+          key_id: keyId,
+        }),
+      });
+      updatedSecrets.push(FACEBOOK_SECRET);
     }
 
     await gh(`/repos/${owner}/${repo}/actions/workflows/check-cookies.yml/dispatches`, token, {
@@ -181,11 +238,29 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       ok: true,
-      message: 'Secrets YouTube/Google aggiornati e workflow check-cookies avviato',
+      message: missingPlatforms.length
+        ? 'Secrets aggiornati (YouTube/Google), cookie Facebook non trovati, workflow check-cookies avviato'
+        : 'Secrets YouTube/Google/Facebook aggiornati e workflow check-cookies avviato',
+      warning: missingPlatforms.length
+        ? `Cookie non trovati per: ${missingPlatforms.join(', ')}`
+        : undefined,
       stats: {
-        filteredRows,
-        secretLength,
-        updatedSecrets: [...TARGET_SECRETS],
+        filteredRows: ytGoogle.filteredRows,
+        secretLength: ytGoogle.secretLength,
+        updatedSecrets,
+        missingPlatforms,
+        platformStats: {
+          youtubeGoogle: {
+            filteredRows: ytGoogle.filteredRows,
+            secretLength: ytGoogle.secretLength,
+          },
+          facebook: facebook
+            ? {
+                filteredRows: facebook.filteredRows,
+                secretLength: facebook.secretLength,
+              }
+            : null,
+        },
       },
     });
   } catch (error: unknown) {
