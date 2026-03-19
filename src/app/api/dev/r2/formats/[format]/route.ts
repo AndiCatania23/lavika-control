@@ -35,8 +35,23 @@ function toHumanSize(bytes: number): string {
   return `${value.toFixed(1)} ${units[unitIndex]}`;
 }
 
-function classifyAsset(pathSegments: string[]): 'video' | 'cover' | 'other' {
+type AssetType = 'video' | 'cover' | 'hls-master' | 'hls-segment' | 'other';
+
+function classifyAsset(pathSegments: string[]): AssetType {
   const normalized = pathSegments.map(segment => segment.toLowerCase());
+  const filename = normalized[normalized.length - 1] ?? '';
+
+  // HLS detection — any path that contains an 'hls' directory segment
+  const hlsIdx = normalized.indexOf('hls');
+  if (hlsIdx >= 0) {
+    // Master playlist: [format, stagione, hls, nome-episodio, playlist.m3u8] = exactly 5 segments
+    if (pathSegments.length === 5 && hlsIdx === 2 && filename === 'playlist.m3u8') {
+      return 'hls-master';
+    }
+    // Profile-level playlists (720p/playlist.m3u8, 480p/playlist.m3u8) and .ts segments
+    return 'hls-segment';
+  }
+
   if (normalized.some(segment => segment === 'video' || segment === 'videos')) return 'video';
   if (normalized.some(segment => segment.includes('copert') || segment.includes('cover') || segment.includes('thumbnail'))) {
     return 'cover';
@@ -81,6 +96,8 @@ export async function GET(_: Request, { params }: { params: Promise<{ format: st
   const objects = await listAllObjects();
 
   const seasonMap = new Map<string, Omit<SeasonStat, 'sizeHuman'>>();
+  // Tracks how many HLS master playlists (= episodes) exist per season
+  const seasonHlsMasterMap = new Map<string, number>();
   let matchedFormatName: string | null = null;
 
   for (const item of objects) {
@@ -107,13 +124,25 @@ export async function GET(_: Request, { params }: { params: Promise<{ format: st
     const stat = seasonMap.get(seasonName)!;
     const type = classifyAsset(segments);
 
-    if (type === 'video') stat.videos += 1;
-    else if (type === 'cover') stat.covers += 1;
-    else stat.other += 1;
+    if (type === 'video') {
+      stat.videos += 1;
+    } else if (type === 'cover') {
+      stat.covers += 1;
+    } else if (type === 'hls-master') {
+      seasonHlsMasterMap.set(seasonName, (seasonHlsMasterMap.get(seasonName) ?? 0) + 1);
+    } else if (type === 'other') {
+      stat.other += 1;
+    }
+    // 'hls-segment' (.ts and profile-level playlists): excluded from other, not counted separately
 
     stat.totalAssets += 1;
     stat.sizeBytes += item.size;
-    stat.episodes = stat.videos;
+  }
+
+  // Compute episodes per season: max(MP4 count, HLS master playlist count)
+  // Handles: solo MP4 → usa MP4; transizione MP4+HLS → usa il maggiore; solo HLS → usa master
+  for (const [seasonName, stat] of seasonMap.entries()) {
+    stat.episodes = Math.max(stat.videos, seasonHlsMasterMap.get(seasonName) ?? 0);
   }
 
   if (!matchedFormatName) {

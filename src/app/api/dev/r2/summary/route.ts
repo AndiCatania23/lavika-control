@@ -85,8 +85,22 @@ function normalizeSegment(value: string): string {
   return value.toLowerCase().trim().replace(/\s+/g, '_');
 }
 
-function classifyAsset(pathSegments: string[]): 'video' | 'cover' | 'other' {
+type AssetType = 'video' | 'cover' | 'hls-master' | 'hls-segment' | 'other';
+
+function classifyAsset(pathSegments: string[]): AssetType {
   const normalized = pathSegments.map(normalizeSegment);
+  const filename = normalized[normalized.length - 1] ?? '';
+
+  // HLS detection — any path that contains an 'hls' directory segment
+  const hlsIdx = normalized.indexOf('hls');
+  if (hlsIdx >= 0) {
+    // Master playlist: [format, stagione, hls, nome-episodio, playlist.m3u8] = exactly 5 segments
+    if (pathSegments.length === 5 && hlsIdx === 2 && filename === 'playlist.m3u8') {
+      return 'hls-master';
+    }
+    // Profile-level playlists (720p/playlist.m3u8, 480p/playlist.m3u8) and .ts segments
+    return 'hls-segment';
+  }
 
   if (normalized.some(segment => VIDEO_SEGMENTS.has(segment))) {
     return 'video';
@@ -217,6 +231,8 @@ export async function GET() {
     const coversMap = await loadFormatCovers();
     const map = new Map<string, FormatStat>();
     const seasonsMap = new Map<string, Set<string>>();
+    // Tracks how many HLS master playlists (= episodes) exist per format
+    const hlsMasterMap = new Map<string, number>();
 
     for (const item of objects) {
       const segments = item.key.split('/').filter(Boolean);
@@ -249,9 +265,16 @@ export async function GET() {
       const bucket = map.get(formatName)!;
       const type = classifyAsset(segments);
 
-      if (type === 'video') bucket.videos += 1;
-      else if (type === 'cover') bucket.covers += 1;
-      else bucket.other += 1;
+      if (type === 'video') {
+        bucket.videos += 1;
+      } else if (type === 'cover') {
+        bucket.covers += 1;
+      } else if (type === 'hls-master') {
+        hlsMasterMap.set(formatName, (hlsMasterMap.get(formatName) ?? 0) + 1);
+      } else if (type === 'other') {
+        bucket.other += 1;
+      }
+      // 'hls-segment' (.ts and profile-level playlists): excluded from other, not counted separately
 
       bucket.total += 1;
       bucket.sizeBytes += item.size;
@@ -284,7 +307,9 @@ export async function GET() {
 
     for (const row of stats) {
       row.seasons = seasonsMap.get(row.format)?.size ?? 0;
-      row.episodes = row.videos;
+      // episodes = max(MP4 count, HLS master playlist count)
+      // Handles: solo MP4 → usa MP4; transizione MP4+HLS → usa il maggiore; solo HLS → usa master
+      row.episodes = Math.max(row.videos, hlsMasterMap.get(row.format) ?? 0);
       videosTotal += row.videos;
       coversTotal += row.covers;
       otherTotal += row.other;
