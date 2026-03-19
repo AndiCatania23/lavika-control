@@ -55,9 +55,9 @@ export default function JobDetailPage() {
       {
         id: 'catanista-live',
         title: 'CATANISTA LIVE',
-        source: 'Facebook (catanista-live)',
-        scope: 'Live Catanista con naming a prefisso data.',
-        filters: 'Durata 5m-4h, parole chiave CATANISTA LIVE, esclusi Clip/Short.',
+        source: 'Facebook @catanista.redazione · /live_videos',
+        scope: 'Video Facebook con titolo 💥 CATANISTA LIVE sulla pagina live_videos.',
+        filters: 'Titolo contiene "💥 CATANISTA LIVE".',
         imageUrl: '/immagini/Format Cover/Catanista/Catanista - card orizzontale.webp',
       },
       {

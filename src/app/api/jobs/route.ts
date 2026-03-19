@@ -69,10 +69,11 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const { jobId, triggeredBy = 'manual', source } = await request.json() as {
+  const { jobId, triggeredBy = 'manual', source, facebook_url } = await request.json() as {
     jobId?: string;
     triggeredBy?: string;
     source?: string;
+    facebook_url?: string;
   };
 
   if (jobId !== 'job_sync_video') {
@@ -95,9 +96,11 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const workflowInputs = source
-    ? { source }
-    : undefined;
+  const workflowInputs: Record<string, string> | undefined = facebook_url
+    ? { facebook_url }
+    : source
+      ? { source }
+      : undefined;
 
   const dispatch = await triggerGithubWorkflow('sync-videos.yml', 'master', workflowInputs);
   if (!dispatch.ok) {

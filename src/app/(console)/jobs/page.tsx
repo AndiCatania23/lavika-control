@@ -60,6 +60,9 @@ export default function JobsPage() {
   const [cookiesError, setCookiesError] = useState<string | null>(null);
   const [cookiesResult, setCookiesResult] = useState<YouTubeCookiesUpdateResponse | null>(null);
   const [isCookiesPanelOpen, setIsCookiesPanelOpen] = useState(false);
+  const [facebookUrl, setFacebookUrl] = useState('');
+  const [facebookSyncLoading, setFacebookSyncLoading] = useState(false);
+  const [facebookSyncResult, setFacebookSyncResult] = useState<'ok' | 'error' | null>(null);
   // formatId → cover_horizontal_url from Supabase/R2
   const [formatCovers, setFormatCovers] = useState<Record<string, string>>({});
   const router = useRouter();
@@ -124,6 +127,31 @@ export default function JobsPage() {
         .then(runs => setHasRunningJob(runs.length > 0))
         .catch(() => setHasRunningJob(false));
     }, 6000);
+  };
+
+  const handleRunFacebookUrl = async () => {
+    const url = facebookUrl.trim();
+    if (!url) return;
+    setFacebookSyncLoading(true);
+    setFacebookSyncResult(null);
+    try {
+      const response = await fetch('/api/jobs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId: 'job_sync_video', triggeredBy: 'manual', facebook_url: url }),
+      });
+      if (response.ok) {
+        setFacebookSyncResult('ok');
+        setFacebookUrl('');
+        setHasRunningJob(true);
+      } else {
+        setFacebookSyncResult('error');
+      }
+    } catch {
+      setFacebookSyncResult('error');
+    } finally {
+      setFacebookSyncLoading(false);
+    }
   };
 
   const handleRunSource = async (sourceId: string) => {
@@ -292,6 +320,43 @@ export default function JobsPage() {
                 <ChevronRight className="w-3 h-3" />
               </button>
             </div>
+
+            {source.id === 'catanista-live' && (
+              <div className="mt-3 space-y-2">
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    value={facebookUrl}
+                    onChange={e => setFacebookUrl(e.target.value)}
+                    placeholder="URL video Facebook..."
+                    className="flex-1 min-w-0 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                  <button
+                    onClick={handleRunFacebookUrl}
+                    disabled={!facebookUrl.trim() || facebookSyncLoading || hasRunningJob}
+                    className="px-3 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50 whitespace-nowrap"
+                  >
+                    {facebookSyncLoading ? '...' : 'Scarica'}
+                  </button>
+                </div>
+                {facebookSyncResult === 'ok' && (
+                  <p className="text-xs text-green-500">
+                    Sync avviato —{' '}
+                    <a
+                      href="https://github.com/AndiCatania23/lavika-video-sync/actions"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline"
+                    >
+                      segui su GitHub Actions
+                    </a>
+                  </p>
+                )}
+                {facebookSyncResult === 'error' && (
+                  <p className="text-xs text-red-500">Errore nel trigger del workflow.</p>
+                )}
+              </div>
+            )}
           </div>
         ))}
       </div>
