@@ -1021,15 +1021,6 @@ export default function PalinsestoHomePage() {
                       </div>
                       <div className="flex flex-wrap gap-1">
                         <button className="rounded border border-border px-2 py-1 text-xs hover:bg-muted/40" onClick={() => startEditSeries(item)}>Edit serie</button>
-                        <button className="rounded border border-border px-2 py-1 text-xs hover:bg-muted/40" onClick={async () => {
-                          const response = await fetch(`/api/dev/schedule/series/${item.id}/materialize`, { method: 'POST' });
-                          const data = await response.json().catch(() => ({}));
-                          if (!response.ok) showToast('error', safeErrorMessage(data, 'Materializzazione non riuscita.'));
-                          else {
-                            showToast('success', 'Serie materializzata.');
-                            await loadCards();
-                          }
-                        }}>Materializza</button>
                         <button className="rounded border border-border px-2 py-1 text-xs hover:bg-muted/40" onClick={() => setPendingDelete({ type: 'series', id: item.id, hard: false, label: item.label ?? item.id })}>Soft del</button>
                         <button className="rounded border border-red-500/30 px-2 py-1 text-xs text-red-500 hover:bg-red-500/10" onClick={() => setPendingDelete({ type: 'series', id: item.id, hard: true, label: item.label ?? item.id })}>Hard del</button>
                       </div>

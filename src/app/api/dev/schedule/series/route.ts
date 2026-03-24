@@ -177,7 +177,15 @@ export async function POST(request: Request) {
   }
 
   if (payload.status === 'published' && payload.is_active) {
-    await materializeSeries({ seriesId: data.id }).catch(() => undefined);
+    try {
+      await materializeSeries({ seriesId: data.id });
+    } catch (error) {
+      await supabaseServer.from('home_schedule_series').delete().eq('id', data.id);
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : 'Materializzazione serie non riuscita.' },
+        { status: 500 }
+      );
+    }
   }
 
   return NextResponse.json(data, { status: 201 });

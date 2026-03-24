@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabaseServer';
-import { materializeSeries } from '@/lib/schedule/materializer';
+import { materializeSeries, retireSeriesOccurrences } from '@/lib/schedule/materializer';
 import { parseRRule } from '@/lib/schedule/rrule';
 import { isKnownFormat, isValidAccess, isValidHttpUrl, isValidStatus, normalizeOptionalText } from '@/lib/schedule/server';
 import { parseLocalDateTime } from '@/lib/schedule/timezone';
@@ -190,7 +190,26 @@ export async function PATCH(
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    await materializeSeries({ seriesId: id }).catch(() => undefined);
+    if (nextStatus === 'published' && nextIsActive) {
+      try {
+        await materializeSeries({ seriesId: id });
+      } catch (materializeError) {
+        return NextResponse.json(
+          { error: materializeError instanceof Error ? materializeError.message : 'Rematerialize non riuscito.' },
+          { status: 500 }
+        );
+      }
+    } else {
+      try {
+        await retireSeriesOccurrences({ seriesId: id, futureOnly: true, hardDelete: false });
+      } catch (retireError) {
+        return NextResponse.json(
+          { error: retireError instanceof Error ? retireError.message : 'Disattivazione occorrenze non riuscita.' },
+          { status: 500 }
+        );
+      }
+    }
+
     return NextResponse.json({ mode: 'all', item: data });
   }
 
@@ -239,8 +258,24 @@ export async function PATCH(
     return NextResponse.json({ error: createError.message }, { status: 500 });
   }
 
-  await materializeSeries({ seriesId: id }).catch(() => undefined);
-  await materializeSeries({ seriesId: created.id }).catch(() => undefined);
+  try {
+    if (current.status === 'published' && current.is_active) {
+      await materializeSeries({ seriesId: id });
+    } else {
+      await retireSeriesOccurrences({ seriesId: id, futureOnly: true, hardDelete: false });
+    }
+
+    if (nextStatus === 'published' && nextIsActive) {
+      await materializeSeries({ seriesId: created.id });
+    } else {
+      await retireSeriesOccurrences({ seriesId: created.id, futureOnly: true, hardDelete: false });
+    }
+  } catch (materializeError) {
+    return NextResponse.json(
+      { error: materializeError instanceof Error ? materializeError.message : 'Rematerialize split non riuscito.' },
+      { status: 500 }
+    );
+  }
 
   return NextResponse.json({
     mode: 'this_and_following',
@@ -270,11 +305,7 @@ export async function DELETE(
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    await supabaseServer
-      .from('home_schedule_cards')
-      .delete()
-      .eq('series_id', id)
-      .eq('source_type', 'series');
+    await retireSeriesOccurrences({ seriesId: id, hardDelete: true, futureOnly: false });
 
     return NextResponse.json({ ok: true, mode: 'hard' });
   }
@@ -288,6 +319,14 @@ export async function DELETE(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  await materializeSeries({ seriesId: id }).catch(() => undefined);
+  try {
+    await retireSeriesOccurrences({ seriesId: id, hardDelete: false, futureOnly: true });
+  } catch (retireError) {
+    return NextResponse.json(
+      { error: retireError instanceof Error ? retireError.message : 'Disattivazione occorrenze non riuscita.' },
+      { status: 500 }
+    );
+  }
+
   return NextResponse.json({ ok: true, mode: 'soft' });
 }

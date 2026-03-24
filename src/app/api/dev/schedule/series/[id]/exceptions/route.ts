@@ -79,7 +79,14 @@ export async function POST(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  await materializeSeries({ seriesId: id }).catch(() => undefined);
+  try {
+    await materializeSeries({ seriesId: id });
+  } catch (materializeError) {
+    return NextResponse.json(
+      { error: materializeError instanceof Error ? materializeError.message : 'Rematerialize non riuscito.' },
+      { status: 500 }
+    );
+  }
 
   return NextResponse.json(data, { status: 201 });
 }

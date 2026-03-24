@@ -41,6 +41,12 @@ interface MaterializedRow {
   occurrence_key: string;
 }
 
+export interface RetireSeriesOptions {
+  seriesId: string;
+  hardDelete?: boolean;
+  futureOnly?: boolean;
+}
+
 export interface MaterializeOptions {
   seriesId?: string;
   windowPastDays?: number;
@@ -199,12 +205,62 @@ async function cleanupObsolete(
     .gte('start_at', windowStartUtcIso);
 
   if (keepOccurrenceKeys.length > 0) {
-    query = query.not('occurrence_key', 'in', `(${keepOccurrenceKeys.map(item => `"${item}"`).join(',')})`);
+    const escaped = keepOccurrenceKeys
+      .map(item => `'${item.replace(/'/g, "''")}'`)
+      .join(',');
+    query = query.not('occurrence_key', 'in', `(${escaped})`);
   }
 
   const { count, error } = await query;
   if (error) {
     throw new Error(`Errore cleanup occorrenze obsolete serie ${seriesId}: ${error.message}`);
+  }
+
+  return count ?? 0;
+}
+
+export async function retireSeriesOccurrences(options: RetireSeriesOptions): Promise<number> {
+  if (!supabaseServer) return 0;
+
+  const hardDelete = options.hardDelete ?? false;
+  const futureOnly = options.futureOnly ?? true;
+  const nowIso = new Date().toISOString();
+
+  if (hardDelete) {
+    let query = supabaseServer
+      .from('home_schedule_cards')
+      .delete({ count: 'exact' })
+      .eq('source_type', 'series')
+      .eq('series_id', options.seriesId);
+
+    if (futureOnly) {
+      query = query.gte('start_at', nowIso);
+    }
+
+    const { count, error } = await query;
+    if (error) {
+      throw new Error(`Errore rimozione occorrenze serie ${options.seriesId}: ${error.message}`);
+    }
+    return count ?? 0;
+  }
+
+  let query = supabaseServer
+    .from('home_schedule_cards')
+    .update({
+      is_active: false,
+      status: 'draft',
+      updated_at: nowIso,
+    }, { count: 'exact' })
+    .eq('source_type', 'series')
+    .eq('series_id', options.seriesId);
+
+  if (futureOnly) {
+    query = query.gte('start_at', nowIso);
+  }
+
+  const { count, error } = await query;
+  if (error) {
+    throw new Error(`Errore disattivazione occorrenze serie ${options.seriesId}: ${error.message}`);
   }
 
   return count ?? 0;
@@ -220,6 +276,15 @@ export async function materializeSeries(options: MaterializeOptions = {}): Promi
   let removedCards = 0;
 
   for (const series of seriesList) {
+    if (!series.is_active || series.status !== 'published') {
+      removedCards += await retireSeriesOccurrences({
+        seriesId: series.id,
+        hardDelete: false,
+        futureOnly: true,
+      });
+      continue;
+    }
+
     const exceptions = await fetchExceptions(series.id);
     const rows = buildRowsForSeries(series, exceptions, windowStartLocal, windowEndLocal);
     upsertedCards += await upsertRows(rows);
@@ -229,9 +294,6 @@ export async function materializeSeries(options: MaterializeOptions = {}): Promi
       windowStartUtcIso
     );
 
-    if (options.seriesId && (!series.is_active || series.status !== 'published')) {
-      removedCards += await cleanupObsolete(series.id, [], windowStartUtcIso);
-    }
   }
 
   return {
