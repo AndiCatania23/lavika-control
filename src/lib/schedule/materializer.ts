@@ -183,8 +183,75 @@ async function upsertRows(rows: MaterializedRow[]): Promise<number> {
       ignoreDuplicates: false,
     });
 
-  if (error) {
+  if (!error) {
+    return rows.length;
+  }
+
+  const noConstraintConflict =
+    error.code === '42P10'
+    || error.message.toLowerCase().includes('no unique or exclusion constraint matching the on conflict specification');
+
+  if (!noConstraintConflict) {
     throw new Error(`Errore upsert card materializzate: ${error.message}`);
+  }
+
+  const occurrenceKeys = rows
+    .map(row => row.occurrence_key)
+    .filter((value): value is string => typeof value === 'string' && value.length > 0);
+
+  const existingByKey = new Map<string, string>();
+  if (occurrenceKeys.length > 0) {
+    const { data: existingRows, error: existingError } = await supabaseServer
+      .from('home_schedule_cards')
+      .select('id,occurrence_key')
+      .eq('source_type', 'series')
+      .in('occurrence_key', occurrenceKeys);
+
+    if (existingError) {
+      throw new Error(`Errore lookup fallback card materializzate: ${existingError.message}`);
+    }
+
+    for (const row of existingRows ?? []) {
+      const key = row.occurrence_key as string | null;
+      const id = row.id as string | null;
+      if (key && id && !existingByKey.has(key)) {
+        existingByKey.set(key, id);
+      }
+    }
+  }
+
+  for (const row of rows) {
+    const existingId = row.occurrence_key ? existingByKey.get(row.occurrence_key) : undefined;
+    if (existingId) {
+      const { error: updateError } = await supabaseServer
+        .from('home_schedule_cards')
+        .update({
+          format_id: row.format_id,
+          label: row.label,
+          access: row.access,
+          start_at: row.start_at,
+          status: row.status,
+          is_active: row.is_active,
+          cover_override_url: row.cover_override_url,
+          source_type: row.source_type,
+          series_id: row.series_id,
+          occurrence_key: row.occurrence_key,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existingId);
+
+      if (updateError) {
+        throw new Error(`Errore update fallback card materializzate: ${updateError.message}`);
+      }
+    } else {
+      const { error: insertError } = await supabaseServer
+        .from('home_schedule_cards')
+        .insert(row);
+
+      if (insertError) {
+        throw new Error(`Errore insert fallback card materializzate: ${insertError.message}`);
+      }
+    }
   }
 
   return rows.length;
