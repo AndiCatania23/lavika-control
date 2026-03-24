@@ -24,7 +24,7 @@ const navItems = [
   { href: '/jobs', label: 'Job', icon: Workflow },
   { href: '/errors', label: 'Errori', icon: AlertTriangle },
   { href: '/media', label: 'Media', icon: ImageIcon },
-  { href: '/home-schedule', label: 'Palinsesto Home', icon: CalendarClock },
+  { href: '/palinsesto-home', label: 'Palinsesto Home', icon: CalendarClock },
   { href: '/settings', label: 'Impostazioni', icon: Settings },
 ];
 
@@ -34,7 +34,7 @@ const mobileNavItems = [
   { href: '/users', label: 'Utenti', icon: Users },
   { href: '/jobs', label: 'Job', icon: Workflow },
   { href: '/media', label: 'Media', icon: ImageIcon },
-  { href: '/home-schedule', label: 'Home', icon: CalendarClock },
+  { href: '/palinsesto-home', label: 'Home', icon: CalendarClock },
 ];
 
 export function Sidebar() {
