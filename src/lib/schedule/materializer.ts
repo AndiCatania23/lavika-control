@@ -94,7 +94,7 @@ async function fetchSeries(seriesId?: string): Promise<SeriesRow[]> {
   if (seriesId) {
     query = query.eq('id', seriesId);
   } else {
-    query = query.eq('status', 'published').eq('is_active', true);
+    query = query.eq('is_active', true);
   }
 
   const { data, error } = await query;
@@ -343,7 +343,7 @@ export async function materializeSeries(options: MaterializeOptions = {}): Promi
   let removedCards = 0;
 
   for (const series of seriesList) {
-    if (!series.is_active || series.status !== 'published') {
+    if (!series.is_active) {
       removedCards += await retireSeriesOccurrences({
         seriesId: series.id,
         hardDelete: false,

@@ -176,7 +176,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  if (payload.status === 'published' && payload.is_active) {
+  if (payload.is_active) {
     try {
       await materializeSeries({ seriesId: data.id });
     } catch (error) {

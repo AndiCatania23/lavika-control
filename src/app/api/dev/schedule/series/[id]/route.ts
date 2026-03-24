@@ -190,7 +190,7 @@ export async function PATCH(
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    if (nextStatus === 'published' && nextIsActive) {
+    if (nextIsActive) {
       try {
         await materializeSeries({ seriesId: id });
       } catch (materializeError) {
@@ -259,13 +259,13 @@ export async function PATCH(
   }
 
   try {
-    if (current.status === 'published' && current.is_active) {
+    if (current.is_active) {
       await materializeSeries({ seriesId: id });
     } else {
       await retireSeriesOccurrences({ seriesId: id, futureOnly: true, hardDelete: false });
     }
 
-    if (nextStatus === 'published' && nextIsActive) {
+    if (nextIsActive) {
       await materializeSeries({ seriesId: created.id });
     } else {
       await retireSeriesOccurrences({ seriesId: created.id, futureOnly: true, hardDelete: false });
