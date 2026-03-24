@@ -279,26 +279,48 @@ async function cleanupObsolete(
 ): Promise<number> {
   if (!supabaseServer) return 0;
 
-  let query = supabaseServer
+  const { data: existingRows, error: existingError } = await supabaseServer
     .from('home_schedule_cards')
-    .delete({ count: 'exact' })
+    .select('id,occurrence_key')
     .eq('source_type', 'series')
     .eq('series_id', seriesId)
     .gte('start_at', windowStartUtcIso);
 
-  if (keepOccurrenceKeys.length > 0) {
-    const escaped = keepOccurrenceKeys
-      .map(item => `'${item.replace(/'/g, "''")}'`)
-      .join(',');
-    query = query.not('occurrence_key', 'in', `(${escaped})`);
+  if (existingError) {
+    throw new Error(`Errore lookup cleanup serie ${seriesId}: ${existingError.message}`);
   }
 
-  const { count, error } = await query;
-  if (error) {
-    throw new Error(`Errore cleanup occorrenze obsolete serie ${seriesId}: ${error.message}`);
+  const keepSet = new Set(keepOccurrenceKeys);
+  const obsoleteIds = (existingRows ?? [])
+    .filter(row => {
+      const key = row.occurrence_key as string | null;
+      if (!key) return true;
+      return !keepSet.has(key);
+    })
+    .map(row => row.id as string)
+    .filter(Boolean);
+
+  if (obsoleteIds.length === 0) {
+    return 0;
   }
 
-  return count ?? 0;
+  let removed = 0;
+  const chunkSize = 200;
+  for (let i = 0; i < obsoleteIds.length; i += chunkSize) {
+    const chunk = obsoleteIds.slice(i, i + chunkSize);
+    const { count, error } = await supabaseServer
+      .from('home_schedule_cards')
+      .delete({ count: 'exact' })
+      .in('id', chunk);
+
+    if (error) {
+      throw new Error(`Errore delete cleanup serie ${seriesId}: ${error.message}`);
+    }
+
+    removed += count ?? 0;
+  }
+
+  return removed;
 }
 
 export async function retireSeriesOccurrences(options: RetireSeriesOptions): Promise<number> {
