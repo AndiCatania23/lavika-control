@@ -178,7 +178,8 @@ export async function POST(request: Request) {
 
   if (payload.is_active) {
     try {
-      await materializeSeries({ seriesId: data.id });
+      const materialize = await materializeSeries({ seriesId: data.id });
+      return NextResponse.json({ item: data, materialize }, { status: 201 });
     } catch (error) {
       await supabaseServer.from('home_schedule_series').delete().eq('id', data.id);
       return NextResponse.json(
@@ -188,5 +189,5 @@ export async function POST(request: Request) {
     }
   }
 
-  return NextResponse.json(data, { status: 201 });
+  return NextResponse.json({ item: data, materialize: null }, { status: 201 });
 }

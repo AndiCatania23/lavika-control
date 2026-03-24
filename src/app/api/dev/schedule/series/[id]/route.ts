@@ -192,7 +192,8 @@ export async function PATCH(
 
     if (nextIsActive) {
       try {
-        await materializeSeries({ seriesId: id });
+        const materialize = await materializeSeries({ seriesId: id });
+        return NextResponse.json({ mode: 'all', item: data, materialize });
       } catch (materializeError) {
         return NextResponse.json(
           { error: materializeError instanceof Error ? materializeError.message : 'Rematerialize non riuscito.' },
@@ -210,7 +211,7 @@ export async function PATCH(
       }
     }
 
-    return NextResponse.json({ mode: 'all', item: data });
+    return NextResponse.json({ mode: 'all', item: data, materialize: null });
   }
 
   const effectiveFrom = normalizeLocalInput(body.effective_from_local);
@@ -259,29 +260,34 @@ export async function PATCH(
   }
 
   try {
+    let previousMaterialize: unknown = null;
+    let newMaterialize: unknown = null;
+
     if (current.is_active) {
-      await materializeSeries({ seriesId: id });
+      previousMaterialize = await materializeSeries({ seriesId: id });
     } else {
       await retireSeriesOccurrences({ seriesId: id, futureOnly: true, hardDelete: false });
     }
 
     if (nextIsActive) {
-      await materializeSeries({ seriesId: created.id });
+      newMaterialize = await materializeSeries({ seriesId: created.id });
     } else {
       await retireSeriesOccurrences({ seriesId: created.id, futureOnly: true, hardDelete: false });
     }
+
+    return NextResponse.json({
+      mode: 'this_and_following',
+      previous_series_id: id,
+      new_series: created,
+      materialize_previous: previousMaterialize,
+      materialize_new: newMaterialize,
+    });
   } catch (materializeError) {
     return NextResponse.json(
       { error: materializeError instanceof Error ? materializeError.message : 'Rematerialize split non riuscito.' },
       { status: 500 }
     );
   }
-
-  return NextResponse.json({
-    mode: 'this_and_following',
-    previous_series_id: id,
-    new_series: created,
-  });
 }
 
 export async function DELETE(

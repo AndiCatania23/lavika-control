@@ -80,13 +80,12 @@ export async function POST(
   }
 
   try {
-    await materializeSeries({ seriesId: id });
+    const materialize = await materializeSeries({ seriesId: id });
+    return NextResponse.json({ item: data, materialize }, { status: 201 });
   } catch (materializeError) {
     return NextResponse.json(
       { error: materializeError instanceof Error ? materializeError.message : 'Rematerialize non riuscito.' },
       { status: 500 }
     );
   }
-
-  return NextResponse.json(data, { status: 201 });
 }

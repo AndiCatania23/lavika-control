@@ -134,7 +134,7 @@ function buildRowsForSeries(
     throw new Error(`Timezone non supportata per serie ${series.id}. Attesa ${SCHEDULE_TIMEZONE}.`);
   }
 
-  const occurrences = generateOccurrences({
+  let occurrences = generateOccurrences({
     dtstartLocal: normalizeLocal(series.dtstart_local),
     rrule: series.rrule,
     windowStartLocal,
@@ -143,6 +143,21 @@ function buildRowsForSeries(
     untilLocal: series.until_local ? normalizeLocal(series.until_local) : null,
     limit: 1000,
   });
+
+  if (occurrences.length === 0) {
+    const fallbackStart = normalizeLocal(series.dtstart_local);
+    const fallbackEnd = addDaysLocal(fallbackStart, 365) ?? fallbackStart;
+
+    occurrences = generateOccurrences({
+      dtstartLocal: fallbackStart,
+      rrule: series.rrule,
+      windowStartLocal: fallbackStart,
+      windowEndLocal: fallbackEnd,
+      maxOccurrences: series.max_occurrences,
+      untilLocal: series.until_local ? normalizeLocal(series.until_local) : null,
+      limit: 1000,
+    });
+  }
 
   const rows: MaterializedRow[] = [];
   for (const occurrenceLocalRaw of occurrences) {
@@ -335,7 +350,7 @@ export async function retireSeriesOccurrences(options: RetireSeriesOptions): Pro
 
 export async function materializeSeries(options: MaterializeOptions = {}): Promise<MaterializeResult> {
   const windowPastDays = options.windowPastDays ?? 1;
-  const windowFutureDays = options.windowFutureDays ?? 90;
+  const windowFutureDays = options.windowFutureDays ?? 365;
   const { windowStartLocal, windowEndLocal, windowStartUtcIso } = getWindowBounds(windowPastDays, windowFutureDays);
 
   const seriesList = await fetchSeries(options.seriesId);
