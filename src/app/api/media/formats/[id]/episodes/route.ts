@@ -28,44 +28,13 @@ export async function GET(
 
   const { data: episodes, error } = await supabaseServer
     .from('content_episodes')
-    .select('id, format_id, video_id, title, thumbnail_url, published_at, is_active, min_badge')
+    .select('id, format_id, video_id, title, thumbnail_url, published_at, is_active, min_badge, season')
     .eq('format_id', formatId)
     .order('created_at', { ascending: false });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const rows = episodes ?? [];
-
-  // Enrich with season from Video table.
-  // content_episodes.video_id ends with the YouTube externalId (always 11 chars).
-  // e.g. "unica-sport-live-06-01-2026-p5DfC-DAOAs" → externalId = "p5DfC-DAOAs"
-  const youtubeIds = Array.from(
-    new Set(
-      rows
-        .map(ep => (ep.video_id ? ep.video_id.slice(-11) : null))
-        .filter((id): id is string => id !== null)
-    )
-  );
-
-  if (youtubeIds.length === 0) {
-    return NextResponse.json(rows);
-  }
-
-  const { data: videos } = await supabaseServer
-    .from('Video')
-    .select('"externalId", season')
-    .in('"externalId"', youtubeIds);
-
-  const seasonMap = new Map(
-    (videos ?? []).map(v => [v.externalId as string, v.season as string | null])
-  );
-
-  return NextResponse.json(
-    rows.map(ep => ({
-      ...ep,
-      season: ep.video_id ? (seasonMap.get(ep.video_id.slice(-11)) ?? null) : null,
-    }))
-  );
+  return NextResponse.json(episodes ?? []);
 }
 
 const VALID_BADGE_VALUES = ['bronze', 'silver', 'gold'];
