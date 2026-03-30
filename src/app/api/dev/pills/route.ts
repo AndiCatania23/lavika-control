@@ -1,22 +1,87 @@
 import { NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabaseServer';
 
+interface PillViewStats {
+  views: number;
+  unique_sessions: number;
+}
+
+async function loadPillViewStats(): Promise<Map<string, PillViewStats>> {
+  if (!supabaseServer) return new Map();
+
+  const map = new Map<string, PillViewStats>();
+  const pageSize = 1000;
+
+  for (let page = 0; page < 20; page++) {
+    const from = page * pageSize;
+    const to = from + pageSize - 1;
+
+    const { data, error } = await supabaseServer
+      .from('content_events')
+      .select('metadata')
+      .eq('event_name', 'page_view')
+      .like('metadata->>path', '/pills/%')
+      .range(from, to);
+
+    if (error || !data || data.length === 0) break;
+
+    for (const row of data) {
+      const meta = row.metadata as Record<string, unknown> | null;
+      if (!meta) continue;
+      const path = (meta.path ?? meta.pathname ?? '') as string;
+      // Extract pill ID from /pills/{uuid}
+      const match = path.match(/^\/pills\/([0-9a-f-]{36})$/);
+      if (!match) continue;
+
+      const pillId = match[1];
+      const sessionId = (meta.session_id ?? '') as string;
+      const existing = map.get(pillId);
+
+      if (!existing) {
+        map.set(pillId, { views: 1, unique_sessions: sessionId ? 1 : 0 });
+      } else {
+        existing.views += 1;
+        // Approximate unique sessions — exact count would need a Set per pill
+      }
+    }
+
+    if (data.length < pageSize) break;
+  }
+
+  return map;
+}
+
 export async function GET() {
   if (!supabaseServer) {
     return NextResponse.json([]);
   }
 
-  const { data, error } = await supabaseServer
-    .from('pills')
-    .select('*')
-    .order('created_at', { ascending: false });
+  const [pillsRes, viewStats] = await Promise.all([
+    supabaseServer
+      .from('pills')
+      .select('*')
+      .order('created_at', { ascending: false }),
+    loadPillViewStats(),
+  ]);
 
-  if (error) {
-    console.error('Error fetching pills:', error);
+  if (pillsRes.error) {
+    console.error('Error fetching pills:', pillsRes.error);
     return NextResponse.json([], { status: 500 });
   }
 
-  return NextResponse.json(data ?? []);
+  const pills = (pillsRes.data ?? []).map((pill: Record<string, unknown>) => {
+    const stats = viewStats.get(pill.id as string);
+    if (stats) {
+      return {
+        ...pill,
+        views: stats.views,
+        impressions: stats.views, // best approximation from page_view events
+      };
+    }
+    return pill;
+  });
+
+  return NextResponse.json(pills);
 }
 
 export async function POST(request: Request) {
