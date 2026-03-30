@@ -15,6 +15,7 @@ import {
   Home,
   ImageIcon,
   CalendarClock,
+  Pill,
 } from 'lucide-react';
 
 const navItems = [
@@ -24,6 +25,7 @@ const navItems = [
   { href: '/jobs', label: 'Job', icon: Workflow },
   { href: '/errors', label: 'Errori', icon: AlertTriangle },
   { href: '/media', label: 'Media', icon: ImageIcon },
+  { href: '/pills', label: 'Pillole', icon: Pill },
   { href: '/palinsesto-home', label: 'Palinsesto Home', icon: CalendarClock },
   { href: '/settings', label: 'Impostazioni', icon: Settings },
 ];

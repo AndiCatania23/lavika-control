@@ -169,6 +169,66 @@ export async function getNotificationsData(limit: number = 3, offset: number = 0
   return safeJson(response, [] as AppNotification[]);
 }
 
+// ── Pills ──────────────────────────────────────────────
+
+export interface Pill {
+  id: string;
+  title: string;
+  content: string;
+  type: 'stat' | 'update' | 'quote' | 'clip' | 'trivia';
+  pill_category: string | null;
+  status: string;
+  scheduled_at: string | null;
+  generated_by: string;
+  source: string;
+  image_url: string | null;
+  video_url: string | null;
+  is_published: boolean;
+  published_at: string;
+  created_at: string;
+  updated_at: string;
+  impressions: number;
+  views: number;
+  clicks: number;
+  opened_from_push: number;
+  total_read_time_ms: number;
+  total_reads: number;
+  content_hash: string | null;
+  match_id: string | null;
+  source_cluster_id: string | null;
+}
+
+export async function getPills(): Promise<Pill[]> {
+  const response = await fetch('/api/dev/pills', { cache: 'no-store' });
+  return safeJson(response, [] as Pill[]);
+}
+
+export async function createPill(pill: Partial<Pill>): Promise<Pill> {
+  const response = await fetch('/api/dev/pills', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(pill),
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ error: 'Errore sconosciuto' }));
+    throw new Error(err.error || 'Errore nella creazione');
+  }
+  return response.json() as Promise<Pill>;
+}
+
+export async function updatePill(id: string, updates: Partial<Pill>): Promise<Pill> {
+  const response = await fetch('/api/dev/pills', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, ...updates }),
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ error: 'Errore sconosciuto' }));
+    throw new Error(err.error || 'Errore nell\'aggiornamento');
+  }
+  return response.json() as Promise<Pill>;
+}
+
 export async function getGlobalSearchData(query: string, limit: number = 12): Promise<GlobalSearchResult[]> {
   const response = await fetch(
     `/api/search?q=${encodeURIComponent(query)}&limit=${encodeURIComponent(String(limit))}`,
