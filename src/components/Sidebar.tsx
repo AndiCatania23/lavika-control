@@ -16,6 +16,8 @@ import {
   ImageIcon,
   CalendarClock,
   Pill,
+  MoreHorizontal,
+  X,
 } from 'lucide-react';
 
 const navItems = [
@@ -35,13 +37,22 @@ const mobileNavItems = [
   { href: '/analytics', label: 'Analisi', icon: BarChart3 },
   { href: '/users', label: 'Utenti', icon: Users },
   { href: '/jobs', label: 'Job', icon: Workflow },
+];
+
+const mobileMoreItems = [
+  { href: '/pills', label: 'Pillole', icon: Pill },
+  { href: '/palinsesto-home', label: 'Palinsesto', icon: CalendarClock },
   { href: '/media', label: 'Media', icon: ImageIcon },
-  { href: '/palinsesto-home', label: 'Home', icon: CalendarClock },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+
+  const isMoreActive = mobileMoreItems.some(
+    item => pathname === item.href || pathname.startsWith(item.href)
+  );
 
   return (
     <>
@@ -67,7 +78,7 @@ export function Sidebar() {
 
         <nav className="flex-1 py-4 px-2 space-y-1">
           {navItems.map(item => {
-            const isActive = pathname === item.href || 
+            const isActive = pathname === item.href ||
               (item.href !== '/dashboard' && pathname.startsWith(item.href));
             return (
               <Link
@@ -76,8 +87,8 @@ export function Sidebar() {
                 className={`
                   flex items-center gap-3 px-3 py-2.5 rounded-lg
                   transition-colors
-                  ${isActive 
-                    ? 'bg-primary/10 text-primary' 
+                  ${isActive
+                    ? 'bg-primary/10 text-primary'
                     : 'text-muted-foreground hover:text-foreground hover:bg-muted'
                   }
                 `}
@@ -90,20 +101,22 @@ export function Sidebar() {
         </nav>
       </aside>
 
+      {/* Mobile bottom nav */}
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-card border-t border-border pb-safe">
         <div className="flex justify-around items-center h-20">
           {mobileNavItems.map(item => {
-            const isActive = pathname === item.href || 
+            const isActive = pathname === item.href ||
               (item.href !== '/dashboard' && pathname.startsWith(item.href));
             return (
               <Link
                 key={item.href}
                 href={item.href}
+                onClick={() => setMoreOpen(false)}
                 className={`
                   flex flex-col items-center justify-center flex-1 h-full
                   transition-colors
-                  ${isActive 
-                    ? 'text-primary' 
+                  ${isActive
+                    ? 'text-primary'
                     : 'text-muted-foreground'
                   }
                 `}
@@ -113,8 +126,54 @@ export function Sidebar() {
               </Link>
             );
           })}
+
+          {/* "Altro" button */}
+          <button
+            onClick={() => setMoreOpen(prev => !prev)}
+            className={`
+              flex flex-col items-center justify-center flex-1 h-full
+              transition-colors
+              ${isMoreActive || moreOpen ? 'text-primary' : 'text-muted-foreground'}
+            `}
+          >
+            {moreOpen ? <X className="w-5 h-5" /> : <MoreHorizontal className="w-5 h-5" />}
+            <span className="text-[10px] mt-1">Altro</span>
+          </button>
         </div>
       </nav>
+
+      {/* Mobile "Altro" popup */}
+      {moreOpen && (
+        <>
+          <div
+            className="lg:hidden fixed inset-0 z-40 bg-black/40"
+            onClick={() => setMoreOpen(false)}
+          />
+          <div className="lg:hidden fixed bottom-20 left-3 right-3 z-50 bg-card border border-border rounded-xl p-2 pb-safe shadow-2xl animate-slide-in">
+            {mobileMoreItems.map(item => {
+              const isActive = pathname === item.href || pathname.startsWith(item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setMoreOpen(false)}
+                  className={`
+                    flex items-center gap-3 px-4 py-3 rounded-lg
+                    transition-colors
+                    ${isActive
+                      ? 'bg-primary/10 text-primary'
+                      : 'text-foreground hover:bg-muted'
+                    }
+                  `}
+                >
+                  <item.icon className="w-5 h-5" />
+                  <span className="text-sm font-medium">{item.label}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </>
+      )}
     </>
   );
 }
