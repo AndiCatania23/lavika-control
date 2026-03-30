@@ -348,12 +348,6 @@ function PillDetail({ pill, onBack, onAction }: PillDetailProps) {
               <Zap className="w-4 h-4" /> Pubblica ora
             </button>
             <button
-              onClick={() => onAction('edit')}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
-            >
-              <Pencil className="w-4 h-4" /> Modifica
-            </button>
-            <button
               onClick={() => onAction('reject')}
               className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-red-600 text-white hover:bg-red-700"
             >
@@ -370,12 +364,6 @@ function PillDetail({ pill, onBack, onAction }: PillDetailProps) {
               <Zap className="w-4 h-4" /> Pubblica ora
             </button>
             <button
-              onClick={() => onAction('edit')}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
-            >
-              <Pencil className="w-4 h-4" /> Modifica
-            </button>
-            <button
               onClick={() => onAction('cancel')}
               className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg border border-border text-foreground hover:bg-muted"
             >
@@ -383,14 +371,28 @@ function PillDetail({ pill, onBack, onAction }: PillDetailProps) {
             </button>
           </>
         )}
-        {pill.status !== 'published' && (
+        {pill.status === 'published' && (
           <button
-            onClick={() => onAction('delete')}
-            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg border border-red-600/30 text-red-500 hover:bg-red-600/10"
+            onClick={() => onAction('cancel')}
+            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg border border-border text-foreground hover:bg-muted"
           >
-            <Trash2 className="w-4 h-4" /> Elimina
+            <Undo2 className="w-4 h-4" /> Depubblica
           </button>
         )}
+
+        {/* Modifica e Elimina sempre visibili */}
+        <button
+          onClick={() => onAction('edit')}
+          className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
+        >
+          <Pencil className="w-4 h-4" /> Modifica
+        </button>
+        <button
+          onClick={() => onAction('delete')}
+          className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg border border-red-600/30 text-red-500 hover:bg-red-600/10"
+        >
+          <Trash2 className="w-4 h-4" /> Elimina
+        </button>
       </div>
     </div>
   );
