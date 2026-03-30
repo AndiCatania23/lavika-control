@@ -102,3 +102,28 @@ export async function PATCH(request: Request) {
 
   return NextResponse.json(data);
 }
+
+export async function DELETE(request: Request) {
+  if (!supabaseServer) {
+    return NextResponse.json({ error: 'Supabase non configurato.' }, { status: 500 });
+  }
+
+  const { searchParams } = new URL(request.url);
+  const id = searchParams.get('id');
+
+  if (!id) {
+    return NextResponse.json({ error: 'ID mancante.' }, { status: 400 });
+  }
+
+  const { error } = await supabaseServer
+    .from('pills')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    console.error('Error deleting pill:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true });
+}

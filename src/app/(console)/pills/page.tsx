@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { SectionHeader } from '@/components/SectionHeader';
 import { ModalConfirm } from '@/components/ModalConfirm';
-import { getPills, createPill, updatePill } from '@/lib/data';
+import { getPills, createPill, updatePill, deletePill } from '@/lib/data';
 import type { Pill } from '@/lib/data';
 import { useToast } from '@/lib/toast';
 import {
@@ -20,6 +20,8 @@ import {
   Ban,
   Undo2,
   Pencil,
+  Trash2,
+  Zap,
 } from 'lucide-react';
 
 // ── Helpers ──────────────────────────────────────────
@@ -263,7 +265,7 @@ function PillForm({ initial, onSave, onCancel, saving }: PillFormProps) {
 interface PillDetailProps {
   pill: Pill;
   onBack: () => void;
-  onAction: (action: 'approve' | 'reject' | 'cancel' | 'edit') => void;
+  onAction: (action: 'approve' | 'reject' | 'cancel' | 'edit' | 'delete' | 'publish') => void;
 }
 
 function PillDetail({ pill, onBack, onAction }: PillDetailProps) {
@@ -330,7 +332,7 @@ function PillDetail({ pill, onBack, onAction }: PillDetailProps) {
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 flex-wrap">
         {pill.status === 'draft' && (
           <>
             <button
@@ -338,6 +340,12 @@ function PillDetail({ pill, onBack, onAction }: PillDetailProps) {
               className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-green-600 text-white hover:bg-green-700"
             >
               <Check className="w-4 h-4" /> Approva
+            </button>
+            <button
+              onClick={() => onAction('publish')}
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700"
+            >
+              <Zap className="w-4 h-4" /> Pubblica ora
             </button>
             <button
               onClick={() => onAction('edit')}
@@ -354,11 +362,33 @@ function PillDetail({ pill, onBack, onAction }: PillDetailProps) {
           </>
         )}
         {pill.status === 'scheduled' && (
+          <>
+            <button
+              onClick={() => onAction('publish')}
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700"
+            >
+              <Zap className="w-4 h-4" /> Pubblica ora
+            </button>
+            <button
+              onClick={() => onAction('edit')}
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
+            >
+              <Pencil className="w-4 h-4" /> Modifica
+            </button>
+            <button
+              onClick={() => onAction('cancel')}
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg border border-border text-foreground hover:bg-muted"
+            >
+              <Undo2 className="w-4 h-4" /> Torna draft
+            </button>
+          </>
+        )}
+        {pill.status !== 'published' && (
           <button
-            onClick={() => onAction('cancel')}
-            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg border border-border text-foreground hover:bg-muted"
+            onClick={() => onAction('delete')}
+            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg border border-red-600/30 text-red-500 hover:bg-red-600/10"
           >
-            <Undo2 className="w-4 h-4" /> Annulla (torna draft)
+            <Trash2 className="w-4 h-4" /> Elimina
           </button>
         )}
       </div>
@@ -488,7 +518,35 @@ export default function PillsPage() {
     setSaving(false);
   };
 
-  const handleDetailAction = (pill: Pill, action: 'approve' | 'reject' | 'cancel' | 'edit') => {
+  const handlePublish = async (pill: Pill) => {
+    setSaving(true);
+    try {
+      await updatePill(pill.id, { status: 'published' });
+      showToast('success', 'Pill pubblicata');
+      await load();
+      setView('list');
+      setSelectedPill(null);
+    } catch (e) {
+      showToast('error', (e as Error).message);
+    }
+    setSaving(false);
+  };
+
+  const handleDelete = async (pill: Pill) => {
+    setSaving(true);
+    try {
+      await deletePill(pill.id);
+      showToast('success', 'Pill eliminata');
+      await load();
+      setView('list');
+      setSelectedPill(null);
+    } catch (e) {
+      showToast('error', (e as Error).message);
+    }
+    setSaving(false);
+  };
+
+  const handleDetailAction = (pill: Pill, action: 'approve' | 'reject' | 'cancel' | 'edit' | 'delete' | 'publish') => {
     if (action === 'edit') {
       setSelectedPill(pill);
       setView('edit');
@@ -521,6 +579,26 @@ export default function PillsPage() {
         message: `Riportare "${pill.title}" in draft?`,
         variant: 'default',
         onConfirm: () => { setConfirmModal(m => ({ ...m, open: false })); handleCancelScheduled(pill); },
+      });
+      return;
+    }
+    if (action === 'publish') {
+      setConfirmModal({
+        open: true,
+        title: 'Pubblica ora',
+        message: `Pubblicare "${pill.title}" immediatamente?`,
+        variant: 'default',
+        onConfirm: () => { setConfirmModal(m => ({ ...m, open: false })); handlePublish(pill); },
+      });
+      return;
+    }
+    if (action === 'delete') {
+      setConfirmModal({
+        open: true,
+        title: 'Elimina Pill',
+        message: `Eliminare "${pill.title}"? Questa azione e\' irreversibile.`,
+        variant: 'danger',
+        onConfirm: () => { setConfirmModal(m => ({ ...m, open: false })); handleDelete(pill); },
       });
     }
   };

@@ -216,6 +216,16 @@ export async function createPill(pill: Partial<Pill>): Promise<Pill> {
   return response.json() as Promise<Pill>;
 }
 
+export async function deletePill(id: string): Promise<void> {
+  const response = await fetch(`/api/dev/pills?id=${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ error: 'Errore sconosciuto' }));
+    throw new Error(err.error || 'Errore nell\'eliminazione');
+  }
+}
+
 export async function updatePill(id: string, updates: Partial<Pill>): Promise<Pill> {
   const response = await fetch('/api/dev/pills', {
     method: 'PATCH',
