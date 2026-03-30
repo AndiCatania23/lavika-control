@@ -336,17 +336,10 @@ export default function AnalyticsPage() {
   const loadTraffic = async () => {
     setTrafficLoading(true);
     try {
-      const [pagesResponse, episodesResponse] = await Promise.all([
-        fetch('/api/dev/users/top-pages?limit=20', { cache: 'no-store' }),
-        fetch('/api/metrics/views/total-per-episode', { cache: 'no-store' }),
-      ]);
+      // top-pages disabilitato: scansiona tutte le content_events (9k+ righe) e rallenta l'app
+      setTopViewedPages([]);
 
-      if (pagesResponse.ok) {
-        const pagesPayload = await pagesResponse.json() as { items?: TopViewedPage[] };
-        setTopViewedPages(Array.isArray(pagesPayload.items) ? pagesPayload.items : []);
-      } else {
-        setTopViewedPages([]);
-      }
+      const episodesResponse = await fetch('/api/metrics/views/total-per-episode', { cache: 'no-store' });
 
       if (episodesResponse.ok) {
         const episodesPayload = await episodesResponse.json() as EpisodeTotalRow[];
