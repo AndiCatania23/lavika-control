@@ -119,9 +119,9 @@ export default function UserDetailPage() {
 
   useEffect(() => {
     const id = params.id as string;
-    Promise.all([getUserById(id), getSessionsByUserId(id), getUserInsights(id)]).then(([userData, sessionsData, insightsData]) => {
+    Promise.all([getUserById(id), getSessionsByUserId(id), getUserInsights(id)]).then(([userData, sessionsResult, insightsData]) => {
       setUser(userData || null);
-      setSessions(sessionsData.slice(0, 5));
+      setSessions(sessionsResult.data.slice(0, 5));
       setInsights(insightsData);
       setLoading(false);
     });

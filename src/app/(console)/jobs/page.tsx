@@ -41,13 +41,6 @@ const SOURCE_FORMAT_MAP: Record<string, string> = {
   'unica-sport-live':        'unica-sport',
 };
 
-// Fallback local images (used if R2 cover not yet uploaded)
-const SOURCE_LOCAL_IMAGE: Record<string, string> = {
-  'catanista-live':          '/immagini/Format Cover/Catanista/Catanista - card orizzontale.webp',
-  'serie-c-2025-2026':       '/immagini/Format Cover/highlights/highlights - card orizzontale.webp',
-  'catania-press-conference':'/immagini/Format Cover/Press Conference/press conference - card orizzontale.webp',
-  'unica-sport-live':        '/immagini/Format Cover/Unica Sport/unica_sport-_card_orizzontale.png',
-};
 
 export default function JobsPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -293,13 +286,19 @@ export default function JobsPage() {
             className="bg-card border border-border rounded-lg p-4 w-full"
           >
             <div className="mb-3 overflow-hidden rounded-md border border-border bg-muted/20 aspect-video">
-              <Image
-                src={formatCovers[SOURCE_FORMAT_MAP[source.id]] ?? SOURCE_LOCAL_IMAGE[source.id]}
-                alt={`${source.title} card`}
-                width={640}
-                height={360}
-                className="h-full w-full object-cover"
-              />
+              {formatCovers[SOURCE_FORMAT_MAP[source.id]] ? (
+                <Image
+                  src={formatCovers[SOURCE_FORMAT_MAP[source.id]]}
+                  alt={`${source.title} card`}
+                  width={640}
+                  height={360}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="h-full w-full flex items-center justify-center text-muted-foreground text-xs">
+                  {source.title}
+                </div>
+              )}
             </div>
             <h3 className="font-semibold text-foreground text-base">{source.title}</h3>
             <div className="text-xs text-muted-foreground mt-1">Sync Video</div>

@@ -39,11 +39,68 @@ function isFiniteNumber(value: number | null | undefined): value is number {
   return typeof value === 'number' && Number.isFinite(value);
 }
 
-async function listUserNameById(): Promise<Map<string, { name: string; email: string }>> {
+/** Resolve the correct SELECT clause by trying geo column variants. */
+let resolvedSelectMode: 'geo' | 'geo_alt' | 'geo_short' | 'legacy' | 'base' | null = null;
+
+function selectClauseForMode(mode: string): string {
+  switch (mode) {
+    case 'geo': return EXTENDED_SESSION_SELECT_GEO;
+    case 'geo_alt': return EXTENDED_SESSION_SELECT_GEO_ALT;
+    case 'geo_short': return EXTENDED_SESSION_SELECT_GEO_SHORT;
+    case 'legacy': return EXTENDED_SESSION_SELECT_LEGACY;
+    default: return BASE_SESSION_SELECT;
+  }
+}
+
+const SELECT_FALLBACK_ORDER = ['geo', 'geo_alt', 'geo_short', 'legacy', 'base'] as const;
+
+async function querySessionsPage(
+  userId: string | null,
+  limit: number,
+  offset: number,
+): Promise<{ rows: UserSessionRow[]; total: number }> {
   const client = supabaseServer;
-  if (!client) return new Map();
+  if (!client) return { rows: [], total: 0 };
+
+  const buildQuery = (selectClause: string, withCount: boolean) => {
+    let query = client
+      .from('user_sessions')
+      .select(selectClause, withCount ? { count: 'exact' } : undefined)
+      .order('last_seen_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (userId) query = query.eq('user_id', userId);
+    return query;
+  };
+
+  // If we already know which column set works, use it directly
+  if (resolvedSelectMode) {
+    const { data, error, count } = await buildQuery(selectClauseForMode(resolvedSelectMode), true);
+    if (!error && data) {
+      return { rows: data as unknown as UserSessionRow[], total: count ?? 0 };
+    }
+    // Reset if previously working mode now fails
+    resolvedSelectMode = null;
+  }
+
+  // Try each select variant until one works
+  for (const mode of SELECT_FALLBACK_ORDER) {
+    const { data, error, count } = await buildQuery(selectClauseForMode(mode), true);
+    if (!error && data) {
+      resolvedSelectMode = mode;
+      return { rows: data as unknown as UserSessionRow[], total: count ?? 0 };
+    }
+  }
+
+  return { rows: [], total: 0 };
+}
+
+async function lookupUserNames(userIds: string[]): Promise<Map<string, { name: string; email: string }>> {
+  const client = supabaseServer;
+  if (!client || userIds.length === 0) return new Map();
 
   const map = new Map<string, { name: string; email: string }>();
+  const needed = new Set(userIds);
   const perPage = 200;
 
   for (let page = 1; page <= 20; page += 1) {
@@ -51,24 +108,47 @@ async function listUserNameById(): Promise<Map<string, { name: string; email: st
     if (error || !data) break;
 
     for (const user of data.users ?? []) {
-      const mapped = mapAuthUserToDevUser(user);
-      map.set(user.id, { name: mapped.name, email: mapped.email });
+      if (needed.has(user.id)) {
+        const mapped = mapAuthUserToDevUser(user);
+        map.set(user.id, { name: mapped.name, email: mapped.email });
+      }
     }
 
+    // Stop early if we found everyone
+    if (map.size >= needed.size) break;
     if ((data.users ?? []).length < perPage) break;
   }
 
   return map;
 }
 
-async function listSessionsFromUserSessions(userId?: string | null): Promise<Session[]> {
-  const client = supabaseServer;
-  if (!client) return [];
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const userId = searchParams.get('userId');
+  const limit = Math.min(Math.max(Number(searchParams.get('limit')) || 50, 1), 200);
+  const offset = Math.max(Number(searchParams.get('offset')) || 0, 0);
 
-  const userInfo = await listUserNameById();
-  const sessions: Session[] = [];
-  const pageSize = 1000;
-  let selectMode: 'geo' | 'geo_alt' | 'geo_short' | 'legacy' | 'base' = 'geo';
+  const client = supabaseServer;
+  if (!client) {
+    return NextResponse.json({ data: [], total: 0 });
+  }
+
+  // 1. Paginated query — only fetches the requested slice
+  const { rows, total } = await querySessionsPage(userId, limit, offset);
+
+  if (rows.length === 0) {
+    return NextResponse.json({ data: [], total });
+  }
+
+  // 2. Lookup user names only for the user_ids in this page
+  const uniqueUserIds = [...new Set(rows.map(r => r.user_id))];
+  const [userInfo, activeUsers] = await Promise.all([
+    lookupUserNames(uniqueUserIds),
+    loadActiveUsers(7 * 24 * 60),
+  ]);
+
+  // Build recent-geo lookup from active telemetry (only for users in this page)
+  const neededUsers = new Set(uniqueUserIds);
   const recentGeoByUser = new Map<string, {
     location_source: string | null;
     latitude: number | null;
@@ -78,9 +158,8 @@ async function listSessionsFromUserSessions(userId?: string | null): Promise<Ses
     country_code: string | null;
   }>();
 
-  const activeUsers = await loadActiveUsers(7 * 24 * 60);
   for (const item of activeUsers) {
-    if (userId && item.user_id !== userId) continue;
+    if (!neededUsers.has(item.user_id)) continue;
     if (!recentGeoByUser.has(item.user_id)) {
       recentGeoByUser.set(item.user_id, {
         location_source: item.location_source,
@@ -93,115 +172,55 @@ async function listSessionsFromUserSessions(userId?: string | null): Promise<Ses
     }
   }
 
-  for (let page = 0; page < 50; page += 1) {
-    const from = page * pageSize;
-    const to = from + pageSize - 1;
+  // 3. Enrich each row (geocoding limited to this page only)
+  const sessions: Session[] = [];
 
-    const buildQuery = (selectClause: string) => {
-      let query = client
-        .from('user_sessions')
-        .select(selectClause)
-        .order('last_seen_at', { ascending: false })
-        .range(from, to);
+  for (const row of rows) {
+    const recentGeo = recentGeoByUser.get(row.user_id);
+    const hasRecentGpsSource = isGpsSource(recentGeo?.location_source);
+    const hasCoordinates = isFiniteNumber(recentGeo?.latitude) && isFiniteNumber(recentGeo?.longitude);
+    const hasRowGpsSource = isGpsSource(row.location_source);
 
-      if (userId) {
-        query = query.eq('user_id', userId);
-      }
-
-      return query;
-    };
-
-    let { data, error } = await buildQuery(
-      selectMode === 'geo'
-        ? EXTENDED_SESSION_SELECT_GEO
-        : selectMode === 'geo_alt'
-        ? EXTENDED_SESSION_SELECT_GEO_ALT
-        : selectMode === 'geo_short'
-        ? EXTENDED_SESSION_SELECT_GEO_SHORT
-        : selectMode === 'legacy'
-        ? EXTENDED_SESSION_SELECT_LEGACY
-        : BASE_SESSION_SELECT
-    );
-
-    if (error && selectMode === 'geo') {
-      selectMode = 'geo_alt';
-      ({ data, error } = await buildQuery(EXTENDED_SESSION_SELECT_GEO_ALT));
-    }
-
-    if (error && selectMode === 'geo_alt') {
-      selectMode = 'geo_short';
-      ({ data, error } = await buildQuery(EXTENDED_SESSION_SELECT_GEO_SHORT));
-    }
-
-    if (error && selectMode === 'geo_short') {
-      selectMode = 'legacy';
-      ({ data, error } = await buildQuery(EXTENDED_SESSION_SELECT_LEGACY));
-    }
-
-    if (error && selectMode === 'legacy') {
-      selectMode = 'base';
-      ({ data, error } = await buildQuery(BASE_SESSION_SELECT));
-    }
-
-    if (error || !data || data.length === 0) break;
-
-    for (const row of data as unknown as UserSessionRow[]) {
-      const recentGeo = recentGeoByUser.get(row.user_id);
-      const hasRowGpsSource = isGpsSource(row.location_source);
-      const hasRecentGpsSource = isGpsSource(recentGeo?.location_source);
-      const hasCoordinates = isFiniteNumber(recentGeo?.latitude) && isFiniteNumber(recentGeo?.longitude);
-
-      let rowForView = hasRecentGpsSource || hasCoordinates
-        ? {
-            ...row,
-            location_source: recentGeo?.location_source ?? row.location_source,
-            latitude: recentGeo?.latitude ?? row.latitude,
-            longitude: recentGeo?.longitude ?? row.longitude,
-            city_name: recentGeo?.city_name ?? row.city_name,
-            region_name: recentGeo?.region_name ?? row.region_name,
-            country_code: recentGeo?.country_code ?? row.country_code,
-          }
-        : row;
-
-      const canReverseGeocode =
-        (hasRowGpsSource || hasRecentGpsSource) &&
-        isFiniteNumber(rowForView.latitude) &&
-        isFiniteNumber(rowForView.longitude);
-
-      if (canReverseGeocode) {
-        const latitude = rowForView.latitude as number;
-        const longitude = rowForView.longitude as number;
-        const reverseGeo = await reverseGeocodeCoordinates(latitude, longitude);
-        if (reverseGeo) {
-          rowForView = {
-            ...rowForView,
-            city_name: reverseGeo.city_name ?? rowForView.city_name,
-            region_name: reverseGeo.region_name ?? rowForView.region_name,
-            country_code: reverseGeo.country_code ?? rowForView.country_code,
-          };
+    let rowForView = hasRecentGpsSource || hasCoordinates
+      ? {
+          ...row,
+          location_source: recentGeo?.location_source ?? row.location_source,
+          latitude: recentGeo?.latitude ?? row.latitude,
+          longitude: recentGeo?.longitude ?? row.longitude,
+          city_name: recentGeo?.city_name ?? row.city_name,
+          region_name: recentGeo?.region_name ?? row.region_name,
+          country_code: recentGeo?.country_code ?? row.country_code,
         }
-      }
+      : row;
 
-      const info = userInfo.get(row.user_id);
-      sessions.push(
-        mapUserSessionTelemetryToSession(
-          rowForView,
-          info?.name ?? row.user_id,
-          info?.email ?? '-'
-        )
-      );
+    const canReverseGeocode =
+      (hasRowGpsSource || hasRecentGpsSource) &&
+      isFiniteNumber(rowForView.latitude) &&
+      isFiniteNumber(rowForView.longitude);
+
+    if (canReverseGeocode) {
+      const latitude = rowForView.latitude as number;
+      const longitude = rowForView.longitude as number;
+      const reverseGeo = await reverseGeocodeCoordinates(latitude, longitude);
+      if (reverseGeo) {
+        rowForView = {
+          ...rowForView,
+          city_name: reverseGeo.city_name ?? rowForView.city_name,
+          region_name: reverseGeo.region_name ?? rowForView.region_name,
+          country_code: reverseGeo.country_code ?? rowForView.country_code,
+        };
+      }
     }
 
-    if (data.length < pageSize) break;
+    const info = userInfo.get(row.user_id);
+    sessions.push(
+      mapUserSessionTelemetryToSession(
+        rowForView,
+        info?.name ?? row.user_id,
+        info?.email ?? '-'
+      )
+    );
   }
 
-  return sessions;
-}
-
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const userId = searchParams.get('userId');
-
-  const allSessions = await listSessionsFromUserSessions(userId);
-  return NextResponse.json(allSessions);
+  return NextResponse.json({ data: sessions, total });
 }

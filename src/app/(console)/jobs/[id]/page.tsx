@@ -14,7 +14,6 @@ type JobSourceSummary = {
   source: string;
   scope: string;
   filters: string;
-  imageUrl: string;
 };
 
 type JobSummary = {
@@ -58,7 +57,6 @@ export default function JobDetailPage() {
         source: 'Facebook @catanista.redazione · /live_videos',
         scope: 'Video Facebook con titolo 💥 CATANISTA LIVE sulla pagina live_videos.',
         filters: 'Titolo contiene "💥 CATANISTA LIVE".',
-        imageUrl: '/immagini/Format Cover/Catanista/Catanista - card orizzontale.webp',
       },
       {
         id: 'serie-c-2025-2026',
@@ -66,7 +64,6 @@ export default function JobDetailPage() {
         source: 'YouTube playlist Serie C (serie-c-2025-2026)',
         scope: 'Partite categoria highlights stagione 2025/2026.',
         filters: 'Titoli con CATANIA, durata 1m-60m, esclusi Allenamento/Primavera/Under.',
-        imageUrl: '/immagini/Format Cover/highlights/highlights - card orizzontale.webp',
       },
       {
         id: 'catania-press-conference',
@@ -74,7 +71,6 @@ export default function JobDetailPage() {
         source: 'YouTube @officialcataniafc streams (catania-press-conference)',
         scope: 'Conferenze pre-gara con risoluzione match e naming canonico.',
         filters: 'Parole chiave conferenza pre-gara, durata 3m-2h, esclusi Highlights/settori giovanili.',
-        imageUrl: '/immagini/Format Cover/Press Conference/press conference - card orizzontale.webp',
       },
       {
         id: 'unica-sport-live',
@@ -82,7 +78,6 @@ export default function JobDetailPage() {
         source: 'YouTube @unicasport2025 streams (unica-sport-live)',
         scope: 'Live Unica Sport con naming stile Catanista e stagione per anno upload.',
         filters: 'Titoli LIVE UNICA SPORT con data, durata 20m-4h, esclusi Clip/Short, ingest da 2026 in poi.',
-        imageUrl: '/immagini/Format Cover/Unica Sport/unica_sport-_card_orizzontale.png',
       },
     ];
 
@@ -91,7 +86,7 @@ export default function JobDetailPage() {
       : sources;
 
     return {
-      objective: 'Sincronizza i video nelle librerie Lavika su R2 e aggiorna il database/manifest.',
+      objective: 'Sincronizza i video nelle librerie Lavika su R2 e aggiorna il database.',
       output: 'Scarica nuovi video idonei, li carica su storage e aggiorna i metadati usati dall\'app.',
       mode: sourceId
         ? 'Dettaglio source specifica: il run avvia solo questa source.'
@@ -298,13 +293,19 @@ export default function JobDetailPage() {
             {jobSummary.sources.map(source => (
               <div key={source.title} className="border border-border rounded-lg p-3">
                 <div className="mb-2 overflow-hidden rounded-md border border-border bg-muted/20 aspect-video">
-                  <Image
-                    src={formatCovers[SOURCE_FORMAT_MAP[source.id]] ?? source.imageUrl}
-                    alt={`${source.title} card`}
-                    width={640}
-                    height={360}
-                    className="h-full w-full object-cover"
-                  />
+                  {formatCovers[SOURCE_FORMAT_MAP[source.id]] ? (
+                    <Image
+                      src={formatCovers[SOURCE_FORMAT_MAP[source.id]]}
+                      alt={`${source.title} card`}
+                      width={640}
+                      height={360}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="h-full w-full flex items-center justify-center text-muted-foreground text-xs">
+                      {source.title}
+                    </div>
+                  )}
                 </div>
                 <div className="text-sm font-semibold text-foreground">{source.title}</div>
                 <div className="text-xs text-muted-foreground mt-1">{source.source}</div>

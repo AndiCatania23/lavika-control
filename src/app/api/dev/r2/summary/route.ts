@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabaseServer';
-import { readdir } from 'node:fs/promises';
-import path from 'node:path';
+import { r2Client, r2BucketName } from '@/lib/r2Client';
+import { ListObjectsV2Command } from '@aws-sdk/client-s3';
 
 /**
- * Catalogo media — legge da Supabase (content_formats + content_episodes)
- * invece di scansionare tutti i file R2 (migliaia di segmenti HLS).
+ * Catalogo media — metadati da Supabase, dimensioni reali da R2.
  */
 
 interface FormatStat {
@@ -21,85 +20,106 @@ interface FormatStat {
   coverHorizontalUrl?: string;
 }
 
-function normalizeName(value: string): string {
-  return value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, '');
-}
-
-interface FormatCoverSet {
-  vertical?: string;
-  horizontal?: string;
-}
-
-async function loadFormatCovers(): Promise<Map<string, FormatCoverSet>> {
-  const coversDir = path.join(process.cwd(), 'public', 'immagini', 'Format Cover');
-  const map = new Map<string, FormatCoverSet>();
-
-  try {
-    const formatDirs = await readdir(coversDir, { withFileTypes: true });
-
-    for (const dir of formatDirs) {
-      if (!dir.isDirectory()) continue;
-
-      const folderPath = path.join(coversDir, dir.name);
-      const files = await readdir(folderPath, { withFileTypes: true });
-      const key = normalizeName(dir.name);
-      const entry: FormatCoverSet = {};
-
-      for (const file of files) {
-        if (!file.isFile()) continue;
-        const ext = path.extname(file.name).toLowerCase();
-        if (!['.jpg', '.jpeg', '.png', '.webp', '.avif'].includes(ext)) continue;
-
-        const lower = file.name.toLowerCase();
-        const url = `/immagini/Format Cover/${encodeURIComponent(dir.name)}/${encodeURIComponent(file.name)}`;
-
-        if (!entry.vertical && lower.includes('card verticale')) {
-          entry.vertical = url;
-        }
-        if (!entry.horizontal && lower.includes('card orizzontale')) {
-          entry.horizontal = url;
-        }
-      }
-
-      if (entry.vertical || entry.horizontal) {
-        map.set(key, entry);
-      }
-    }
-  } catch {
-    return map;
-  }
-
-  return map;
-}
-
-function matchCover(formatName: string, coversMap: Map<string, FormatCoverSet>): FormatCoverSet {
-  const normalizedFormat = normalizeName(formatName);
-  const direct = coversMap.get(normalizedFormat);
-  if (direct) return direct;
-
-  for (const [key, value] of coversMap.entries()) {
-    if (key.includes(normalizedFormat) || normalizedFormat.includes(key)) {
-      return value;
-    }
-  }
-
-  return {};
-}
-
 interface SupaFormat {
   id: string;
   title: string | null;
+  cover_vertical_url: string | null;
+  cover_horizontal_url: string | null;
 }
 
 interface SupaEpisode {
   format_id: string;
   season: string | null;
   video_id: string | null;
+  r2_key: string | null;
 }
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  return `${(bytes / Math.pow(1024, i)).toFixed(i >= 2 ? 2 : 0)} ${units[i]}`;
+}
+
+// ── R2 size cache (in-memory, 1 hour TTL) ────────────────────────────────────
+
+interface R2SizeCache {
+  byPrefix: Map<string, number>;
+  totalBytes: number;
+  cachedAt: number;
+}
+
+const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+let r2SizeCache: R2SizeCache | null = null;
+
+/** List all objects under a prefix and sum their sizes. */
+async function sumR2PrefixSize(prefix: string): Promise<number> {
+  if (!r2Client || !r2BucketName) return 0;
+
+  let totalSize = 0;
+  let token: string | undefined;
+
+  do {
+    const res = await r2Client.send(
+      new ListObjectsV2Command({
+        Bucket: r2BucketName,
+        Prefix: prefix,
+        ContinuationToken: token,
+      })
+    );
+    for (const obj of res.Contents ?? []) {
+      totalSize += obj.Size ?? 0;
+    }
+    token = res.IsTruncated ? res.NextContinuationToken : undefined;
+  } while (token);
+
+  return totalSize;
+}
+
+/**
+ * Extract the real R2 root prefix for each format from r2_key values.
+ * e.g. format_id "highlights" → R2 prefix "HIGHLIGHTS/"
+ */
+function resolveR2Prefixes(episodes: SupaEpisode[]): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const ep of episodes) {
+    if (!ep.r2_key || map.has(ep.format_id)) continue;
+    const firstSlash = ep.r2_key.indexOf('/');
+    if (firstSlash > 0) {
+      map.set(ep.format_id, ep.r2_key.substring(0, firstSlash + 1));
+    }
+  }
+  return map;
+}
+
+/** Get R2 sizes per format, using a 1-hour cache. */
+async function getR2Sizes(formatIds: string[], r2Prefixes: Map<string, string>): Promise<Map<string, number>> {
+  // Return cached data if still fresh
+  if (r2SizeCache && Date.now() - r2SizeCache.cachedAt < CACHE_TTL_MS) {
+    return r2SizeCache.byPrefix;
+  }
+
+  if (!r2Client || !r2BucketName) {
+    return new Map();
+  }
+
+  // Scan all format prefixes in parallel, using real R2 prefixes
+  const results = await Promise.all(
+    formatIds.map(async (id) => {
+      const prefix = r2Prefixes.get(id) ?? `${id}/`;
+      const size = await sumR2PrefixSize(prefix);
+      return [id, size] as const;
+    })
+  );
+
+  const byPrefix = new Map<string, number>(results);
+  const totalBytes = results.reduce((sum, [, size]) => sum + size, 0);
+
+  r2SizeCache = { byPrefix, totalBytes, cachedAt: Date.now() };
+  return byPrefix;
+}
+
+// ── Route handler ─────────────────────────────────────────────────────────────
 
 export async function GET() {
   if (!supabaseServer) {
@@ -111,10 +131,9 @@ export async function GET() {
   }
 
   try {
-    const [formatsRes, episodesRes, coversMap] = await Promise.all([
-      supabaseServer.from('content_formats').select('id, title'),
-      supabaseServer.from('content_episodes').select('format_id, season, video_id'),
-      loadFormatCovers(),
+    const [formatsRes, episodesRes] = await Promise.all([
+      supabaseServer.from('content_formats').select('id, title, cover_vertical_url, cover_horizontal_url'),
+      supabaseServer.from('content_episodes').select('format_id, season, video_id, r2_key'),
     ]);
 
     const formats = (formatsRes.data ?? []) as SupaFormat[];
@@ -128,15 +147,21 @@ export async function GET() {
       episodesByFormat.set(ep.format_id, list);
     }
 
+    // Get real R2 sizes per format (cached 1h)
+    const formatIds = formats.map(f => f.id);
+    const r2Prefixes = resolveR2Prefixes(episodes);
+    const r2Sizes = await getR2Sizes(formatIds, r2Prefixes);
+
     const stats: FormatStat[] = [];
     let videosTotal = 0;
     let episodesTotal = 0;
+    let sizeBytesTotal = 0;
 
     for (const fmt of formats) {
       const fmtEpisodes = episodesByFormat.get(fmt.id) ?? [];
       const seasons = new Set(fmtEpisodes.map(e => e.season).filter(Boolean));
       const withVideo = fmtEpisodes.filter(e => e.video_id).length;
-      const matchedCover = matchCover(fmt.title ?? fmt.id, coversMap);
+      const fmtSizeBytes = r2Sizes.get(fmt.id) ?? 0;
 
       stats.push({
         format: fmt.title ?? fmt.id,
@@ -144,15 +169,16 @@ export async function GET() {
         covers: 0,
         other: 0,
         total: fmtEpisodes.length,
-        sizeBytes: 0,
+        sizeBytes: fmtSizeBytes,
         seasons: seasons.size,
         episodes: fmtEpisodes.length,
-        coverVerticalUrl: matchedCover.vertical,
-        coverHorizontalUrl: matchedCover.horizontal,
+        coverVerticalUrl: fmt.cover_vertical_url ?? undefined,
+        coverHorizontalUrl: fmt.cover_horizontal_url ?? undefined,
       });
 
       videosTotal += withVideo;
       episodesTotal += fmtEpisodes.length;
+      sizeBytesTotal += fmtSizeBytes;
     }
 
     return NextResponse.json({
@@ -163,8 +189,8 @@ export async function GET() {
         covers: 0,
         other: 0,
         allAssets: episodesTotal,
-        sizeBytes: 0,
-        sizeHuman: '-',
+        sizeBytes: sizeBytesTotal,
+        sizeHuman: formatBytes(sizeBytesTotal),
       },
       formats: stats.sort((a, b) => b.episodes - a.episodes),
     });

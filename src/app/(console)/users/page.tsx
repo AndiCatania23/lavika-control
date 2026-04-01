@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { UserPlus, Users, Activity } from 'lucide-react';
+import { UserPlus, Users, Activity, ChevronLeft, ChevronRight as ChevronRightIcon } from 'lucide-react';
 import { getUsers, User, getSessions, Session } from '@/lib/data';
 import { DataTable } from '@/components/DataTable';
 import { SectionHeader } from '@/components/SectionHeader';
@@ -49,10 +49,13 @@ export default function UsersPage() {
   const [activeTab, setActiveTab] = useState<Tab>('utenti');
   const [users, setUsers] = useState<User[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
+  const [sessionsTotal, setSessionsTotal] = useState(0);
+  const [sessionsOffset, setSessionsOffset] = useState(0);
   const [usersLoading, setUsersLoading] = useState(true);
   const [sessionsLoading, setSessionsLoading] = useState(false);
-  const [sessionsLoaded, setSessionsLoaded] = useState(false);
   const router = useRouter();
+
+  const SESSIONS_PAGE_SIZE = 50;
 
   // Load users on mount
   useEffect(() => {
@@ -62,17 +65,16 @@ export default function UsersPage() {
     });
   }, []);
 
-  // Load sessions lazily on first tab switch
+  // Load sessions when tab is active or offset changes
   useEffect(() => {
-    if (activeTab === 'sessioni' && !sessionsLoaded) {
-      setSessionsLoading(true);
-      getSessions().then(data => {
-        setSessions(data);
-        setSessionsLoading(false);
-        setSessionsLoaded(true);
-      });
-    }
-  }, [activeTab, sessionsLoaded]);
+    if (activeTab !== 'sessioni') return;
+    setSessionsLoading(true);
+    getSessions({ limit: SESSIONS_PAGE_SIZE, offset: sessionsOffset }).then(result => {
+      setSessions(result.data);
+      setSessionsTotal(result.total);
+      setSessionsLoading(false);
+    });
+  }, [activeTab, sessionsOffset]);
 
   // ── Utenti columns ───────────────────────────────────────────────────────────
 
@@ -262,9 +264,9 @@ export default function UsersPage() {
         >
           <Activity className="w-3.5 h-3.5" />
           Sessioni
-          {sessionsLoaded && (
+          {sessionsTotal > 0 && (
             <span className="ml-1 text-[10px] bg-muted text-muted-foreground rounded px-1.5 py-0.5">
-              {sessions.length}
+              {sessionsTotal.toLocaleString('it-IT')}
             </span>
           )}
         </button>
@@ -297,15 +299,45 @@ export default function UsersPage() {
           />
         )
       ) : (
-        sessionsLoading ? <Spinner /> : (
-          <DataTable
-            data={sessions}
-            columns={sessionColumns}
-            searchPlaceholder="Cerca sessioni..."
-            searchKeys={['userName', 'userEmail', 'location', 'device', 'deviceLabel', 'browser']}
-            mobileVariant="table"
-          />
-        )
+        <>
+          {sessionsLoading ? <Spinner /> : (
+            <DataTable
+              data={sessions}
+              columns={sessionColumns}
+              searchPlaceholder="Cerca sessioni..."
+              searchKeys={['userName', 'userEmail', 'location', 'device', 'deviceLabel', 'browser']}
+              mobileVariant="table"
+            />
+          )}
+
+          {/* Server-side pagination */}
+          {sessionsTotal > SESSIONS_PAGE_SIZE && (
+            <div className="flex items-center justify-between pt-2">
+              <span className="text-sm text-muted-foreground">
+                {sessionsOffset + 1}–{Math.min(sessionsOffset + SESSIONS_PAGE_SIZE, sessionsTotal)} di {sessionsTotal.toLocaleString('it-IT')}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setSessionsOffset(o => Math.max(0, o - SESSIONS_PAGE_SIZE))}
+                  disabled={sessionsOffset === 0 || sessionsLoading}
+                  className="p-2 rounded hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <span className="text-sm text-muted-foreground">
+                  {Math.floor(sessionsOffset / SESSIONS_PAGE_SIZE) + 1}/{Math.ceil(sessionsTotal / SESSIONS_PAGE_SIZE)}
+                </span>
+                <button
+                  onClick={() => setSessionsOffset(o => o + SESSIONS_PAGE_SIZE)}
+                  disabled={sessionsOffset + SESSIONS_PAGE_SIZE >= sessionsTotal || sessionsLoading}
+                  className="p-2 rounded hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <ChevronRightIcon className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

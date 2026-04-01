@@ -77,14 +77,18 @@ export async function getUserInsights(id: string): Promise<UserContentInsights> 
   } as UserContentInsights);
 }
 
-export async function getSessions(): Promise<Session[]> {
-  const response = await fetch('/api/dev/sessions', { cache: 'no-store' });
-  return safeJson(response, [] as Session[]);
+export async function getSessions(opts?: { limit?: number; offset?: number }): Promise<{ data: Session[]; total: number }> {
+  const params = new URLSearchParams();
+  if (opts?.limit) params.set('limit', String(opts.limit));
+  if (opts?.offset) params.set('offset', String(opts.offset));
+  const qs = params.toString();
+  const response = await fetch(`/api/dev/sessions${qs ? `?${qs}` : ''}`, { cache: 'no-store' });
+  return safeJson(response, { data: [] as Session[], total: 0 });
 }
 
-export async function getSessionsByUserId(userId: string): Promise<Session[]> {
+export async function getSessionsByUserId(userId: string): Promise<{ data: Session[]; total: number }> {
   const response = await fetch(`/api/dev/sessions?userId=${encodeURIComponent(userId)}`, { cache: 'no-store' });
-  return safeJson(response, [] as Session[]);
+  return safeJson(response, { data: [] as Session[], total: 0 });
 }
 
 export async function getJobs(): Promise<Job[]> {
