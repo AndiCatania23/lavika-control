@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { ListObjectsV2Command, ListObjectsV2CommandOutput } from '@aws-sdk/client-s3';
+import { ListObjectsV2Command, ListObjectsV2CommandOutput, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { r2MediaClient, MEDIA_BUCKET_NAME, MEDIA_PUBLIC_BASE_URL } from '@/lib/r2MediaClient';
 
 const IMAGE_EXTS = new Set(['webp', 'jpg', 'jpeg', 'png', 'avif']);
@@ -43,6 +43,28 @@ export async function GET() {
     items.sort((a, b) => (b.lastModified ?? '').localeCompare(a.lastModified ?? ''));
 
     return NextResponse.json({ items });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  if (!r2MediaClient) {
+    return NextResponse.json({ error: 'R2 Media not configured' }, { status: 503 });
+  }
+
+  try {
+    const { key } = await request.json() as { key?: string };
+    if (!key || typeof key !== 'string') {
+      return NextResponse.json({ error: 'Missing key' }, { status: 400 });
+    }
+
+    await r2MediaClient.send(
+      new DeleteObjectCommand({ Bucket: MEDIA_BUCKET_NAME, Key: key })
+    );
+
+    return NextResponse.json({ ok: true, deleted: key });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json({ error: message }, { status: 500 });

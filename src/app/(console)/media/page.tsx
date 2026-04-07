@@ -17,6 +17,7 @@ import {
   Square,
   Layers,
   Search,
+  Trash2,
 } from 'lucide-react';
 
 const MEDIA_PUBLIC_BASE_URL = 'https://pub-caae50e77b854437b46967f95fd48914.r2.dev';
@@ -86,9 +87,9 @@ const FORMAT_SLOTS = [
   {
     key: 'hero_url' as FormatImageColumn,
     label: 'Hero',
-    note: 'Senza titolo · 16:9',
-    aspect: 'aspect-video',
-    minDim: '1280×720',
+    note: 'Senza titolo · 3:4',
+    aspect: 'aspect-[3/4]',
+    minDim: '750×1000',
     uploadType: 'format-hero',
   },
 ] as const;
@@ -359,6 +360,7 @@ function MediaPicker({
   const [filter, setFilter] = useState<'all' | 'formats' | 'episodes'>('all');
   const [search, setSearch] = useState('');
   const [pickerUpload, setPickerUpload] = useState<UploadState | null>(null);
+  const [deletingKey, setDeletingKey] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const loadItems = useCallback(async () => {
@@ -380,6 +382,22 @@ function MediaPicker({
     if (search && !item.key.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
+
+  const handlePickerDelete = async (key: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (deletingKey) return;
+    setDeletingKey(key);
+    try {
+      const res = await fetch('/api/media/library', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key }),
+      });
+      if (!res.ok) throw new Error('Errore eliminazione');
+      setItems(prev => prev.filter(i => i.key !== key));
+    } catch { /* ignore */ }
+    setDeletingKey(null);
+  };
 
   const handlePickerUpload = async (file: File) => {
     setPickerUpload({ progress: 10, error: null, done: false });
@@ -475,23 +493,32 @@ function MediaPicker({
           ) : (
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2">
               {filtered.map(item => (
-                <button key={item.key} title={item.key}
+                <div key={item.key} title={item.key}
                   onClick={() => { onSelect(item.url); onClose(); }}
-                  className="group relative aspect-square rounded-lg overflow-hidden border-2 border-transparent hover:border-primary transition-all bg-muted/20">
+                  className={`group relative aspect-square rounded-lg overflow-hidden border-2 border-transparent hover:border-primary transition-all bg-muted/20 cursor-pointer ${
+                    deletingKey === item.key ? 'opacity-40 pointer-events-none' : ''
+                  }`}>
                   <img src={item.url} alt={item.key} className="w-full h-full object-cover" loading="lazy"
                     onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                   <div className="absolute inset-0 bg-background/0 group-hover:bg-background/40 transition-colors" />
+                  <button
+                    onClick={(e) => handlePickerDelete(item.key, e)}
+                    className="absolute top-1 right-1 p-1 rounded-md bg-red-600/80 text-white opacity-0 group-hover:opacity-100 hover:bg-red-600 transition-all z-10"
+                    title="Elimina"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
                   <p className="absolute bottom-0 inset-x-0 px-1 py-0.5 text-[8px] text-white bg-black/50 truncate opacity-0 group-hover:opacity-100 transition-opacity">
                     {item.key.split('/').pop()}
                   </p>
-                </button>
+                </div>
               ))}
             </div>
           )}
         </div>
 
         <div className="px-3 py-2 border-t border-border shrink-0">
-          <p className="text-[10px] text-muted-foreground">{filtered.length} immagini · Clicca per selezionare</p>
+          <p className="text-[10px] text-muted-foreground">{filtered.length} immagini · Clicca per selezionare · Hover per eliminare</p>
         </div>
 
         <input ref={fileRef} type="file" accept=".jpg,.jpeg,.png,.webp" className="hidden"
