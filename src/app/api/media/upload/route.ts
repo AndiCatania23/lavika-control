@@ -63,7 +63,7 @@ export async function POST(request: Request) {
       })
     );
 
-    return NextResponse.json({ ok: true, url: `${MEDIA_PUBLIC_BASE_URL}/${key}` });
+    return NextResponse.json({ ok: true, url: `${MEDIA_PUBLIC_BASE_URL}/${key}?v=${Date.now()}` });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json({ error: message }, { status: 500 });
