@@ -531,7 +531,7 @@ function MediaPicker({
 // ── Main Page ──────────────────────────────────────────────────────────────────
 
 export default function MediaPage() {
-  const [activeSection, setActiveSection] = useState<'formats' | 'episodes'>('formats');
+  const [activeSection, setActiveSection] = useState<'formats' | 'episodes' | 'archive'>('formats');
 
   // Section 1: Supabase formats
   const [supaFormats, setSupaFormats] = useState<SupaFormat[]>([]);
@@ -552,6 +552,14 @@ export default function MediaPage() {
   // Media picker
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerTarget, setPickerTarget] = useState<PickerTarget | null>(null);
+
+  // Archive
+  const [archiveItems, setArchiveItems] = useState<LibraryItem[]>([]);
+  const [archiveLoading, setArchiveLoading] = useState(false);
+  const [archiveFilter, setArchiveFilter] = useState<'all' | 'formats' | 'episodes' | 'library'>('all');
+  const [archiveSearch, setArchiveSearch] = useState('');
+  const [archiveSelected, setArchiveSelected] = useState<Set<string>>(new Set());
+  const [archiveDeleting, setArchiveDeleting] = useState(false);
 
   // ── Data loading ─────────────────────────────────────────────────────────────
 
@@ -590,12 +598,44 @@ export default function MediaPage() {
     } catch { /* ignore */ } finally { setEpisodesLoading(false); }
   }, []);
 
+  const loadArchive = useCallback(async () => {
+    setArchiveLoading(true);
+    try {
+      const res = await fetch('/api/media/library');
+      const data = await res.json() as { items: LibraryItem[] };
+      setArchiveItems(Array.isArray(data.items) ? data.items : []);
+    } catch { /* ignore */ } finally { setArchiveLoading(false); }
+  }, []);
+
+  const handleArchiveDeleteSelected = async () => {
+    if (archiveSelected.size === 0 || archiveDeleting) return;
+    setArchiveDeleting(true);
+    const toDelete = [...archiveSelected];
+    for (const key of toDelete) {
+      try {
+        await fetch('/api/media/library', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key }),
+        });
+        setArchiveItems(prev => prev.filter(i => i.key !== key));
+        setArchiveSelected(prev => { const next = new Set(prev); next.delete(key); return next; });
+      } catch { /* ignore */ }
+    }
+    setArchiveDeleting(false);
+  };
+
   useEffect(() => { loadFormats(); }, [loadFormats]);
 
   // Load episodes when format changes
   useEffect(() => {
     if (selectedFormatId) loadEpisodesForFormat(selectedFormatId);
   }, [selectedFormatId, loadEpisodesForFormat]);
+
+  // Load archive when tab is active
+  useEffect(() => {
+    if (activeSection === 'archive' && archiveItems.length === 0) loadArchive();
+  }, [activeSection, archiveItems.length, loadArchive]);
 
   // ── Derived ────────────────────────────────────────────────────────────────
 
@@ -757,10 +797,11 @@ export default function MediaPage() {
 
       {/* Section tabs */}
       <div className="rounded-xl border border-border bg-card/70 p-1">
-        <nav className="grid grid-cols-2 gap-1">
+        <nav className="grid grid-cols-3 gap-1">
           {[
             { id: 'formats' as const, label: 'Immagini Format', icon: <ImageIcon className="h-3.5 w-3.5" /> },
             { id: 'episodes' as const, label: 'Thumbnail Episodi', icon: <Film className="h-3.5 w-3.5" /> },
+            { id: 'archive' as const, label: 'Archivio R2', icon: <Cloud className="h-3.5 w-3.5" /> },
           ].map(tab => (
             <button key={tab.id} onClick={() => setActiveSection(tab.id)}
               className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-sm font-medium transition-colors ${
@@ -943,6 +984,143 @@ export default function MediaPage() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── Section 3: Archive R2 ──────────────────────────────────────────── */}
+      {activeSection === 'archive' && (
+        <div className="space-y-4">
+          <div className="rounded-lg border border-border bg-card/60 p-3 text-xs text-muted-foreground">
+            <p>Tutte le immagini nel bucket <span className="text-foreground font-medium">lavika-media</span>.
+              Seleziona e elimina per fare pulizia.</p>
+          </div>
+
+          {/* Controls */}
+          <div className="flex flex-wrap items-center gap-2">
+            {(['all', 'formats', 'episodes', 'library'] as const).map(f => (
+              <button key={f} onClick={() => setArchiveFilter(f)}
+                className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                  archiveFilter === f ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted/40'
+                }`}>
+                {f === 'all' ? 'Tutto' : f === 'formats' ? 'Format' : f === 'episodes' ? 'Episodi' : 'Library'}
+              </button>
+            ))}
+            <div className="flex-1" />
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
+              <input type="text" placeholder="Cerca..." value={archiveSearch} onChange={(e) => setArchiveSearch(e.target.value)}
+                className="bg-muted/40 border border-border rounded-md pl-6 pr-2 py-1.5 text-xs text-foreground placeholder:text-muted-foreground w-40" />
+            </div>
+            <button onClick={loadArchive} className="p-1.5 rounded-md border border-border hover:bg-muted/40 transition-colors">
+              <RefreshCw className={`w-3.5 h-3.5 ${archiveLoading ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
+
+          {/* Grid */}
+          {archiveLoading ? (
+            <div className="flex items-center justify-center h-48">
+              <div className="w-7 h-7 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : (() => {
+            const archiveFiltered = archiveItems.filter(item => {
+              if (archiveFilter === 'formats' && !item.key.startsWith('formats/')) return false;
+              if (archiveFilter === 'episodes' && !item.key.startsWith('episodes/')) return false;
+              if (archiveFilter === 'library' && !item.key.startsWith('library/')) return false;
+              if (archiveSearch && !item.key.toLowerCase().includes(archiveSearch.toLowerCase())) return false;
+              return true;
+            });
+
+            return archiveFiltered.length === 0 ? (
+              <div className="rounded-lg border border-border bg-card p-8 text-center">
+                <Cloud className="w-8 h-8 text-muted-foreground/40 mx-auto mb-3" />
+                <p className="text-sm text-muted-foreground">Nessuna immagine trovata.</p>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>{archiveFiltered.length} immagini · {archiveSelected.size > 0 ? `${archiveSelected.size} selezionat${archiveSelected.size === 1 ? 'a' : 'e'}` : 'Clicca per selezionare'}</span>
+                  <div className="flex items-center gap-2">
+                    {archiveSelected.size > 0 && (
+                      <button onClick={() => setArchiveSelected(new Set())}
+                        className="text-xs text-muted-foreground hover:text-foreground">Deseleziona</button>
+                    )}
+                    <button
+                      onClick={() => {
+                        const allKeys = new Set(archiveFiltered.map(i => i.key));
+                        setArchiveSelected(prev => prev.size === allKeys.size ? new Set() : allKeys);
+                      }}
+                      className="text-xs text-muted-foreground hover:text-foreground">
+                      {archiveSelected.size === archiveFiltered.length ? 'Deseleziona tutto' : 'Seleziona tutto'}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2">
+                  {archiveFiltered.map(item => (
+                    <div key={item.key} title={item.key}
+                      onClick={() => setArchiveSelected(prev => {
+                        const next = new Set(prev);
+                        next.has(item.key) ? next.delete(item.key) : next.add(item.key);
+                        return next;
+                      })}
+                      className={`group relative aspect-square rounded-lg overflow-hidden border-2 transition-all cursor-pointer bg-muted/20 ${
+                        archiveSelected.has(item.key) ? 'border-red-500 ring-1 ring-red-500/30' : 'border-transparent hover:border-primary'
+                      }`}>
+                      <img src={item.url} alt={item.key} className="w-full h-full object-cover" loading="lazy"
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                      {archiveSelected.has(item.key) && (
+                        <div className="absolute inset-0 bg-red-500/10" />
+                      )}
+                      <div className="absolute top-1 left-1">
+                        <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors ${
+                          archiveSelected.has(item.key) ? 'bg-red-500 border-red-500' : 'border-white/60 bg-black/30'
+                        }`}>
+                          {archiveSelected.has(item.key) && <CheckCircle2 className="w-3 h-3 text-white" />}
+                        </div>
+                      </div>
+                      <p className="absolute bottom-0 inset-x-0 px-1 py-0.5 text-[8px] text-white bg-black/60 truncate">
+                        {item.key}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* ── Sticky bottom: Archive delete bar ──────────────────────────────── */}
+      {activeSection === 'archive' && archiveSelected.size > 0 && (
+        <div className="fixed bottom-20 lg:bottom-6 left-0 lg:left-64 right-0 px-4 lg:px-6 pointer-events-none z-30">
+          <div className="max-w-4xl mx-auto pointer-events-auto">
+            <div className="flex items-center gap-3 rounded-xl border border-red-500/30 bg-card shadow-xl px-4 py-3">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-foreground">
+                  {archiveSelected.size} immagin{archiveSelected.size === 1 ? 'e' : 'i'} selezionat{archiveSelected.size === 1 ? 'a' : 'e'}
+                </p>
+                <p className="text-[10px] text-muted-foreground">
+                  Eliminazione permanente dal bucket R2
+                </p>
+              </div>
+              <button
+                onClick={handleArchiveDeleteSelected}
+                disabled={archiveDeleting}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-red-600 text-white text-xs font-medium hover:bg-red-700 disabled:opacity-40 transition-colors shrink-0"
+              >
+                {archiveDeleting
+                  ? <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  : <Trash2 className="w-3.5 h-3.5" />}
+                Elimina selezionat{archiveSelected.size === 1 ? 'a' : 'e'}
+              </button>
+              <button
+                onClick={() => setArchiveSelected(new Set())}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
