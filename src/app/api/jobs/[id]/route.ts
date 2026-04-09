@@ -1,24 +1,32 @@
 import { NextResponse } from 'next/server';
 import type { Job } from '@/mocks/jobs';
-import { listGithubRuns, listGithubWorkflows, mapWorkflowToJobId } from '@/lib/githubWorkflows';
+import { supabaseServer } from '@/lib/supabaseServer';
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [workflows, runs] = await Promise.all([listGithubWorkflows(), listGithubRuns()]);
 
-  const workflow = workflows.find(wf => mapWorkflowToJobId(wf) === id);
-  if (!workflow) {
+  if (id !== 'job_sync_video') {
     return NextResponse.json(null, { status: 404 });
   }
 
-  const latest = runs.find(run => run.workflow_id === workflow.id);
+  // Get latest run
+  const latestRun = supabaseServer
+    ? (await supabaseServer
+        .from('job_queue')
+        .select('created_at')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
+      ).data
+    : null;
+
   const job: Job = {
-    id,
-    name: workflow.name,
-    description: workflow.path,
+    id: 'job_sync_video',
+    name: 'Sync Video',
+    description: 'Scarica e sincronizza i video dagli archivi delle singole risorse',
     schedule: null,
-    lastRun: latest?.run_started_at ?? latest?.created_at ?? null,
-    status: workflow.state === 'active' ? 'active' : 'paused',
+    lastRun: latestRun?.created_at ?? null,
+    status: 'active',
     nextRun: null,
   };
 

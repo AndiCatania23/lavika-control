@@ -1,17 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { Job } from '@/mocks/jobs';
 import type { JobRun } from '@/mocks/jobRuns';
-import {
-  listGithubRuns,
-  listGithubWorkflows,
-  mapWorkflowToJobId,
-  triggerGithubWorkflow,
-} from '@/lib/githubWorkflows';
+import { supabaseServer } from '@/lib/supabaseServer';
 
-function mapRunStatus(status: string, conclusion: string | null): JobRun['status'] {
-  if (status !== 'completed') return 'running';
-  if (conclusion === 'success') return 'success';
-  if (conclusion === 'cancelled') return 'cancelled';
+function mapStatus(status: string): JobRun['status'] {
+  if (status === 'pending' || status === 'running') return 'running';
+  if (status === 'success') return 'success';
+  if (status === 'cancelled') return 'cancelled';
   return 'failed';
 }
 
@@ -23,52 +18,37 @@ function computeDuration(startedAt: string | null, finishedAt: string | null): n
   return Math.round((end - start) / 1000);
 }
 
-async function buildJobs(): Promise<Job[]> {
-  const [workflows, runs] = await Promise.all([listGithubWorkflows(), listGithubRuns()]);
-
-  return workflows.map(workflow => {
-    const jobId = mapWorkflowToJobId(workflow);
-    const relatedRuns = runs.filter(run => run.workflow_id === workflow.id);
-    const latest = relatedRuns[0];
-    const status: Job['status'] = workflow.state === 'active' ? 'active' : 'paused';
-
-    return {
-      id: jobId,
-      name: workflow.name,
-      description: workflow.path,
-      schedule: null,
-      lastRun: latest?.run_started_at ?? latest?.created_at ?? null,
-      status,
-      nextRun: null,
-    };
-  });
-}
-
-function mapRun(run: Awaited<ReturnType<typeof listGithubRuns>>[number]): JobRun {
-  const startedAt = run.run_started_at ?? run.created_at;
-  const finishedAt = run.status === 'completed' ? run.updated_at : null;
-  return {
-    id: String(run.id),
-    jobId: run.workflow_id ? `job_${run.workflow_id}` : 'job_sync_video',
-    jobName: run.name,
-    status: mapRunStatus(run.status, run.conclusion),
-    startedAt,
-    finishedAt,
-    duration: computeDuration(startedAt, finishedAt),
-    triggeredBy: run.actor?.login ?? 'github',
-    scannedCount: 0,
-    insertedCount: 0,
-    updatedCount: 0,
-    errorCount: run.conclusion === 'failure' ? 1 : 0,
-  };
-}
-
 export async function GET() {
-  const jobs = await buildJobs();
-  return NextResponse.json(jobs);
+  if (!supabaseServer) {
+    return NextResponse.json([], { status: 500 });
+  }
+
+  // Get latest run to populate lastRun
+  const { data: latestRun } = await supabaseServer
+    .from('job_queue')
+    .select('created_at')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single();
+
+  const job: Job = {
+    id: 'job_sync_video',
+    name: 'Sync Video',
+    description: 'Scarica e sincronizza i video dagli archivi delle singole risorse',
+    schedule: null,
+    lastRun: latestRun?.created_at ?? null,
+    status: 'active',
+    nextRun: null,
+  };
+
+  return NextResponse.json([job]);
 }
 
 export async function POST(request: NextRequest) {
+  if (!supabaseServer) {
+    return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 });
+  }
+
   const { jobId, triggeredBy = 'manual', source, facebook_url } = await request.json() as {
     jobId?: string;
     triggeredBy?: string;
@@ -80,77 +60,54 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unsupported job id' }, { status: 400 });
   }
 
-  const [workflows, currentRuns] = await Promise.all([listGithubWorkflows(), listGithubRuns()]);
-  const syncWorkflow = workflows.find(workflow => workflow.path.toLowerCase().includes('sync-videos.yml'));
-  const previousRunIds = new Set(currentRuns.map(run => String(run.id)));
-  const hasRunningSync = currentRuns.some(run => {
-    if (run.status === 'completed') return false;
-    if (syncWorkflow) return run.workflow_id === syncWorkflow.id;
-    return run.name.toLowerCase().includes('sync');
-  });
+  // Check if there's already a running/pending job
+  const { data: runningJobs } = await supabaseServer
+    .from('job_queue')
+    .select('id')
+    .in('status', ['pending', 'running'])
+    .limit(1);
 
-  if (hasRunningSync) {
+  if (runningJobs && runningJobs.length > 0) {
     return NextResponse.json(
       { success: false, error: 'Sync job already running' },
       { status: 409 }
     );
   }
 
-  const workflowInputs: Record<string, string> | undefined = facebook_url
-    ? { facebook_url }
-    : source
-      ? { source }
-      : undefined;
+  // Insert new job into queue
+  const { data: newJob, error } = await supabaseServer
+    .from('job_queue')
+    .insert({
+      job_id: 'job_sync_video',
+      status: 'pending',
+      source: source || null,
+      facebook_url: facebook_url || null,
+      triggered_by: triggeredBy,
+    })
+    .select()
+    .single();
 
-  const dispatch = await triggerGithubWorkflow('sync-videos.yml', 'master', workflowInputs);
-  if (!dispatch.ok) {
-    return NextResponse.json({ success: false, error: dispatch.error ?? 'Dispatch failed' }, { status: 502 });
+  if (error || !newJob) {
+    return NextResponse.json(
+      { success: false, error: error?.message ?? 'Insert failed' },
+      { status: 500 }
+    );
   }
 
-  await new Promise(resolve => setTimeout(resolve, 1200));
-
-  let latest = null as Awaited<ReturnType<typeof listGithubRuns>>[number] | null;
-
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    const runs = await listGithubRuns();
-    latest = runs.find(run => {
-      const isNewRun = !previousRunIds.has(String(run.id));
-      if (!isNewRun) return false;
-      if (syncWorkflow) return run.workflow_id === syncWorkflow.id;
-      return run.name.toLowerCase().includes('sync');
-    }) ?? null;
-
-    if (latest) break;
-    await new Promise(resolve => setTimeout(resolve, 1200));
-  }
-
-  if (!latest) {
-    const runs = await listGithubRuns();
-    latest = runs.find(run => {
-      if (syncWorkflow) return run.workflow_id === syncWorkflow.id;
-      return run.name.toLowerCase().includes('sync');
-    }) ?? runs[0] ?? null;
-  }
-
-  let run: JobRun;
-  if (latest) {
-    run = mapRun(latest);
-  } else {
-    run = {
-      id: `pending_${Date.now()}`,
-      jobId,
-      jobName: 'Sync Video',
-      status: 'running',
-      startedAt: new Date().toISOString(),
-      finishedAt: null,
-      duration: null,
-      triggeredBy,
-      scannedCount: 0,
-      insertedCount: 0,
-      updatedCount: 0,
-      errorCount: 0,
-    };
-  }
+  const run: JobRun = {
+    id: newJob.id,
+    jobId: 'job_sync_video',
+    jobName: 'Sync Video',
+    status: 'running',
+    startedAt: newJob.created_at,
+    finishedAt: null,
+    duration: null,
+    triggeredBy,
+    scannedCount: 0,
+    insertedCount: 0,
+    updatedCount: 0,
+    errorCount: 0,
+  };
 
   return NextResponse.json({ success: true, run });
 }

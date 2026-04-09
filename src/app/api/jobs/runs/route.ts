@@ -1,48 +1,63 @@
 import { NextResponse } from 'next/server';
 import type { JobRun } from '@/mocks/jobRuns';
-import { listGithubRuns } from '@/lib/githubWorkflows';
+import { supabaseServer } from '@/lib/supabaseServer';
 
-function mapRunStatus(status: string, conclusion: string | null): JobRun['status'] {
-  if (status !== 'completed') return 'running';
-  if (conclusion === 'success') return 'success';
-  if (conclusion === 'cancelled') return 'cancelled';
-  return 'failed';
-}
-
-function mapRun(run: Awaited<ReturnType<typeof listGithubRuns>>[number]): JobRun {
-  const startedAt = run.run_started_at ?? run.created_at;
-  const finishedAt = run.status === 'completed' ? run.updated_at : null;
-  const duration = finishedAt
+function mapRow(row: Record<string, unknown>): JobRun {
+  const startedAt = (row.started_at as string) ?? (row.created_at as string);
+  const finishedAt = row.finished_at as string | null;
+  const duration = startedAt && finishedAt
     ? Math.max(0, Math.round((new Date(finishedAt).getTime() - new Date(startedAt).getTime()) / 1000))
     : null;
 
+  let status: JobRun['status'] = 'running';
+  const rawStatus = row.status as string;
+  if (rawStatus === 'success') status = 'success';
+  else if (rawStatus === 'failed') status = 'failed';
+  else if (rawStatus === 'cancelled') status = 'cancelled';
+
   return {
-    id: String(run.id),
-    jobId: run.workflow_id ? `job_${run.workflow_id}` : 'job_sync_video',
-    jobName: run.name,
-    status: mapRunStatus(run.status, run.conclusion),
+    id: row.id as string,
+    jobId: 'job_sync_video',
+    jobName: 'Sync Video',
+    status,
     startedAt,
     finishedAt,
     duration,
-    triggeredBy: run.actor?.login ?? 'github',
-    scannedCount: 0,
-    insertedCount: 0,
-    updatedCount: 0,
-    errorCount: run.conclusion === 'failure' ? 1 : 0,
+    triggeredBy: (row.triggered_by as string) ?? 'manual',
+    scannedCount: (row.scanned_count as number) ?? 0,
+    insertedCount: (row.inserted_count as number) ?? 0,
+    updatedCount: (row.updated_count as number) ?? 0,
+    errorCount: (row.error_count as number) ?? 0,
+    sourcesProcessed: row.sources_processed as number | null,
+    downloadedVideos: row.downloaded_videos as number | null,
+    uploadedVideos: row.uploaded_videos as number | null,
+    totalDurationSeconds: (row.total_duration_seconds as number | null) ?? duration,
   };
 }
 
 export async function GET(request: Request) {
+  if (!supabaseServer) {
+    return NextResponse.json([], { status: 500 });
+  }
+
   const { searchParams } = new URL(request.url);
-  const jobId = searchParams.get('jobId');
   const status = searchParams.get('status');
 
-  const runs = (await listGithubRuns()).map(mapRun);
-  const filtered = runs.filter(run => {
-    if (jobId && run.jobId !== jobId && run.jobId !== 'job_sync_video') return false;
-    if (status && run.status !== status) return false;
-    return true;
-  });
+  let query = supabaseServer
+    .from('job_queue')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(100);
 
-  return NextResponse.json(filtered);
+  if (status) {
+    query = query.eq('status', status);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    return NextResponse.json([], { status: 500 });
+  }
+
+  return NextResponse.json((data ?? []).map(mapRow));
 }
