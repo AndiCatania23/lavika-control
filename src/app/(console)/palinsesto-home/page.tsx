@@ -462,6 +462,8 @@ export default function PalinsestoHomePage() {
     setCreateMode('single');
     setEditingSeries(null);
     setEditingCard(card);
+    const main = document.querySelector('main');
+    (main ?? window).scrollTo({ top: 0, behavior: 'smooth' });
     setSingleState({
       format_id: card.format_id,
       label: card.label ?? '',
@@ -478,6 +480,8 @@ export default function PalinsestoHomePage() {
     setEditingCard(null);
     setEditingSeries(item);
     setSeriesScope('all');
+    const main = document.querySelector('main');
+    (main ?? window).scrollTo({ top: 0, behavior: 'smooth' });
     setEffectiveFromLocal('');
 
     let parsedFreq: RRuleFreq = 'WEEKLY';
@@ -569,7 +573,7 @@ export default function PalinsestoHomePage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 overflow-x-hidden">
       <SectionHeader
         title="Palinsesto Home"
         description="Eventi singoli e ricorrenti per carousel IN ARRIVO (Europe/Rome)"
@@ -588,7 +592,7 @@ export default function PalinsestoHomePage() {
       />
 
       <div className="grid gap-4 xl:grid-cols-[1.05fr_1.35fr]">
-        <section className="rounded-xl border border-border bg-card p-5">
+        <section className="rounded-xl border border-border bg-card p-3 sm:p-5">
           <div className="mb-4 flex items-center gap-2">
             <CalendarClock className="h-4 w-4 text-primary" />
             <h3 className="text-sm font-semibold text-foreground">
@@ -898,10 +902,10 @@ export default function PalinsestoHomePage() {
         </section>
 
         <section className="space-y-4">
-          <div className="rounded-xl border border-border bg-card p-5">
+          <div className="rounded-xl border border-border bg-card p-3 sm:p-5">
             <h3 className="mb-3 text-sm font-semibold text-foreground">Lista appuntamenti materializzati</h3>
 
-            <div className="mb-3 flex flex-wrap items-end gap-2">
+            <div className="mb-3 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-end">
               <div className="space-y-1">
                 <label className="text-xs font-medium text-foreground" htmlFor="f-status">Status</label>
                 <select id="f-status" value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value as StatusFilter); setCurrentPage(1); }} className="rounded-lg border border-border bg-background px-2 py-2 text-sm">
@@ -941,7 +945,8 @@ export default function PalinsestoHomePage() {
               <div className="rounded border border-dashed border-border p-6 text-center text-sm text-muted-foreground">Nessun appuntamento trovato.</div>
             ) : (
               <>
-                <div className="overflow-x-auto rounded-lg border border-border">
+                {/* Desktop table */}
+                <div className="hidden lg:block overflow-x-auto rounded-lg border border-border">
                   <table className="min-w-[980px] w-full text-sm">
                     <thead>
                       <tr className="border-b border-border bg-muted/30 text-left text-[11px] uppercase tracking-wide text-muted-foreground">
@@ -989,6 +994,47 @@ export default function PalinsestoHomePage() {
                   </table>
                 </div>
 
+                {/* Mobile cards */}
+                <div className="lg:hidden space-y-2">
+                  {cards.map(card => (
+                    <div key={card.id} className="rounded-lg border border-border p-3 space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium text-foreground truncate">{card.format_title ?? card.format_id}</div>
+                          <div className="text-xs text-muted-foreground">{card.label ?? '-'}</div>
+                        </div>
+                        <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${card.status === 'published' ? 'bg-green-500/15 text-green-500' : 'bg-muted text-muted-foreground'}`}>
+                          {card.status}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+                        <span>{formatRomeDisplay(card.start_at)}</span>
+                        <span>{card.access}</span>
+                        <span>{card.is_active ? 'active' : 'inactive'}</span>
+                        <span>{card.source_type}</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5 pt-1 border-t border-border">
+                        <button className="rounded border border-border px-2 py-1 text-xs hover:bg-muted/40" onClick={() => startEditCard(card)}>
+                          <Pencil className="mr-1 inline h-3 w-3" />Edit
+                        </button>
+                        <button className="rounded border border-border px-2 py-1 text-xs hover:bg-muted/40" onClick={() => void handleCardQuickPatch(card, { status: card.status === 'draft' ? 'published' : 'draft' })}>
+                          {card.status === 'draft' ? 'Pubblica' : 'Bozza'}
+                        </button>
+                        <button className="rounded border border-border px-2 py-1 text-xs hover:bg-muted/40" onClick={() => void handleCardQuickPatch(card, { is_active: !card.is_active })}>
+                          {card.is_active ? 'Disattiva' : 'Attiva'}
+                        </button>
+                        {card.source_type === 'series' && card.series_id ? (
+                          <button className="rounded border border-amber-500/30 px-2 py-1 text-xs text-amber-500 hover:bg-amber-500/10" onClick={() => openExceptionModal(card)}>
+                            Solo questa
+                          </button>
+                        ) : null}
+                        <button className="rounded border border-border px-2 py-1 text-xs hover:bg-muted/40" onClick={() => setPendingDelete({ type: 'card', id: card.id, hard: false, label: card.label ?? card.id })}>Soft del</button>
+                        <button className="rounded border border-red-500/30 px-2 py-1 text-xs text-red-500 hover:bg-red-500/10" onClick={() => setPendingDelete({ type: 'card', id: card.id, hard: true, label: card.label ?? card.id })}><Trash2 className="mr-1 inline h-3 w-3" />Hard</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
                 <div className="mt-2 flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">
                     {(currentPage - 1) * PAGE_SIZE + 1}-{Math.min(totalCards, currentPage * PAGE_SIZE)} di {totalCards}
@@ -1003,7 +1049,7 @@ export default function PalinsestoHomePage() {
             )}
           </div>
 
-          <div className="rounded-xl border border-border bg-card p-5">
+          <div className="rounded-xl border border-border bg-card p-3 sm:p-5">
             <h3 className="mb-3 text-sm font-semibold text-foreground">Serie ricorrenti</h3>
             {seriesLoading ? (
               <div className="flex h-24 items-center justify-center"><div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" /></div>
