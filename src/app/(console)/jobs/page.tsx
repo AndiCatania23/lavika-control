@@ -7,6 +7,7 @@ import { getJobs, Job } from '@/lib/data';
 import { saveRunSourceMapping } from '@/lib/jobRunSourceRegistry';
 import { SectionHeader } from '@/components/SectionHeader';
 import { StatusPill } from '@/components/StatusPill';
+import { useToast } from '@/lib/toast';
 import { Play, Clock, Calendar, ChevronRight } from 'lucide-react';
 
 // Map from quickSource.id → Supabase content_formats.id
@@ -25,9 +26,24 @@ export default function JobsPage() {
   const [runningJobId, setRunningJobId] = useState<string | null>(null);
   const [runningSourceId, setRunningSourceId] = useState<string | null>(null);
   const [hasRunningJob, setHasRunningJob] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
   // formatId → cover_horizontal_url from Supabase/R2
   const [formatCovers, setFormatCovers] = useState<Record<string, string>>({});
   const router = useRouter();
+  const { showToast } = useToast();
+
+  const refreshQueueState = async () => {
+    const [running, pending] = await Promise.all([
+      fetch('/api/jobs/runs?status=running', { cache: 'no-store' })
+        .then(r => r.ok ? r.json() as Promise<Array<{ id: string }>> : [])
+        .catch(() => []),
+      fetch('/api/jobs/runs?status=pending', { cache: 'no-store' })
+        .then(r => r.ok ? r.json() as Promise<Array<{ id: string }>> : [])
+        .catch(() => []),
+    ]);
+    setHasRunningJob(running.length > 0);
+    setPendingCount(pending.length);
+  };
 
   const quickSources = [
     { id: 'catanista-live',              title: 'CATANISTA LIVE'    },
@@ -43,12 +59,16 @@ export default function JobsPage() {
       fetch('/api/jobs/runs?status=running', { cache: 'no-store' })
         .then(response => response.ok ? response.json() as Promise<Array<{ id: string }>> : [])
         .catch(() => []),
+      fetch('/api/jobs/runs?status=pending', { cache: 'no-store' })
+        .then(response => response.ok ? response.json() as Promise<Array<{ id: string }>> : [])
+        .catch(() => []),
       fetch('/api/media/formats')
         .then(r => r.ok ? r.json() as Promise<Array<{ id: string; cover_horizontal_url: string | null }>> : [])
         .catch(() => []),
-    ]).then(([jobsData, runningRuns, formatsData]) => {
+    ]).then(([jobsData, runningRuns, pendingRuns, formatsData]) => {
       setJobs(jobsData);
       setHasRunningJob(runningRuns.length > 0);
+      setPendingCount(pendingRuns.length);
       const covers: Record<string, string> = {};
       for (const fmt of formatsData) {
         if (fmt.cover_horizontal_url) covers[fmt.id] = fmt.cover_horizontal_url;
@@ -61,34 +81,35 @@ export default function JobsPage() {
   const handleRunJob = async (e: React.MouseEvent, job: Job) => {
     e.stopPropagation();
     setRunningJobId(job.id);
-    
+
     try {
       const response = await fetch('/api/jobs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ jobId: job.id, triggeredBy: 'manual' }),
       });
-      
+
       if (!response.ok) {
-        console.error('Job trigger failed');
         if (response.status === 409) {
+          showToast('warning', 'Un sync è già in corso — riprova tra poco');
           setHasRunningJob(true);
+        } else {
+          const body = await response.json().catch(() => null) as { error?: string } | null;
+          showToast('error', `Trigger fallito: ${body?.error || response.status}`);
         }
       } else {
-        setHasRunningJob(true);
+        showToast('success', 'Job accodato');
+        setPendingCount(c => c + 1);
       }
     } catch (error) {
-      console.error('Error triggering job:', error);
+      showToast('error', `Errore rete: ${error instanceof Error ? error.message : 'unknown'}`);
     }
-    
+
     setTimeout(async () => {
       const { getJobs: reloadJobs } = await import('@/lib/data');
       reloadJobs().then(data => setJobs(data));
       setRunningJobId(null);
-      fetch('/api/jobs/runs?status=running', { cache: 'no-store' })
-        .then(response => response.ok ? response.json() as Promise<Array<{ id: string }>> : [])
-        .then(runs => setHasRunningJob(runs.length > 0))
-        .catch(() => setHasRunningJob(false));
+      refreshQueueState();
     }, 6000);
   };
 
@@ -107,30 +128,29 @@ export default function JobsPage() {
       });
 
       if (!response.ok) {
-        console.error('Source trigger failed');
         if (response.status === 409) {
+          showToast('warning', 'Un sync è già in corso — riprova tra poco');
           setHasRunningJob(true);
+        } else {
+          const body = await response.json().catch(() => null) as { error?: string } | null;
+          showToast('error', `Trigger fallito: ${body?.error || response.status}`);
         }
       } else {
         const payload = await response.json().catch(() => null) as { run?: { id?: string } } | null;
         const runId = payload?.run?.id;
-        if (runId) {
-          saveRunSourceMapping(runId, sourceId);
-        }
-        setHasRunningJob(true);
+        if (runId) saveRunSourceMapping(runId, sourceId);
+        showToast('success', `Accodato: ${sourceId}`);
+        setPendingCount(c => c + 1);
       }
     } catch (error) {
-      console.error('Error triggering source:', error);
+      showToast('error', `Errore rete: ${error instanceof Error ? error.message : 'unknown'}`);
     }
 
     setTimeout(async () => {
       const { getJobs: reloadJobs } = await import('@/lib/data');
       reloadJobs().then(data => setJobs(data));
       setRunningSourceId(null);
-      fetch('/api/jobs/runs?status=running', { cache: 'no-store' })
-        .then(response => response.ok ? response.json() as Promise<Array<{ id: string }>> : [])
-        .then(runs => setHasRunningJob(runs.length > 0))
-        .catch(() => setHasRunningJob(false));
+      refreshQueueState();
     }, 6000);
   };
 
@@ -190,7 +210,13 @@ export default function JobsPage() {
                 className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50"
               >
                 <Play className="w-3 h-3" />
-                {runningSourceId === source.id ? 'Esecuzione...' : hasRunningJob ? 'Job attivo' : 'ESEGUI'}
+                {runningSourceId === source.id
+                  ? 'Accodamento...'
+                  : hasRunningJob
+                    ? 'Job attivo'
+                    : pendingCount > 0
+                      ? `ESEGUI (${pendingCount} in coda)`
+                      : 'ESEGUI'}
               </button>
               <button
                 onClick={() => router.push(`/jobs/job_sync_video?source=${encodeURIComponent(source.id)}`)}
@@ -245,7 +271,13 @@ export default function JobsPage() {
                   className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50"
                 >
                   <Play className="w-3 h-3" />
-                  {runningJobId === job.id ? 'Esecuzione...' : hasRunningJob ? 'Job attivo' : 'ESEGUI'}
+                  {runningJobId === job.id
+                    ? 'Accodamento...'
+                    : hasRunningJob
+                      ? 'Job attivo'
+                      : pendingCount > 0
+                        ? `ESEGUI (${pendingCount} in coda)`
+                        : 'ESEGUI'}
                 </button>
               )}
               <button

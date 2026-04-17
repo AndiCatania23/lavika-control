@@ -60,11 +60,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unsupported job id' }, { status: 400 });
   }
 
-  // Check if there's already a running/pending job
+  // Block only if a sync is actively running. Pending jobs are fine — the
+  // daemon drains the queue FIFO, so new triggers just get appended.
   const { data: runningJobs } = await supabaseServer
     .from('job_queue')
     .select('id')
-    .in('status', ['pending', 'running'])
+    .eq('status', 'running')
     .limit(1);
 
   if (runningJobs && runningJobs.length > 0) {
