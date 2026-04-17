@@ -121,7 +121,11 @@ async function getR2Sizes(formatIds: string[], r2Prefixes: Map<string, string>):
 
 // ── Route handler ─────────────────────────────────────────────────────────────
 
-export async function GET() {
+export async function GET(request: Request) {
+  // ?fast=1 skips the R2 ListObjectsV2 scan (size fields will be 0).
+  // Used by the dashboard home to avoid a multi-second blocking call.
+  const fast = new URL(request.url).searchParams.get('fast') === '1';
+
   if (!supabaseServer) {
     return NextResponse.json({
       connected: false,
@@ -147,10 +151,10 @@ export async function GET() {
       episodesByFormat.set(ep.format_id, list);
     }
 
-    // Get real R2 sizes per format (cached 1h)
+    // Get real R2 sizes per format (cached 1h) — skip in fast mode.
     const formatIds = formats.map(f => f.id);
     const r2Prefixes = resolveR2Prefixes(episodes);
-    const r2Sizes = await getR2Sizes(formatIds, r2Prefixes);
+    const r2Sizes = fast ? new Map<string, number>() : await getR2Sizes(formatIds, r2Prefixes);
 
     const stats: FormatStat[] = [];
     let videosTotal = 0;

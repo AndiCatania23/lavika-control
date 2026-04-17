@@ -110,7 +110,6 @@ export default function DashboardPage() {
   const [runs, setRuns] = useState<DashboardRun[]>([]);
   const [diagnostics, setDiagnostics] = useState<DiagnosticsData | null>(null);
   const [r2Summary, setR2Summary] = useState<R2Summary | null>(null);
-  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<string>('');
 
@@ -119,32 +118,32 @@ export default function DashboardPage() {
     [kpis]
   );
 
-  const loadData = useCallback(async (background = false) => {
+  const loadData = useCallback((background = false) => {
     if (background) setRefreshing(true);
-    else setLoading(true);
 
-    try {
-      const [kpiResponse, runsResponse, diagnosticsResponse, r2Response] = await Promise.all([
-        fetch('/api/dev/overview', { cache: 'no-store' }),
-        fetch('/api/jobs/runs', { cache: 'no-store' }),
-        fetch('/api/dev/diagnostics', { cache: 'no-store' }),
-        fetch('/api/dev/r2/summary', { cache: 'no-store' }),
-      ]);
+    const fetches = [
+      fetch('/api/dev/overview', { cache: 'no-store' })
+        .then(r => r.json() as Promise<{ kpis?: OverviewKpi[] }>)
+        .then(p => setKpis(p.kpis ?? []))
+        .catch(() => {}),
+      fetch('/api/jobs/runs', { cache: 'no-store' })
+        .then(r => r.json() as Promise<DashboardRun[]>)
+        .then(p => setRuns((p ?? []).slice(0, 6)))
+        .catch(() => {}),
+      fetch('/api/dev/diagnostics', { cache: 'no-store' })
+        .then(r => r.json() as Promise<DiagnosticsData>)
+        .then(p => setDiagnostics(p))
+        .catch(() => {}),
+      fetch('/api/dev/r2/summary?fast=1', { cache: 'no-store' })
+        .then(r => r.json() as Promise<R2Summary>)
+        .then(p => setR2Summary(p))
+        .catch(() => {}),
+    ];
 
-      const kpiPayload = (await kpiResponse.json()) as { kpis?: OverviewKpi[] };
-      const runsPayload = (await runsResponse.json()) as DashboardRun[];
-      const diagnosticsPayload = (await diagnosticsResponse.json()) as DiagnosticsData;
-      const r2Payload = (await r2Response.json()) as R2Summary;
-
-      setKpis(kpiPayload.kpis ?? []);
-      setRuns((runsPayload ?? []).slice(0, 6));
-      setDiagnostics(diagnosticsPayload);
-      setR2Summary(r2Payload);
-      setLastUpdated(new Date().toLocaleTimeString('it-IT'));
-    } finally {
-      setLoading(false);
+    Promise.allSettled(fetches).finally(() => {
       setRefreshing(false);
-    }
+      setLastUpdated(new Date().toLocaleTimeString('it-IT'));
+    });
   }, []);
 
   useEffect(() => {
@@ -252,13 +251,9 @@ export default function DashboardPage() {
     ];
   }, [diagnostics, r2Summary]);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
+  const kpisLoaded = kpis.length > 0;
+  const diagnosticsLoaded = diagnostics !== null;
+  const r2Loaded = r2Summary !== null;
 
   return (
     <div className="space-y-6">
@@ -288,7 +283,7 @@ export default function DashboardPage() {
       />
 
       <div className="grid grid-cols-3 gap-2 md:gap-3">
-        {healthItems.map(item => (
+        {(diagnosticsLoaded && r2Loaded) ? healthItems.map(item => (
           <div key={item.label} className="bg-card border border-border rounded-lg p-2 sm:p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-2 min-w-0">
             <div className="min-w-0">
               <div className="text-[10px] sm:text-xs text-muted-foreground truncate">{item.label}</div>
@@ -305,11 +300,13 @@ export default function DashboardPage() {
               <span className="inline-flex shrink-0">{item.icon}</span>
             </div>
           </div>
+        )) : Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="bg-card border border-border rounded-lg p-2 sm:p-3 h-[52px] animate-pulse" />
         ))}
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-2.5">
-        {metricCards.map(card => (
+        {kpisLoaded ? metricCards.map(card => (
           <MetricCard
             key={card.key}
             title={card.title}
@@ -319,6 +316,8 @@ export default function DashboardPage() {
             iconClassName={card.iconClassName}
             status={card.status}
           />
+        )) : Array.from({ length: 7 }).map((_, i) => (
+          <div key={i} className="bg-card border border-border rounded-lg p-3 sm:p-3.5 h-[78px] animate-pulse" />
         ))}
       </div>
 
