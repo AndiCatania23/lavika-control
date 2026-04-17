@@ -127,11 +127,11 @@ function PillsDashboard({ pills }: { pills: Pill[] }) {
   ];
 
   return (
-    <div className="grid grid-cols-3 gap-3 mb-6">
+    <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-6">
       {cards.map(c => (
-        <div key={c.label} className="bg-card border border-border rounded-lg p-3">
-          <span className="text-xs text-muted-foreground">{c.label}</span>
-          <div className={`text-xl font-semibold mt-0.5 ${c.color}`}>{c.value}</div>
+        <div key={c.label} className="bg-card border border-border rounded-lg p-2.5 sm:p-3">
+          <span className="text-[10px] sm:text-xs text-muted-foreground line-clamp-1">{c.label}</span>
+          <div className={`text-lg sm:text-xl font-semibold mt-0.5 ${c.color}`}>{c.value}</div>
         </div>
       ))}
     </div>
@@ -200,8 +200,8 @@ function PillForm({ initial, onSave, onCancel, saving }: PillFormProps) {
     });
   };
 
-  const inputCls = 'w-full px-3 py-2 bg-card border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary';
-  const labelCls = 'block text-xs font-medium text-muted-foreground mb-1';
+  const inputCls = 'w-full px-3 h-11 sm:h-10 bg-card border border-border rounded-lg text-[15px] sm:text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary';
+  const labelCls = 'block text-xs font-medium text-muted-foreground mb-1.5';
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -221,7 +221,7 @@ function PillForm({ initial, onSave, onCancel, saving }: PillFormProps) {
       <div>
         <label className={labelCls}>Contenuto *</label>
         <textarea
-          className={`${inputCls} min-h-[120px] resize-y`}
+          className="w-full px-3 py-2.5 min-h-[140px] resize-y bg-card border border-border rounded-lg text-[15px] sm:text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
           value={content}
           onChange={e => setContent(e.target.value)}
           required
@@ -261,66 +261,64 @@ function PillForm({ initial, onSave, onCancel, saving }: PillFormProps) {
 
       <div>
         <label className={labelCls}>Immagine di riferimento</label>
-        <div className="space-y-2">
+        <div className="space-y-2.5">
           {imageUrl && (
             <div className="relative">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={imageUrl}
                 alt=""
-                className="rounded-lg max-h-40 w-auto border border-border"
+                className="rounded-lg w-full max-h-56 sm:max-h-40 object-cover border border-border"
               />
               <button
                 type="button"
                 onClick={() => setImageUrl('')}
-                className="absolute top-1 right-1 bg-black/70 text-white rounded-full p-1 hover:bg-black"
+                className="absolute top-2 right-2 bg-black/70 text-white rounded-full w-8 h-8 flex items-center justify-center hover:bg-black active:scale-95"
                 aria-label="Rimuovi immagine"
               >
-                <X className="w-3 h-3" />
+                <X className="w-4 h-4" />
               </button>
             </div>
           )}
-          <div className="flex items-center gap-2">
-            <label
-              className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg border border-border cursor-pointer hover:bg-muted/40 ${uploadingImage ? 'opacity-60 pointer-events-none' : ''}`}
-            >
-              <Upload className="w-3.5 h-3.5" />
-              {uploadingImage ? 'Caricamento…' : imageUrl ? 'Sostituisci immagine' : 'Carica immagine'}
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleImagePick}
-              />
-            </label>
+          <label
+            className={`flex items-center justify-center gap-2 px-4 h-11 sm:h-10 text-sm font-medium rounded-lg border border-dashed border-border cursor-pointer hover:bg-muted/40 active:scale-[0.98] ${uploadingImage ? 'opacity-60 pointer-events-none' : ''}`}
+          >
+            <Upload className="w-4 h-4" />
+            {uploadingImage ? 'Caricamento…' : imageUrl ? 'Sostituisci immagine' : 'Carica immagine'}
             <input
-              className={`${inputCls} flex-1`}
-              value={imageUrl}
-              onChange={e => setImageUrl(e.target.value)}
-              placeholder="o incolla URL..."
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleImagePick}
             />
-          </div>
+          </label>
+          <input
+            className={inputCls}
+            value={imageUrl}
+            onChange={e => setImageUrl(e.target.value)}
+            placeholder="o incolla URL..."
+          />
           {uploadError && <span className="text-xs text-red-500">{uploadError}</span>}
           <span className="text-[10px] text-muted-foreground">
-            Qualsiasi formato (JPEG/PNG/HEIC) — convertito in WebP e salvato su R2.
+            Qualsiasi formato (JPEG/PNG/HEIC) — convertito in WebP su R2.
           </span>
         </div>
       </div>
 
-      <div className="flex items-center gap-3 pt-2">
-        <button
-          type="submit"
-          disabled={saving}
-          className="px-4 py-2 text-sm font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-        >
-          {saving ? 'Salvataggio...' : 'Salva'}
-        </button>
+      <div className="flex flex-col-reverse sm:flex-row sm:items-center gap-2 sm:gap-3 pt-2">
         <button
           type="button"
           onClick={onCancel}
-          className="px-4 py-2 text-sm text-foreground hover:bg-muted rounded-lg"
+          className="px-4 h-11 sm:h-10 text-sm text-foreground hover:bg-muted rounded-lg border border-border sm:border-0 active:scale-[0.98]"
         >
           Annulla
+        </button>
+        <button
+          type="submit"
+          disabled={saving}
+          className="px-4 h-11 sm:h-10 text-sm font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 active:scale-[0.98]"
+        >
+          {saving ? 'Salvataggio…' : 'Salva'}
         </button>
       </div>
     </form>
@@ -340,46 +338,45 @@ function PillDetail({ pill, onBack, onAction }: PillDetailProps) {
   const avgReadTime = pill.total_reads > 0 ? Math.round(pill.total_read_time_ms / pill.total_reads / 1000) : 0;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <button
         onClick={onBack}
-        className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground h-10"
       >
         <ChevronLeft className="w-4 h-4" /> Torna alla lista
       </button>
 
-      <div className="bg-card border border-border rounded-lg p-5 space-y-4">
-        <div className="flex items-start justify-between gap-4">
-          <div className="space-y-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <StatusBadge status={pill.status} />
-              <CategoryBadge category={pill.pill_category} />
-              <span className="text-[11px] text-muted-foreground">{typeLabels[pill.type] || pill.type}</span>
-            </div>
-            <h3 className="text-lg font-semibold text-foreground break-words">{pill.title}</h3>
+      <div className="bg-card border border-border rounded-xl p-4 sm:p-5 space-y-4">
+        <div className="space-y-2 min-w-0">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <StatusBadge status={pill.status} />
+            <CategoryBadge category={pill.pill_category} />
+            <span className="text-[11px] text-muted-foreground uppercase tracking-wide">{typeLabels[pill.type] || pill.type}</span>
           </div>
+          <h3 className="text-xl sm:text-lg font-semibold text-foreground break-words leading-tight">{pill.title}</h3>
         </div>
 
-        <p className="text-sm text-foreground/80 whitespace-pre-wrap leading-relaxed">{pill.content}</p>
+        <p className="text-[15px] sm:text-sm text-foreground/80 whitespace-pre-wrap leading-relaxed">{pill.content}</p>
 
         {pill.image_url && (
+          /* eslint-disable-next-line @next/next/no-img-element */
           <img
             src={pill.image_url}
             alt=""
-            className="rounded-lg max-h-48 object-cover border border-border"
+            className="rounded-lg w-full max-h-64 sm:max-h-48 object-cover border border-border"
           />
         )}
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-          <div className="text-muted-foreground">Generata da: <span className="text-foreground">{pill.generated_by}</span></div>
-          <div className="text-muted-foreground">Creata: <span className="text-foreground">{formatDateIT(pill.created_at)}</span></div>
-          <div className="text-muted-foreground">Programmata: <span className="text-foreground">{formatDateIT(pill.scheduled_at)}</span></div>
-          <div className="text-muted-foreground">Pubblicata: <span className="text-foreground">{formatDateIT(pill.published_at)}</span></div>
-        </div>
+        <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs pt-3 border-t border-border/50">
+          <div><dt className="text-muted-foreground text-[10px] uppercase tracking-wide">Generata da</dt><dd className="text-foreground mt-0.5">{pill.generated_by}</dd></div>
+          <div><dt className="text-muted-foreground text-[10px] uppercase tracking-wide">Creata</dt><dd className="text-foreground mt-0.5">{formatDateIT(pill.created_at)}</dd></div>
+          <div><dt className="text-muted-foreground text-[10px] uppercase tracking-wide">Programmata</dt><dd className="text-foreground mt-0.5">{formatDateIT(pill.scheduled_at)}</dd></div>
+          <div><dt className="text-muted-foreground text-[10px] uppercase tracking-wide">Pubblicata</dt><dd className="text-foreground mt-0.5">{formatDateIT(pill.published_at)}</dd></div>
+        </dl>
       </div>
 
       {/* Metrics */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-3 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
         {[
           { icon: Eye, label: 'Impressions', value: pill.impressions.toLocaleString('it-IT') },
           { icon: BookOpen, label: 'Views', value: pill.views.toLocaleString('it-IT') },
@@ -388,35 +385,35 @@ function PillDetail({ pill, onBack, onAction }: PillDetailProps) {
           { icon: BarChart3, label: 'CTR', value: ctr === '-' ? '-' : `${ctr}%` },
           { icon: Clock, label: 'Avg read', value: avgReadTime > 0 ? `${avgReadTime}s` : '-' },
         ].map(m => (
-          <div key={m.label} className="bg-card border border-border rounded-lg p-3">
-            <div className="flex items-center gap-1.5 mb-1">
-              <m.icon className="w-3.5 h-3.5 text-muted-foreground" />
-              <span className="text-[10px] text-muted-foreground">{m.label}</span>
+          <div key={m.label} className="bg-card border border-border rounded-lg p-2.5 sm:p-3">
+            <div className="flex items-center gap-1 sm:gap-1.5 mb-1">
+              <m.icon className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-muted-foreground shrink-0" />
+              <span className="text-[9px] sm:text-[10px] text-muted-foreground uppercase tracking-wide truncate">{m.label}</span>
             </div>
-            <span className="text-base font-semibold text-foreground">{m.value}</span>
+            <span className="text-base sm:text-base font-semibold text-foreground">{m.value}</span>
           </div>
         ))}
       </div>
 
-      {/* Actions */}
-      <div className="flex items-center gap-3 flex-wrap">
+      {/* Actions — mobile: grid 2col full-width, desktop: flex inline */}
+      <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-3 sm:flex-wrap">
         {pill.status === 'draft' && (
           <>
             <button
               onClick={() => onAction('approve')}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-green-600 text-white hover:bg-green-700"
+              className="flex items-center justify-center gap-1.5 px-4 h-11 sm:h-10 text-sm font-medium rounded-lg bg-green-600 text-white hover:bg-green-700 active:scale-[0.98]"
             >
               <Check className="w-4 h-4" /> Approva
             </button>
             <button
               onClick={() => onAction('publish')}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700"
+              className="flex items-center justify-center gap-1.5 px-4 h-11 sm:h-10 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 active:scale-[0.98]"
             >
-              <Zap className="w-4 h-4" /> Pubblica ora
+              <Zap className="w-4 h-4" /> Pubblica
             </button>
             <button
               onClick={() => onAction('reject')}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-red-600 text-white hover:bg-red-700"
+              className="flex items-center justify-center gap-1.5 px-4 h-11 sm:h-10 text-sm font-medium rounded-lg bg-red-600 text-white hover:bg-red-700 active:scale-[0.98] col-span-2 sm:col-span-1"
             >
               <Ban className="w-4 h-4" /> Rifiuta
             </button>
@@ -426,13 +423,13 @@ function PillDetail({ pill, onBack, onAction }: PillDetailProps) {
           <>
             <button
               onClick={() => onAction('publish')}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700"
+              className="flex items-center justify-center gap-1.5 px-4 h-11 sm:h-10 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 active:scale-[0.98]"
             >
-              <Zap className="w-4 h-4" /> Pubblica ora
+              <Zap className="w-4 h-4" /> Pubblica
             </button>
             <button
               onClick={() => onAction('cancel')}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg border border-border text-foreground hover:bg-muted"
+              className="flex items-center justify-center gap-1.5 px-4 h-11 sm:h-10 text-sm font-medium rounded-lg border border-border text-foreground hover:bg-muted active:scale-[0.98]"
             >
               <Undo2 className="w-4 h-4" /> Torna draft
             </button>
@@ -441,7 +438,7 @@ function PillDetail({ pill, onBack, onAction }: PillDetailProps) {
         {pill.status === 'published' && (
           <button
             onClick={() => onAction('cancel')}
-            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg border border-border text-foreground hover:bg-muted"
+            className="flex items-center justify-center gap-1.5 px-4 h-11 sm:h-10 text-sm font-medium rounded-lg border border-border text-foreground hover:bg-muted active:scale-[0.98] col-span-2 sm:col-span-1"
           >
             <Undo2 className="w-4 h-4" /> Depubblica
           </button>
@@ -450,13 +447,13 @@ function PillDetail({ pill, onBack, onAction }: PillDetailProps) {
         {/* Modifica e Elimina sempre visibili */}
         <button
           onClick={() => onAction('edit')}
-          className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
+          className="flex items-center justify-center gap-1.5 px-4 h-11 sm:h-10 text-sm font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 active:scale-[0.98]"
         >
           <Pencil className="w-4 h-4" /> Modifica
         </button>
         <button
           onClick={() => onAction('delete')}
-          className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg border border-red-600/30 text-red-500 hover:bg-red-600/10"
+          className="flex items-center justify-center gap-1.5 px-4 h-11 sm:h-10 text-sm font-medium rounded-lg border border-red-600/30 text-red-500 hover:bg-red-600/10 active:scale-[0.98]"
         >
           <Trash2 className="w-4 h-4" /> Elimina
         </button>
@@ -511,32 +508,41 @@ function GenerateModal({ open, onClose, onCreated }: GenerateModalProps) {
     }
   };
 
-  const inputCls = 'w-full px-3 py-2 bg-card border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary';
-  const labelCls = 'block text-xs font-medium text-muted-foreground mb-1';
+  const inputCls = 'w-full px-3 h-11 sm:h-10 bg-card border border-border rounded-lg text-[15px] sm:text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary';
+  const labelCls = 'block text-xs font-medium text-muted-foreground mb-1.5';
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
       <div
-        className="bg-card border border-border rounded-xl p-5 w-full max-w-md space-y-4 shadow-xl"
+        className="bg-card border border-border rounded-t-2xl sm:rounded-xl p-4 sm:p-5 w-full sm:max-w-md space-y-4 shadow-xl max-h-[90vh] overflow-y-auto"
         onClick={e => e.stopPropagation()}
       >
+        {/* Grab handle mobile */}
+        <div className="sm:hidden flex justify-center -mt-2 mb-1">
+          <div className="w-10 h-1 bg-border rounded-full" />
+        </div>
+
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-primary" />
             <h3 className="text-base font-semibold text-foreground">Genera con Gemini</h3>
           </div>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
-            <X className="w-4 h-4" />
+          <button
+            onClick={onClose}
+            className="w-9 h-9 flex items-center justify-center text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted/40 -mr-2"
+            aria-label="Chiudi"
+          >
+            <X className="w-5 h-5" />
           </button>
         </div>
 
         <div>
           <label className={labelCls}>Topic / notizia</label>
           <textarea
-            className={`${inputCls} min-h-[80px] resize-y`}
+            className="w-full px-3 py-2.5 min-h-[120px] resize-y bg-card border border-border rounded-lg text-[15px] sm:text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
             value={topic}
             onChange={e => setTopic(e.target.value)}
-            placeholder="es. 'Infortunio di Sturaro', oppure 'Classifica girone C dopo giornata 30', oppure incolla un titolo di news..."
+            placeholder="es. 'Infortunio di Sturaro', 'Classifica girone C giornata 30', o incolla un titolo di news…"
           />
           <span className="text-[10px] text-muted-foreground">
             Gemini cerca news recenti via Google Search e produce una draft pronta in italiano.
@@ -571,24 +577,24 @@ function GenerateModal({ open, onClose, onCreated }: GenerateModalProps) {
         </div>
 
         {error && (
-          <div className="text-xs text-red-500 bg-red-500/10 rounded-lg p-2 border border-red-500/20">
+          <div className="text-xs text-red-500 bg-red-500/10 rounded-lg p-2.5 border border-red-500/20">
             {error}
           </div>
         )}
 
-        <div className="flex items-center justify-end gap-2 pt-2">
+        <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 pt-1">
           <button
             onClick={onClose}
-            className="px-3 py-2 text-sm text-foreground hover:bg-muted/40 rounded-lg"
+            className="px-4 h-11 sm:h-10 text-sm text-foreground hover:bg-muted/40 rounded-lg border border-border sm:border-0 active:scale-[0.98]"
           >
             Annulla
           </button>
           <button
             onClick={handleGenerate}
             disabled={generating || !topic.trim()}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+            className="inline-flex items-center justify-center gap-1.5 px-4 h-11 sm:h-10 text-sm font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 active:scale-[0.98]"
           >
-            <Sparkles className="w-3.5 h-3.5" />
+            <Sparkles className="w-4 h-4" />
             {generating ? 'Generazione…' : 'Genera'}
           </button>
         </div>
@@ -869,69 +875,70 @@ export default function PillsPage() {
 
   // ── LIST VIEW ──
 
-  const selectCls = 'px-2.5 py-1.5 bg-card border border-border rounded-lg text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary';
+  const selectCls = 'px-2.5 h-10 sm:h-9 bg-card border border-border rounded-lg text-sm sm:text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary';
 
   return (
     <div className="space-y-6">
       <SectionHeader
         title="Pillole"
         description="Gestisci le pills generate automaticamente e crea contenuti manuali"
-        actions={
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setGenerateOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg border border-border text-foreground hover:bg-muted/40"
-            >
-              <Sparkles className="w-4 h-4" /> Genera con Gemini
-            </button>
-            <button
-              onClick={() => setView('create')}
-              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
-            >
-              <Plus className="w-4 h-4" /> Nuova Pill
-            </button>
-          </div>
-        }
       />
+
+      <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-2 sm:justify-end -mt-2">
+        <button
+          onClick={() => setGenerateOpen(true)}
+          className="inline-flex items-center justify-center gap-1.5 px-3 h-11 sm:h-10 text-sm font-medium rounded-lg border border-border text-foreground hover:bg-muted/40 active:scale-[0.98]"
+        >
+          <Sparkles className="w-4 h-4" /> Gemini
+        </button>
+        <button
+          onClick={() => setView('create')}
+          className="inline-flex items-center justify-center gap-1.5 px-3 h-11 sm:h-10 text-sm font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 active:scale-[0.98]"
+        >
+          <Plus className="w-4 h-4" /> Nuova Pill
+        </button>
+      </div>
 
       <PillsDashboard pills={pills} />
 
       {/* Filters */}
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="space-y-2 sm:space-y-0 sm:flex sm:flex-wrap sm:items-center sm:gap-2">
         <div className="relative w-full sm:max-w-xs">
           <input
             type="text"
             placeholder="Cerca titolo o contenuto..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="w-full pl-3 pr-8 py-1.5 bg-card border border-border rounded-lg text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            className="w-full pl-3 pr-8 h-10 sm:h-9 bg-card border border-border rounded-lg text-sm sm:text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
           />
           {search && (
             <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-              <X className="w-3.5 h-3.5" />
+              <X className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
             </button>
           )}
         </div>
-        <select className={selectCls} value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
-          <option value="">Tutti gli stati</option>
-          <option value="draft">Draft</option>
-          <option value="scheduled">Scheduled</option>
-          <option value="published">Published</option>
-          <option value="rejected">Rejected</option>
-        </select>
-        <select className={selectCls} value={filterCategory} onChange={e => setFilterCategory(e.target.value)}>
-          <option value="">Tutte le categorie</option>
-          {PILL_CATEGORIES.map(c => (
-            <option key={c} value={c}>{c.toUpperCase()}</option>
-          ))}
-        </select>
-        <select className={selectCls} value={filterGeneratedBy} onChange={e => setFilterGeneratedBy(e.target.value)}>
-          <option value="">Tutti i generatori</option>
-          <option value="gemini">Gemini (auto)</option>
-          <option value="gemini-manual">Gemini (manuale)</option>
-          <option value="history">History</option>
-          <option value="manual">Manuale</option>
-        </select>
+        <div className="grid grid-cols-3 gap-2 sm:contents">
+          <select className={selectCls} value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+            <option value="">Stato</option>
+            <option value="draft">Draft</option>
+            <option value="scheduled">Scheduled</option>
+            <option value="published">Published</option>
+            <option value="rejected">Rejected</option>
+          </select>
+          <select className={selectCls} value={filterCategory} onChange={e => setFilterCategory(e.target.value)}>
+            <option value="">Categoria</option>
+            {PILL_CATEGORIES.map(c => (
+              <option key={c} value={c}>{c.toUpperCase()}</option>
+            ))}
+          </select>
+          <select className={selectCls} value={filterGeneratedBy} onChange={e => setFilterGeneratedBy(e.target.value)}>
+            <option value="">Generatore</option>
+            <option value="gemini">Gemini (auto)</option>
+            <option value="gemini-manual">Gemini (manuale)</option>
+            <option value="history">History</option>
+            <option value="manual">Manuale</option>
+          </select>
+        </div>
       </div>
 
       {/* Loading */}
@@ -941,27 +948,30 @@ export default function PillsPage() {
 
       {/* Mobile cards */}
       {!loading && (
-        <div className="md:hidden space-y-3">
+        <div className="lg:hidden space-y-2.5">
           {filtered.map(pill => (
             <div
               key={pill.id}
               onClick={() => { setSelectedPill(pill); setView('detail'); }}
-              className="bg-card border border-border rounded-lg p-3 space-y-2 cursor-pointer active:scale-[0.99]"
+              className="bg-card border border-border rounded-xl p-3.5 space-y-2 cursor-pointer active:scale-[0.99] transition-transform"
             >
-              <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <StatusBadge status={pill.status} />
                 <CategoryBadge category={pill.pill_category} />
-                <span className="text-[10px] text-muted-foreground ml-auto">{typeLabels[pill.type] || pill.type}</span>
+                <span className="text-[10px] text-muted-foreground ml-auto uppercase tracking-wide">{typeLabels[pill.type] || pill.type}</span>
               </div>
-              <div className="text-sm font-medium text-foreground line-clamp-1">{pill.title}</div>
-              <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+              <div className="text-[15px] font-semibold text-foreground line-clamp-2 leading-snug">{pill.title}</div>
+              {pill.content && (
+                <div className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">{pill.content}</div>
+              )}
+              <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-1 border-t border-border/50">
                 <span>{pill.generated_by}</span>
                 <span>{formatDateShort(pill.scheduled_at || pill.created_at)}</span>
               </div>
             </div>
           ))}
           {filtered.length === 0 && (
-            <div className="bg-card border border-border rounded-lg p-6 text-center text-sm text-muted-foreground">
+            <div className="bg-card border border-border rounded-xl p-8 text-center text-sm text-muted-foreground">
               Nessuna pill trovata
             </div>
           )}
@@ -970,7 +980,7 @@ export default function PillsPage() {
 
       {/* Desktop table */}
       {!loading && (
-        <div className="hidden md:block border border-border rounded-lg overflow-x-auto">
+        <div className="hidden lg:block border border-border rounded-lg overflow-x-auto">
           <table className="w-full min-w-[700px]">
             <thead>
               <tr className="border-b border-border bg-muted/30">
