@@ -47,6 +47,8 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     downloadedVideos: row.downloaded_videos,
     uploadedVideos: row.uploaded_videos,
     totalDurationSeconds: row.total_duration_seconds ?? duration,
+    source: row.source,
+    logs: row.logs,
   };
 
   return NextResponse.json(payload);

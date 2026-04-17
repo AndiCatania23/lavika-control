@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { listGithubWorkflows, mapWorkflowToJobId } from '@/lib/githubWorkflows';
 import { supabaseServer } from '@/lib/supabaseServer';
 
 type SearchResultItem = {
@@ -10,18 +9,14 @@ type SearchResultItem = {
   href: string;
 };
 
-async function searchJobs(query: string, limit: number): Promise<SearchResultItem[]> {
-  const workflows = await listGithubWorkflows();
-  const q = query.toLowerCase();
+// Static catalog of jobs handled by the Mac mini daemon.
+const STATIC_JOBS: SearchResultItem[] = [
+  { id: 'job_sync_video', type: 'job', title: 'Sync Video', subtitle: 'Scarica video da Facebook/YouTube', href: '/jobs/job_sync_video' },
+];
 
-  return workflows
-    .map(workflow => ({
-      id: `job_${workflow.id}`,
-      type: 'job' as const,
-      title: workflow.name,
-      subtitle: workflow.path,
-      href: `/jobs/${mapWorkflowToJobId(workflow)}`,
-    }))
+async function searchJobs(query: string, limit: number): Promise<SearchResultItem[]> {
+  const q = query.toLowerCase();
+  return STATIC_JOBS
     .filter(item => `${item.title} ${item.subtitle}`.toLowerCase().includes(q))
     .slice(0, limit);
 }

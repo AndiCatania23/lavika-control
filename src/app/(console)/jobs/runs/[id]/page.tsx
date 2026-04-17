@@ -152,11 +152,24 @@ export default function JobRunDetailPage() {
         </div>
       )}
 
-      <div className="bg-card border border-border rounded-lg p-6">
-        <h3 className="font-semibold text-foreground mb-2">Logs</h3>
-        <p className="text-sm text-muted-foreground">
-          I log completi sono disponibili direttamente su GitHub Actions nella run {run.id}.
-        </p>
+      <div className="bg-card border border-border rounded-lg p-4 sm:p-6">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-semibold text-foreground">Logs</h3>
+          {run.source && (
+            <span className="text-[10px] uppercase tracking-wide text-muted-foreground px-2 py-0.5 rounded bg-muted/40">
+              source: {run.source}
+            </span>
+          )}
+        </div>
+        {run.logs ? (
+          <pre className="text-[11px] text-foreground/80 bg-black/40 border border-border rounded-lg p-3 overflow-x-auto whitespace-pre-wrap max-h-[480px] leading-relaxed font-mono">
+            {run.logs}
+          </pre>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Nessun log salvato per questa esecuzione.
+          </p>
+        )}
       </div>
     </div>
   );

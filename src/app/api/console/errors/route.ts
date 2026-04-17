@@ -1,9 +1,20 @@
 import { NextResponse } from 'next/server';
 import type { ErrorLog } from '@/mocks/errors';
-import { listGithubRuns } from '@/lib/githubWorkflows';
+import { supabaseServer } from '@/lib/supabaseServer';
 
-function mapSeverity(conclusion: string | null): ErrorLog['severity'] {
-  if (conclusion === 'cancelled') return 'warning';
+interface JobQueueRow {
+  id: string;
+  status: string;
+  source: string | null;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  error_count: number | null;
+  logs: string | null;
+}
+
+function mapSeverity(status: string): ErrorLog['severity'] {
+  if (status === 'cancelled') return 'warning';
   return 'error';
 }
 
@@ -12,21 +23,30 @@ export async function GET(request: Request) {
   const severityFilter = searchParams.get('severity');
   const sourceFilter = searchParams.get('source');
 
-  const runs = await listGithubRuns();
-  const items: ErrorLog[] = runs
-    .filter(run => run.conclusion === 'failure' || run.conclusion === 'cancelled')
-    .map(run => ({
-      id: `gh_${run.id}`,
-      severity: mapSeverity(run.conclusion),
-      source: run.name || 'github_actions',
-      message: `Workflow ${run.conclusion === 'failure' ? 'failed' : 'cancelled'} - Run #${run.run_number ?? run.id}`,
+  if (!supabaseServer) {
+    return NextResponse.json([]);
+  }
+
+  const { data } = await supabaseServer
+    .from('job_queue')
+    .select('id, status, source, created_at, started_at, finished_at, error_count, logs')
+    .in('status', ['failed', 'cancelled'])
+    .order('created_at', { ascending: false })
+    .limit(100);
+
+  const items: ErrorLog[] = ((data ?? []) as JobQueueRow[])
+    .map(row => ({
+      id: `jq_${row.id}`,
+      severity: mapSeverity(row.status),
+      source: row.source ?? 'job_queue',
+      message: `Sync ${row.status === 'failed' ? 'failed' : 'cancelled'}${row.source ? ` - ${row.source}` : ''}`,
       metadata: {
-        runId: run.id,
-        workflowId: run.workflow_id,
-        htmlUrl: run.html_url,
+        jobQueueId: row.id,
+        errorCount: row.error_count,
+        hasLogs: Boolean(row.logs),
       },
-      timestamp: run.run_started_at ?? run.created_at,
-      jobRunId: String(run.id),
+      timestamp: row.started_at ?? row.created_at,
+      jobRunId: row.id,
     }))
     .filter(item => {
       if (severityFilter && item.severity !== severityFilter) return false;

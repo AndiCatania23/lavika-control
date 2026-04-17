@@ -9,14 +9,17 @@ import {
   ArrowLeft,
   ArrowRight,
   CheckCircle2,
+  Clock,
   Coins,
+  Cpu,
   Database,
-  GitBranch,
   HardDrive,
+  Hourglass,
   RefreshCw,
   UserCheck,
   Users,
   XCircle,
+  Zap,
 } from 'lucide-react';
 
 interface OverviewKpi {
@@ -38,9 +41,32 @@ interface DiagnosticsData {
   database: {
     connected: boolean;
   };
-  github?: {
-    workflows?: number;
+}
+
+interface MacStatus {
+  daemon: {
+    name: string;
+    state: 'online' | 'stale' | 'offline' | 'unknown';
+    lastSeenAt: string | null;
+    startedAt: string | null;
+    ageSeconds: number | null;
+    pid: number | null;
+    hostname: string | null;
+    meta: Record<string, unknown> | null;
   };
+  queue: {
+    pending: number;
+    pendingStuck: number;
+    running: number;
+    success24h: number;
+    failed24h: number;
+  };
+  sources: Array<{
+    source: string;
+    lastRunAt: string | null;
+    lastStatus: string | null;
+    lastSuccessAt: string | null;
+  }>;
 }
 
 interface R2Summary {
@@ -109,6 +135,7 @@ export default function DashboardPage() {
   const [kpis, setKpis] = useState<OverviewKpi[]>([]);
   const [runs, setRuns] = useState<DashboardRun[]>([]);
   const [diagnostics, setDiagnostics] = useState<DiagnosticsData | null>(null);
+  const [macStatus, setMacStatus] = useState<MacStatus | null>(null);
   const [r2Summary, setR2Summary] = useState<R2Summary | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<string>('');
@@ -134,6 +161,10 @@ export default function DashboardPage() {
         .then(r => r.json() as Promise<DiagnosticsData>)
         .then(p => setDiagnostics(p))
         .catch(() => {}),
+      fetch('/api/dev/mac-status', { cache: 'no-store' })
+        .then(r => r.json() as Promise<MacStatus>)
+        .then(p => setMacStatus(p))
+        .catch(() => {}),
       fetch('/api/dev/r2/summary?fast=1', { cache: 'no-store' })
         .then(r => r.json() as Promise<R2Summary>)
         .then(p => setR2Summary(p))
@@ -153,7 +184,8 @@ export default function DashboardPage() {
   }, [loadData]);
 
   const metricCards = useMemo<MetricItem[]>(() => {
-    const workflowErrors = getKpi('workflow_errors_24h');
+    const syncErrors = macStatus?.queue.failed24h ?? 0;
+    const pendingStuck = macStatus?.queue.pendingStuck ?? 0;
 
     return [
       {
@@ -184,22 +216,31 @@ export default function DashboardPage() {
         status: 'ok' as const,
       },
       {
-        key: 'workflow_runs_24h',
-        title: 'Workflow 24h',
-        value: getKpi('workflow_runs_24h').toLocaleString('it-IT'),
-        hint: 'Esecuzioni GitHub Actions',
-        icon: <GitBranch className="w-4 h-4" />,
+        key: 'sync_24h',
+        title: 'Sync 24h',
+        value: (macStatus?.queue.success24h ?? 0).toLocaleString('it-IT'),
+        hint: 'Job completati dal daemon',
+        icon: <Zap className="w-4 h-4" />,
         iconClassName: 'text-indigo-500',
         status: 'ok' as const,
       },
       {
-        key: 'workflow_errors_24h',
-        title: 'Errori Workflow 24h',
-        value: workflowErrors.toLocaleString('it-IT'),
-        hint: 'Failure nelle ultime 24h',
+        key: 'sync_errors_24h',
+        title: 'Errori Sync 24h',
+        value: syncErrors.toLocaleString('it-IT'),
+        hint: 'Job falliti nelle ultime 24h',
         icon: <AlertTriangle className="w-4 h-4" />,
-        iconClassName: workflowErrors > 0 ? 'text-amber-500' : 'text-indigo-500',
-        status: workflowErrors > 0 ? 'warn' as const : 'ok' as const,
+        iconClassName: syncErrors > 0 ? 'text-amber-500' : 'text-indigo-500',
+        status: syncErrors > 0 ? 'warn' as const : 'ok' as const,
+      },
+      {
+        key: 'queue_pending',
+        title: 'In coda',
+        value: (macStatus?.queue.pending ?? 0).toLocaleString('it-IT'),
+        hint: pendingStuck > 0 ? `${pendingStuck} bloccati > 15min` : 'Pending in attesa',
+        icon: <Hourglass className="w-4 h-4" />,
+        iconClassName: pendingStuck > 0 ? 'text-red-500' : 'text-muted-foreground',
+        status: pendingStuck > 0 ? 'error' as const : 'ok' as const,
       },
       {
         key: 'users_revenue_total',
@@ -220,12 +261,24 @@ export default function DashboardPage() {
         status: r2Summary?.connected ? 'ok' as const : 'error' as const,
       },
     ];
-  }, [getKpi, r2Summary]);
+  }, [getKpi, macStatus, r2Summary]);
 
   const healthItems = useMemo<HealthItem[]>(() => {
     const supabaseOk = diagnostics?.database.connected ?? false;
     const r2Ok = r2Summary?.connected ?? false;
-    const githubOk = (diagnostics?.github?.workflows ?? 0) > 0;
+    const daemonState = macStatus?.daemon.state ?? 'unknown';
+    const daemonAge = macStatus?.daemon.ageSeconds;
+
+    const daemonStatus: 'ok' | 'warn' | 'error' =
+      daemonState === 'online' ? 'ok' : daemonState === 'stale' ? 'warn' : 'error';
+    const daemonDetail =
+      daemonState === 'online'
+        ? `Online · hb ${daemonAge ?? '-'}s fa`
+        : daemonState === 'stale'
+          ? `Heartbeat in ritardo (${daemonAge ?? '-'}s)`
+          : daemonState === 'offline'
+            ? 'Daemon offline'
+            : 'Stato sconosciuto';
 
     return [
       {
@@ -241,18 +294,17 @@ export default function DashboardPage() {
         icon: <HardDrive className="w-4 h-4" />,
       },
       {
-        label: 'GitHub Actions',
-        status: githubOk ? 'ok' : 'warn',
-        detail: githubOk
-          ? `${diagnostics?.github?.workflows ?? 0} workflow letti`
-          : 'Nessun workflow letto',
-        icon: <GitBranch className="w-4 h-4" />,
+        label: 'Mac Mini',
+        status: daemonStatus,
+        detail: daemonDetail,
+        icon: <Cpu className="w-4 h-4" />,
       },
     ];
-  }, [diagnostics, r2Summary]);
+  }, [diagnostics, macStatus, r2Summary]);
 
   const kpisLoaded = kpis.length > 0;
   const diagnosticsLoaded = diagnostics !== null;
+  const macLoaded = macStatus !== null;
   const r2Loaded = r2Summary !== null;
 
   return (
@@ -283,7 +335,7 @@ export default function DashboardPage() {
       />
 
       <div className="grid grid-cols-3 gap-2 md:gap-3">
-        {(diagnosticsLoaded && r2Loaded) ? healthItems.map(item => (
+        {(diagnosticsLoaded && macLoaded && r2Loaded) ? healthItems.map(item => (
           <div key={item.label} className="bg-card border border-border rounded-lg p-2 sm:p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-2 min-w-0">
             <div className="min-w-0">
               <div className="text-[10px] sm:text-xs text-muted-foreground truncate">{item.label}</div>
@@ -305,8 +357,8 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-2.5">
-        {kpisLoaded ? metricCards.map(card => (
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+        {(kpisLoaded && macLoaded) ? metricCards.map(card => (
           <MetricCard
             key={card.key}
             title={card.title}
@@ -316,21 +368,60 @@ export default function DashboardPage() {
             iconClassName={card.iconClassName}
             status={card.status}
           />
-        )) : Array.from({ length: 7 }).map((_, i) => (
+        )) : Array.from({ length: 8 }).map((_, i) => (
           <div key={i} className="bg-card border border-border rounded-lg p-3 sm:p-3.5 h-[78px] animate-pulse" />
         ))}
       </div>
 
-      <div className="bg-card border border-border rounded-lg p-4">
-        <h3 className="font-semibold text-foreground mb-3">Ultime Esecuzioni GitHub</h3>
+      {/* Mac Mini sync per source */}
+      <div className="bg-card border border-border rounded-xl p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-semibold text-foreground">Ultimi Sync per Source</h3>
+          {macStatus?.daemon.hostname && (
+            <span className="text-[10px] text-muted-foreground uppercase tracking-wide">{macStatus.daemon.hostname}</span>
+          )}
+        </div>
+        <div className="space-y-2">
+          {(macStatus?.sources ?? []).map(s => (
+            <div key={s.source} className="flex items-center justify-between gap-2 py-2 border-b border-border/50 last:border-0">
+              <div className="min-w-0">
+                <div className="text-sm text-foreground truncate font-medium">{s.source}</div>
+                <div className="text-[11px] text-muted-foreground">
+                  Ultimo sync: {s.lastSuccessAt ? new Date(s.lastSuccessAt).toLocaleString('it-IT') : 'mai'}
+                </div>
+              </div>
+              <div className={`text-[11px] uppercase px-2 py-1 rounded shrink-0 ${
+                s.lastStatus === 'success'
+                  ? 'bg-green-500/10 text-green-600'
+                  : s.lastStatus === 'failed'
+                  ? 'bg-red-500/10 text-red-600'
+                  : s.lastStatus === 'running' || s.lastStatus === 'pending'
+                  ? 'bg-blue-500/10 text-blue-600'
+                  : 'bg-yellow-500/10 text-yellow-600'
+              }`}>
+                {s.lastStatus ?? '-'}
+              </div>
+            </div>
+          ))}
+          {(!macStatus || macStatus.sources.length === 0) && (
+            <div className="text-sm text-muted-foreground">Nessun sync recente</div>
+          )}
+        </div>
+      </div>
+
+      {/* Ultimi run queue (generic) */}
+      <div className="bg-card border border-border rounded-xl p-4">
+        <h3 className="font-semibold text-foreground mb-3">Ultime Esecuzioni</h3>
         <div className="space-y-2">
           {runs.map(run => (
-            <div key={run.id} className="flex items-center justify-between gap-2 py-2 border-b border-border last:border-0">
+            <div key={run.id} className="flex items-center justify-between gap-2 py-2 border-b border-border/50 last:border-0">
               <div className="min-w-0">
                 <div className="text-sm text-foreground truncate">{run.jobName}</div>
-                <div className="text-xs text-muted-foreground">{new Date(run.startedAt).toLocaleString('it-IT')}</div>
+                <div className="text-[11px] text-muted-foreground flex items-center gap-1">
+                  <Clock className="w-3 h-3" />{new Date(run.startedAt).toLocaleString('it-IT')} · {run.triggeredBy}
+                </div>
               </div>
-              <div className={`text-[11px] uppercase px-2 py-1 rounded ${
+              <div className={`text-[11px] uppercase px-2 py-1 rounded shrink-0 ${
                 run.status === 'success'
                   ? 'bg-green-500/10 text-green-600'
                   : run.status === 'failed'

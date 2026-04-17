@@ -15,6 +15,8 @@ export interface JobRun {
   downloadedVideos?: number | null;
   uploadedVideos?: number | null;
   totalDurationSeconds?: number | null;
+  source?: string | null;
+  logs?: string | null;
 }
 
 let jobRuns: JobRun[] = [];
