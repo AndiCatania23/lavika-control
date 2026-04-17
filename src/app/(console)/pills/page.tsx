@@ -22,6 +22,8 @@ import {
   Pencil,
   Trash2,
   Zap,
+  Sparkles,
+  Upload,
 } from 'lucide-react';
 
 // ── Helpers ──────────────────────────────────────────
@@ -57,9 +59,10 @@ const statusConfig: Record<string, { bg: string; text: string; label: string }> 
 };
 
 const categoryConfig: Record<string, { bg: string; text: string }> = {
-  oggi: { bg: 'bg-white/10', text: 'text-white' },
-  ieri: { bg: 'bg-amber-500/10', text: 'text-amber-500' },
-  numero: { bg: 'bg-cyan-500/10', text: 'text-cyan-500' },
+  flash:  { bg: 'bg-white/10',       text: 'text-white' },
+  numeri: { bg: 'bg-cyan-500/10',    text: 'text-cyan-500' },
+  rivali: { bg: 'bg-violet-500/10',  text: 'text-violet-400' },
+  storia: { bg: 'bg-amber-500/10',   text: 'text-amber-500' },
 };
 
 const typeLabels: Record<string, string> = {
@@ -71,7 +74,7 @@ const typeLabels: Record<string, string> = {
 };
 
 const PILL_TYPES = ['stat', 'update', 'quote', 'clip', 'trivia'] as const;
-const PILL_CATEGORIES = ['oggi', 'ieri', 'numero'] as const;
+const PILL_CATEGORIES = ['numeri', 'flash', 'rivali', 'storia'] as const;
 
 function StatusBadge({ status }: { status: string }) {
   const cfg = statusConfig[status] || { bg: 'bg-muted', text: 'text-muted-foreground', label: status };
@@ -158,6 +161,32 @@ function PillForm({ initial, onSave, onCancel, saving }: PillFormProps) {
     return local.toISOString().slice(0, 16);
   });
   const [imageUrl, setImageUrl] = useState(initial?.image_url || '');
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const handleImagePick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setUploadingImage(true);
+    setUploadError(null);
+    try {
+      const fd = new FormData();
+      fd.append('type', 'pill-image');
+      fd.append('file', file);
+      if (initial?.id) fd.append('pillId', initial.id);
+      const res = await fetch('/api/media/upload', { method: 'POST', body: fd });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok || !payload.url) {
+        throw new Error(payload.error || `Upload fallito (${res.status})`);
+      }
+      setImageUrl(payload.url);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : 'Errore upload');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -231,13 +260,51 @@ function PillForm({ initial, onSave, onCancel, saving }: PillFormProps) {
       </div>
 
       <div>
-        <label className={labelCls}>Immagine URL (opzionale)</label>
-        <input
-          className={inputCls}
-          value={imageUrl}
-          onChange={e => setImageUrl(e.target.value)}
-          placeholder="https://..."
-        />
+        <label className={labelCls}>Immagine di riferimento</label>
+        <div className="space-y-2">
+          {imageUrl && (
+            <div className="relative">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={imageUrl}
+                alt=""
+                className="rounded-lg max-h-40 w-auto border border-border"
+              />
+              <button
+                type="button"
+                onClick={() => setImageUrl('')}
+                className="absolute top-1 right-1 bg-black/70 text-white rounded-full p-1 hover:bg-black"
+                aria-label="Rimuovi immagine"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          )}
+          <div className="flex items-center gap-2">
+            <label
+              className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg border border-border cursor-pointer hover:bg-muted/40 ${uploadingImage ? 'opacity-60 pointer-events-none' : ''}`}
+            >
+              <Upload className="w-3.5 h-3.5" />
+              {uploadingImage ? 'Caricamento…' : imageUrl ? 'Sostituisci immagine' : 'Carica immagine'}
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleImagePick}
+              />
+            </label>
+            <input
+              className={`${inputCls} flex-1`}
+              value={imageUrl}
+              onChange={e => setImageUrl(e.target.value)}
+              placeholder="o incolla URL..."
+            />
+          </div>
+          {uploadError && <span className="text-xs text-red-500">{uploadError}</span>}
+          <span className="text-[10px] text-muted-foreground">
+            Qualsiasi formato (JPEG/PNG/HEIC) — convertito in WebP e salvato su R2.
+          </span>
+        </div>
       </div>
 
       <div className="flex items-center gap-3 pt-2">
@@ -398,6 +465,138 @@ function PillDetail({ pill, onBack, onAction }: PillDetailProps) {
   );
 }
 
+// ── Gemini Generate Modal ───────────────────────────
+
+interface GenerateModalProps {
+  open: boolean;
+  onClose: () => void;
+  onCreated: (pillId: string) => void;
+}
+
+function GenerateModal({ open, onClose, onCreated }: GenerateModalProps) {
+  const [topic, setTopic] = useState('');
+  const [category, setCategory] = useState<typeof PILL_CATEGORIES[number]>('flash');
+  const [type, setType] = useState<typeof PILL_TYPES[number]>('update');
+  const [generating, setGenerating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { showToast } = useToast();
+
+  if (!open) return null;
+
+  const handleGenerate = async () => {
+    if (!topic.trim()) {
+      setError('Inserisci un topic');
+      return;
+    }
+    setGenerating(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/console/pills/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic: topic.trim(), category, type }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok || !payload.pill?.id) {
+        throw new Error(payload.error || `HTTP ${res.status}`);
+      }
+      showToast('success', 'Pill generata (draft)');
+      setTopic('');
+      onCreated(payload.pill.id as string);
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Errore sconosciuto');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const inputCls = 'w-full px-3 py-2 bg-card border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary';
+  const labelCls = 'block text-xs font-medium text-muted-foreground mb-1';
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={onClose}>
+      <div
+        className="bg-card border border-border rounded-xl p-5 w-full max-w-md space-y-4 shadow-xl"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-primary" />
+            <h3 className="text-base font-semibold text-foreground">Genera con Gemini</h3>
+          </div>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div>
+          <label className={labelCls}>Topic / notizia</label>
+          <textarea
+            className={`${inputCls} min-h-[80px] resize-y`}
+            value={topic}
+            onChange={e => setTopic(e.target.value)}
+            placeholder="es. 'Infortunio di Sturaro', oppure 'Classifica girone C dopo giornata 30', oppure incolla un titolo di news..."
+          />
+          <span className="text-[10px] text-muted-foreground">
+            Gemini cerca news recenti via Google Search e produce una draft pronta in italiano.
+          </span>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={labelCls}>Categoria</label>
+            <select
+              className={inputCls}
+              value={category}
+              onChange={e => setCategory(e.target.value as typeof category)}
+            >
+              {PILL_CATEGORIES.map(c => (
+                <option key={c} value={c}>{c.toUpperCase()}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={labelCls}>Tipo</label>
+            <select
+              className={inputCls}
+              value={type}
+              onChange={e => setType(e.target.value as typeof type)}
+            >
+              {PILL_TYPES.map(t => (
+                <option key={t} value={t}>{typeLabels[t]}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {error && (
+          <div className="text-xs text-red-500 bg-red-500/10 rounded-lg p-2 border border-red-500/20">
+            {error}
+          </div>
+        )}
+
+        <div className="flex items-center justify-end gap-2 pt-2">
+          <button
+            onClick={onClose}
+            className="px-3 py-2 text-sm text-foreground hover:bg-muted/40 rounded-lg"
+          >
+            Annulla
+          </button>
+          <button
+            onClick={handleGenerate}
+            disabled={generating || !topic.trim()}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            {generating ? 'Generazione…' : 'Genera'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Page ───────────────────────────────────────
 
 type View = 'list' | 'detail' | 'create' | 'edit';
@@ -408,6 +607,7 @@ export default function PillsPage() {
   const [view, setView] = useState<View>('list');
   const [selectedPill, setSelectedPill] = useState<Pill | null>(null);
   const [saving, setSaving] = useState(false);
+  const [generateOpen, setGenerateOpen] = useState(false);
   const [confirmModal, setConfirmModal] = useState<{
     open: boolean;
     title: string;
@@ -677,12 +877,20 @@ export default function PillsPage() {
         title="Pillole"
         description="Gestisci le pills generate automaticamente e crea contenuti manuali"
         actions={
-          <button
-            onClick={() => setView('create')}
-            className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
-          >
-            <Plus className="w-4 h-4" /> Nuova Pill
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setGenerateOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg border border-border text-foreground hover:bg-muted/40"
+            >
+              <Sparkles className="w-4 h-4" /> Genera con Gemini
+            </button>
+            <button
+              onClick={() => setView('create')}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
+            >
+              <Plus className="w-4 h-4" /> Nuova Pill
+            </button>
+          </div>
         }
       />
 
@@ -713,13 +921,14 @@ export default function PillsPage() {
         </select>
         <select className={selectCls} value={filterCategory} onChange={e => setFilterCategory(e.target.value)}>
           <option value="">Tutte le categorie</option>
-          <option value="oggi">OGGI</option>
-          <option value="ieri">IERI</option>
-          <option value="numero">NUMERO</option>
+          {PILL_CATEGORIES.map(c => (
+            <option key={c} value={c}>{c.toUpperCase()}</option>
+          ))}
         </select>
         <select className={selectCls} value={filterGeneratedBy} onChange={e => setFilterGeneratedBy(e.target.value)}>
           <option value="">Tutti i generatori</option>
-          <option value="gemini">Gemini</option>
+          <option value="gemini">Gemini (auto)</option>
+          <option value="gemini-manual">Gemini (manuale)</option>
           <option value="history">History</option>
           <option value="manual">Manuale</option>
         </select>
@@ -810,6 +1019,19 @@ export default function PillsPage() {
         confirmLabel="Conferma"
         cancelLabel="Annulla"
         isLoading={saving}
+      />
+
+      <GenerateModal
+        open={generateOpen}
+        onClose={() => setGenerateOpen(false)}
+        onCreated={async (pillId) => {
+          await load();
+          const fresh = (await getPills()).find(p => p.id === pillId);
+          if (fresh) {
+            setSelectedPill(fresh);
+            setView('detail');
+          }
+        }}
       />
     </div>
   );

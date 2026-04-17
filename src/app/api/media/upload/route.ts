@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { PutObjectCommand } from '@aws-sdk/client-s3';
+import sharp from 'sharp';
 import { r2MediaClient, MEDIA_BUCKET_NAME, MEDIA_PUBLIC_BASE_URL } from '@/lib/r2MediaClient';
 
 export async function POST(request: Request) {
@@ -13,6 +14,7 @@ export async function POST(request: Request) {
     const formatId = formData.get('formatId') as string | null;
     const season = formData.get('season') as string | null;
     const episodeId = formData.get('episodeId') as string | null;
+    const pillId = formData.get('pillId') as string | null;
     const file = formData.get('file') as File | null;
 
     if (!type || !file) {
@@ -47,23 +49,33 @@ export async function POST(request: Request) {
       case 'library-upload':
         key = `library/${ts}.webp`;
         break;
+      case 'pill-image':
+        key = `pills/manual/${pillId ?? 'new'}-${ts}.webp`;
+        break;
       default:
         return NextResponse.json({ error: `Invalid type: ${type}` }, { status: 400 });
     }
 
-    const buffer = Buffer.from(await file.arrayBuffer());
+    // Convert to WebP server-side so the client can send any supported format
+    // (JPEG/PNG/HEIC/…). Keep aspect ratio, cap width to 2048px, quality 85.
+    const inputBuffer = Buffer.from(await file.arrayBuffer());
+    const webp = await sharp(inputBuffer)
+      .rotate()
+      .resize({ width: 2048, withoutEnlargement: true })
+      .webp({ quality: 85 })
+      .toBuffer();
 
     await r2MediaClient.send(
       new PutObjectCommand({
         Bucket: MEDIA_BUCKET_NAME,
         Key: key,
-        Body: buffer,
+        Body: webp,
         ContentType: 'image/webp',
         CacheControl: 'public, max-age=31536000',
       })
     );
 
-    return NextResponse.json({ ok: true, url: `${MEDIA_PUBLIC_BASE_URL}/${key}?v=${Date.now()}` });
+    return NextResponse.json({ ok: true, url: `${MEDIA_PUBLIC_BASE_URL}/${key}?v=${ts}` });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json({ error: message }, { status: 500 });
