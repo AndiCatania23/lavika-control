@@ -161,6 +161,7 @@ function PillForm({ initial, onSave, onCancel, saving }: PillFormProps) {
     return local.toISOString().slice(0, 16);
   });
   const [imageUrl, setImageUrl] = useState(initial?.image_url || '');
+  const [sourceAttribution, setSourceAttribution] = useState(initial?.source_attribution || '');
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
@@ -197,6 +198,7 @@ function PillForm({ initial, onSave, onCancel, saving }: PillFormProps) {
       pill_category: pillCategory || null,
       scheduled_at: scheduledAt ? new Date(scheduledAt).toISOString() : null,
       image_url: imageUrl || null,
+      source_attribution: sourceAttribution.trim() || null,
     });
   };
 
@@ -257,6 +259,19 @@ function PillForm({ initial, onSave, onCancel, saving }: PillFormProps) {
           value={scheduledAt}
           onChange={e => setScheduledAt(e.target.value)}
         />
+      </div>
+
+      <div>
+        <label className={labelCls}>Fonte della notizia</label>
+        <input
+          className={inputCls}
+          value={sourceAttribution}
+          onChange={e => setSourceAttribution(e.target.value)}
+          placeholder="es. Tutto Calcio Catania, La Sicilia, BlogSicilia…"
+        />
+        <span className="text-[10px] text-muted-foreground mt-0.5 block">
+          Nome della pubblicazione da mostrare come attribuzione (opzionale).
+        </span>
       </div>
 
       <div>
@@ -357,6 +372,13 @@ function PillDetail({ pill, onBack, onAction }: PillDetailProps) {
         </div>
 
         <p className="text-[15px] sm:text-sm text-foreground/80 whitespace-pre-wrap leading-relaxed">{pill.content}</p>
+
+        {pill.source_attribution && (
+          <div className="inline-flex items-center gap-1.5 rounded-full bg-muted/40 border border-border px-2.5 py-1 text-[11px] text-foreground">
+            <span className="text-muted-foreground uppercase tracking-wide text-[10px]">Fonte</span>
+            <span className="font-medium">{pill.source_attribution}</span>
+          </div>
+        )}
 
         {pill.image_url && (
           /* eslint-disable-next-line @next/next/no-img-element */

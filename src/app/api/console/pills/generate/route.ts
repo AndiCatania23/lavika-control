@@ -39,15 +39,19 @@ Tipo: ${type}
 Regole rigide:
 - Titolo: max 60 caratteri, in italiano, diretto, con UNA emoji iniziale pertinente.
 - Contenuto: 2-4 frasi in italiano, max 400 caratteri totali, tono giornalistico sintetico e coinvolgente. NESSUNA emoji nel contenuto.
-- Fonti: cita solo se utile dentro al contenuto (es. "secondo La Sicilia…"), senza link.
 - Prospettiva: focus sul Catania; se la notizia riguarda rivali/girone, evidenzia sempre l'impatto sul Catania.
 - Niente frasi filler, niente disclaimer, niente richieste all'utente.
 
+Fonte:
+- Identifica la testata/pubblicazione principale da cui proviene la notizia (es. "La Sicilia", "Tutto Calcio Catania", "BlogSicilia", "Gazzetta dello Sport").
+- Se non riesci a identificare una testata univoca, lascia il campo source vuoto ("").
+- NON inserire URL o link nel campo source — solo il nome pulito della testata.
+
 Rispondi SOLO con un oggetto JSON valido (nessun markdown, nessun testo fuori), schema:
-{"title": string, "content": string}`;
+{"title": string, "content": string, "source": string}`;
 }
 
-function extractJsonBlock(text: string): { title: string; content: string } | null {
+function extractJsonBlock(text: string): { title: string; content: string; source: string | null } | null {
   if (!text) return null;
   // Strip markdown fences if present
   const cleaned = text.replace(/^\s*```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
@@ -56,12 +60,13 @@ function extractJsonBlock(text: string): { title: string; content: string } | nu
   if (start < 0 || end <= start) return null;
   const slice = cleaned.slice(start, end + 1);
   try {
-    const parsed = JSON.parse(slice) as { title?: unknown; content?: unknown };
+    const parsed = JSON.parse(slice) as { title?: unknown; content?: unknown; source?: unknown };
     if (typeof parsed.title !== 'string' || typeof parsed.content !== 'string') return null;
     const title = parsed.title.trim();
     const content = parsed.content.trim();
     if (!title || !content) return null;
-    return { title, content };
+    const source = typeof parsed.source === 'string' ? parsed.source.trim() : '';
+    return { title, content, source: source || null };
   } catch {
     return null;
   }
@@ -139,6 +144,8 @@ export async function POST(request: Request) {
       pill_category: body.category,
       status: 'draft',
       generated_by: 'gemini-manual',
+      source: 'editorial',
+      source_attribution: parsed.source ? parsed.source.slice(0, 120) : null,
       is_published: false,
     })
     .select()

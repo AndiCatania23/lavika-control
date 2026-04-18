@@ -94,7 +94,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Body non valido.' }, { status: 400 });
   }
 
-  const { title, content, type, pill_category, scheduled_at, image_url } = body;
+  const { title, content, type, pill_category, scheduled_at, image_url, source_attribution } = body;
 
   if (!title || !content || !type) {
     return NextResponse.json({ error: 'Campi obbligatori mancanti.' }, { status: 400 });
@@ -109,6 +109,7 @@ export async function POST(request: Request) {
       pill_category: pill_category || null,
       scheduled_at: scheduled_at || null,
       image_url: image_url || null,
+      source_attribution: source_attribution || null,
       generated_by: 'manual',
       source: 'editorial',
       status: 'draft',
