@@ -201,6 +201,8 @@ export interface Pill {
   content_hash: string | null;
   match_id: string | null;
   source_cluster_id: string | null;
+  audit_flags?: Array<{ type: string; term: string }> | null;
+  audited_at?: string | null;
 }
 
 export async function getPills(): Promise<Pill[]> {

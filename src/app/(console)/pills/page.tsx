@@ -24,6 +24,9 @@ import {
   Zap,
   Sparkles,
   Upload,
+  AlertTriangle,
+  Rss,
+  ExternalLink,
 } from 'lucide-react';
 
 // ── Helpers ──────────────────────────────────────────
@@ -371,6 +374,19 @@ function PillDetail({ pill, onBack, onAction }: PillDetailProps) {
           <h3 className="text-xl sm:text-lg font-semibold text-foreground break-words leading-tight">{pill.title}</h3>
         </div>
 
+        {pill.audit_flags && pill.audit_flags.length > 0 && (
+          <div className="flex items-start gap-2.5 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">
+            <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+            <div className="text-[13px] text-amber-200 leading-snug">
+              <div className="font-semibold text-amber-400 mb-0.5">Review consigliata</div>
+              <div>
+                Audit automatico ha segnalato nomi non presenti nel roster Catania n&egrave; negli articoli sorgente:{' '}
+                <span className="font-medium">{pill.audit_flags.map(f => f.term).join(', ')}</span>. Verifica la pill prima di pubblicare.
+              </div>
+            </div>
+          </div>
+        )}
+
         <p className="text-[15px] sm:text-sm text-foreground/80 whitespace-pre-wrap leading-relaxed">{pill.content}</p>
 
         {pill.source_attribution && (
@@ -627,7 +643,218 @@ function GenerateModal({ open, onClose, onCreated }: GenerateModalProps) {
 
 // ── Main Page ───────────────────────────────────────
 
-type View = 'list' | 'detail' | 'create' | 'edit';
+type View = 'list' | 'detail' | 'create' | 'edit' | 'sources';
+
+// ── Sources Manager (RSS feeds) ──────────────────────
+
+interface RssFeed {
+  id: string;
+  slug: string;
+  display_name: string;
+  feed_url: string;
+  priority: number;
+  enabled: boolean;
+  last_fetched_at: string | null;
+  last_article_at: string | null;
+  articles_total: number;
+  notes: string | null;
+}
+
+function SourcesManager({ onBack }: { onBack: () => void }) {
+  const [feeds, setFeeds] = useState<RssFeed[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [addOpen, setAddOpen] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [form, setForm] = useState({ display_name: '', feed_url: '', slug: '', priority: 50, notes: '' });
+  const { showToast } = useToast();
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/dev/pill-sources', { cache: 'no-store' });
+      const payload = await res.json().catch(() => ({})) as { feeds?: RssFeed[] };
+      setFeeds(payload.feeds ?? []);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const toggleEnabled = async (feed: RssFeed) => {
+    const optimistic = feeds.map(f => f.id === feed.id ? { ...f, enabled: !feed.enabled } : f);
+    setFeeds(optimistic);
+    const res = await fetch('/api/dev/pill-sources', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: feed.id, enabled: !feed.enabled }),
+    });
+    if (!res.ok) {
+      showToast('error', 'Aggiornamento fallito');
+      load();
+    }
+  };
+
+  const removeFeed = async (feed: RssFeed) => {
+    if (!window.confirm(`Rimuovere "${feed.display_name}"? Gli articoli già scaricati restano nel corpus.`)) return;
+    const res = await fetch(`/api/dev/pill-sources?id=${feed.id}`, { method: 'DELETE' });
+    if (!res.ok) {
+      showToast('error', 'Rimozione fallita');
+      return;
+    }
+    showToast('success', `${feed.display_name} rimossa`);
+    load();
+  };
+
+  const addFeed = async () => {
+    if (!form.display_name.trim() || !form.feed_url.trim()) {
+      showToast('warning', 'Nome e URL sono obbligatori');
+      return;
+    }
+    setAdding(true);
+    try {
+      const slug = (form.slug.trim() || form.display_name.trim())
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+      const res = await fetch('/api/dev/pill-sources', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          slug,
+          display_name: form.display_name.trim(),
+          feed_url: form.feed_url.trim(),
+          priority: form.priority,
+          notes: form.notes.trim() || null,
+        }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast('error', payload.error || `HTTP ${res.status}`);
+        return;
+      }
+      showToast('success', 'Fonte aggiunta');
+      setForm({ display_name: '', feed_url: '', slug: '', priority: 50, notes: '' });
+      setAddOpen(false);
+      load();
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const fmtDate = (iso: string | null) => {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    const diffH = (Date.now() - d.getTime()) / 3600_000;
+    if (diffH < 24) return `${Math.round(diffH)}h fa`;
+    return d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' });
+  };
+
+  const inputCls = 'w-full px-3 h-11 sm:h-10 bg-card border border-border rounded-lg text-[15px] sm:text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary';
+  const labelCls = 'block text-xs font-medium text-muted-foreground mb-1.5';
+
+  return (
+    <div className="space-y-4">
+      <button onClick={onBack} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground h-10">
+        <ChevronLeft className="w-4 h-4" /> Torna alla lista pills
+      </button>
+
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold text-foreground">Fonti RSS</h2>
+          <p className="text-sm text-muted-foreground">Testate monitorate dal generator per produrre le pills. Tieni fresca la lista per avere news accurate.</p>
+        </div>
+        <button
+          onClick={() => setAddOpen(v => !v)}
+          className="inline-flex items-center justify-center gap-1.5 px-3 h-11 sm:h-10 text-sm font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 active:scale-[0.98]"
+        >
+          <Plus className="w-4 h-4" /> Aggiungi fonte
+        </button>
+      </div>
+
+      {addOpen && (
+        <div className="bg-card border border-border rounded-xl p-4 space-y-3">
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div>
+              <label className={labelCls}>Nome testata *</label>
+              <input className={inputCls} value={form.display_name} onChange={e => setForm({ ...form, display_name: e.target.value })} placeholder="es. Corriere dello Sport" />
+            </div>
+            <div>
+              <label className={labelCls}>URL feed RSS *</label>
+              <input className={inputCls} value={form.feed_url} onChange={e => setForm({ ...form, feed_url: e.target.value })} placeholder="https://.../feed" />
+            </div>
+            <div>
+              <label className={labelCls}>Slug (opzionale)</label>
+              <input className={inputCls} value={form.slug} onChange={e => setForm({ ...form, slug: e.target.value })} placeholder="auto dal nome" />
+            </div>
+            <div>
+              <label className={labelCls}>Priorità (0 = alta, 99 = bassa)</label>
+              <input type="number" className={inputCls} value={form.priority} onChange={e => setForm({ ...form, priority: Number(e.target.value) || 50 })} />
+            </div>
+          </div>
+          <div>
+            <label className={labelCls}>Note</label>
+            <input className={inputCls} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="es. focus Serie C" />
+          </div>
+          <div className="flex items-center justify-end gap-2">
+            <button onClick={() => setAddOpen(false)} className="px-4 h-10 text-sm rounded-lg border border-border hover:bg-muted/40">Annulla</button>
+            <button onClick={addFeed} disabled={adding} className="px-4 h-10 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+              {adding ? 'Aggiungo…' : 'Aggiungi'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="text-sm text-muted-foreground text-center py-8">Caricamento…</div>
+      ) : (
+        <div className="space-y-2">
+          {feeds.map(feed => (
+            <div key={feed.id} className={`bg-card border rounded-xl p-3.5 ${feed.enabled ? 'border-border' : 'border-border/50 opacity-60'}`}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Rss className={`w-3.5 h-3.5 ${feed.enabled ? 'text-primary' : 'text-muted-foreground'} shrink-0`} />
+                    <span className="text-[15px] font-semibold text-foreground">{feed.display_name}</span>
+                    <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-muted/50 text-muted-foreground">prio {feed.priority}</span>
+                    {!feed.enabled && <span className="text-[10px] uppercase tracking-wide text-red-500">disabilitata</span>}
+                  </div>
+                  <a href={feed.feed_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground mt-1 break-all">
+                    {feed.feed_url} <ExternalLink className="w-3 h-3 shrink-0" />
+                  </a>
+                  {feed.notes && <div className="text-[11px] text-muted-foreground mt-1 italic">{feed.notes}</div>}
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground mt-2">
+                    <span><strong className="text-foreground">{feed.articles_total}</strong> articoli</span>
+                    <span>Ultimo articolo: {fmtDate(feed.last_article_at)}</span>
+                    <span>Ultimo fetch: {fmtDate(feed.last_fetched_at)}</span>
+                  </div>
+                </div>
+                <div className="flex flex-col items-end gap-1.5 shrink-0">
+                  <button
+                    onClick={() => toggleEnabled(feed)}
+                    className={`px-3 h-8 text-xs font-medium rounded-lg ${feed.enabled ? 'bg-green-500/15 text-green-600 hover:bg-green-500/25' : 'bg-muted/40 text-muted-foreground hover:bg-muted/60'}`}
+                  >
+                    {feed.enabled ? 'Attiva' : 'Inattiva'}
+                  </button>
+                  <button onClick={() => removeFeed(feed)} className="text-[11px] text-red-500 hover:underline flex items-center gap-1">
+                    <Trash2 className="w-3 h-3" /> Rimuovi
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+          {feeds.length === 0 && (
+            <div className="bg-card border border-border rounded-xl p-8 text-center text-sm text-muted-foreground">
+              Nessuna fonte configurata.
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function PillsPage() {
   const [pills, setPills] = useState<Pill[]>([]);
@@ -878,6 +1105,15 @@ export default function PillsPage() {
     );
   }
 
+  if (view === 'sources') {
+    return (
+      <div className="space-y-6">
+        <SectionHeader title="Fonti Pills" description="Gestisci i feed RSS usati dal generator" />
+        <SourcesManager onBack={() => setView('list')} />
+      </div>
+    );
+  }
+
   if (view === 'edit' && selectedPill) {
     return (
       <div className="space-y-6">
@@ -906,7 +1142,13 @@ export default function PillsPage() {
         description="Gestisci le pills generate automaticamente e crea contenuti manuali"
       />
 
-      <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-2 sm:justify-end -mt-2">
+      <div className="grid grid-cols-3 gap-2 sm:flex sm:items-center sm:gap-2 sm:justify-end -mt-2">
+        <button
+          onClick={() => setView('sources')}
+          className="inline-flex items-center justify-center gap-1.5 px-3 h-11 sm:h-10 text-sm font-medium rounded-lg border border-border text-foreground hover:bg-muted/40 active:scale-[0.98]"
+        >
+          <Rss className="w-4 h-4" /> Fonti
+        </button>
         <button
           onClick={() => setGenerateOpen(true)}
           className="inline-flex items-center justify-center gap-1.5 px-3 h-11 sm:h-10 text-sm font-medium rounded-lg border border-border text-foreground hover:bg-muted/40 active:scale-[0.98]"
@@ -980,6 +1222,11 @@ export default function PillsPage() {
               <div className="flex items-center gap-1.5 flex-wrap">
                 <StatusBadge status={pill.status} />
                 <CategoryBadge category={pill.pill_category} />
+                {pill.audit_flags && pill.audit_flags.length > 0 && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 text-amber-500 px-1.5 py-0.5 text-[10px] font-medium" title="Audit flag">
+                    <AlertTriangle className="w-3 h-3" /> review
+                  </span>
+                )}
                 <span className="text-[10px] text-muted-foreground ml-auto uppercase tracking-wide">{typeLabels[pill.type] || pill.type}</span>
               </div>
               <div className="text-[15px] font-semibold text-foreground line-clamp-2 leading-snug">{pill.title}</div>
