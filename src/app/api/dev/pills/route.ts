@@ -137,18 +137,15 @@ export async function PATCH(request: Request) {
 
   const { id, ...updates } = body;
 
-  // If approving, set scheduled status
-  if (updates.status === 'scheduled') {
-    updates.is_published = false;
-  }
-  // If publishing directly
+  // Keep published_at in sync with status transitions.
+  // When moving BACK from 'published' (or into any non-published state)
+  // we reset published_at so the detail view doesn't show a stale timestamp.
   if (updates.status === 'published') {
     updates.is_published = true;
     updates.published_at = new Date().toISOString();
-  }
-  // If rejecting
-  if (updates.status === 'rejected') {
+  } else if (updates.status === 'scheduled' || updates.status === 'draft' || updates.status === 'rejected') {
     updates.is_published = false;
+    updates.published_at = null;
   }
 
   updates.updated_at = new Date().toISOString();
