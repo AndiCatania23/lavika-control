@@ -695,6 +695,24 @@ function SourcesManager({ onBack }: { onBack: () => void }) {
     }
   };
 
+  const updatePriority = async (feed: RssFeed, newPriority: number) => {
+    const clamped = Math.max(0, Math.min(99, Math.round(newPriority)));
+    if (clamped === feed.priority) return;
+    setFeeds(prev => prev.map(f => f.id === feed.id ? { ...f, priority: clamped } : f));
+    const res = await fetch('/api/dev/pill-sources', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: feed.id, priority: clamped }),
+    });
+    if (!res.ok) {
+      showToast('error', 'Priorità non aggiornata');
+      load();
+    } else {
+      // Re-sort by new priority
+      setFeeds(prev => [...prev].sort((a, b) => a.priority - b.priority));
+    }
+  };
+
   const removeFeed = async (feed: RssFeed) => {
     if (!window.confirm(`Rimuovere "${feed.display_name}"? Gli articoli già scaricati restano nel corpus.`)) return;
     const res = await fetch(`/api/dev/pill-sources?id=${feed.id}`, { method: 'DELETE' });
@@ -764,7 +782,11 @@ function SourcesManager({ onBack }: { onBack: () => void }) {
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
         <div>
           <h2 className="text-xl font-semibold text-foreground">Fonti RSS</h2>
-          <p className="text-sm text-muted-foreground">Testate monitorate dal generator per produrre le pills. Tieni fresca la lista per avere news accurate.</p>
+          <p className="text-sm text-muted-foreground">
+            Testate monitorate dal generator per produrre le pills.
+            Il <strong className="text-foreground">peso</strong> (0 = massima autorevolezza, 99 = minima) decide l&apos;ordine
+            con cui il generator sceglie gli articoli e se il contenuto viene passato a Gemini per intero (peso ≤ 3) o troncato.
+          </p>
         </div>
         <button
           onClick={() => setAddOpen(v => !v)}
@@ -814,11 +836,10 @@ function SourcesManager({ onBack }: { onBack: () => void }) {
           {feeds.map(feed => (
             <div key={feed.id} className={`bg-card border rounded-xl p-3.5 ${feed.enabled ? 'border-border' : 'border-border/50 opacity-60'}`}>
               <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <Rss className={`w-3.5 h-3.5 ${feed.enabled ? 'text-primary' : 'text-muted-foreground'} shrink-0`} />
                     <span className="text-[15px] font-semibold text-foreground">{feed.display_name}</span>
-                    <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-muted/50 text-muted-foreground">prio {feed.priority}</span>
                     {!feed.enabled && <span className="text-[10px] uppercase tracking-wide text-red-500">disabilitata</span>}
                   </div>
                   <a href={feed.feed_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground mt-1 break-all">
@@ -829,6 +850,43 @@ function SourcesManager({ onBack }: { onBack: () => void }) {
                     <span><strong className="text-foreground">{feed.articles_total}</strong> articoli</span>
                     <span>Ultimo articolo: {fmtDate(feed.last_article_at)}</span>
                     <span>Ultimo fetch: {fmtDate(feed.last_fetched_at)}</span>
+                  </div>
+
+                  {/* Weight editor */}
+                  <div className="mt-3 pt-3 border-t border-border/50">
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <label className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                        Peso sorgente
+                        <span className="ml-1.5 normal-case text-[10px] text-muted-foreground/70">
+                          0 = prioritaria · 99 = minima
+                        </span>
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={99}
+                        value={feed.priority}
+                        onChange={e => {
+                          const v = Number(e.target.value);
+                          setFeeds(prev => prev.map(f => f.id === feed.id ? { ...f, priority: v } : f));
+                        }}
+                        onBlur={e => updatePriority(feed, Number(e.target.value))}
+                        className="w-14 h-8 text-xs text-center bg-card border border-border rounded-md text-foreground tabular-nums focus:outline-none focus:ring-1 focus:ring-primary"
+                      />
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={99}
+                      value={feed.priority}
+                      onChange={e => {
+                        const v = Number(e.target.value);
+                        setFeeds(prev => prev.map(f => f.id === feed.id ? { ...f, priority: v } : f));
+                      }}
+                      onMouseUp={e => updatePriority(feed, Number((e.target as HTMLInputElement).value))}
+                      onTouchEnd={e => updatePriority(feed, Number((e.target as HTMLInputElement).value))}
+                      className="w-full accent-primary cursor-pointer"
+                    />
                   </div>
                 </div>
                 <div className="flex flex-col items-end gap-1.5 shrink-0">
