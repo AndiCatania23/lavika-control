@@ -665,7 +665,7 @@ function SourcesManager({ onBack }: { onBack: () => void }) {
   const [loading, setLoading] = useState(true);
   const [addOpen, setAddOpen] = useState(false);
   const [adding, setAdding] = useState(false);
-  const [form, setForm] = useState({ display_name: '', feed_url: '', slug: '', priority: 50, notes: '' });
+  const [form, setForm] = useState({ display_name: '', feed_url: '', slug: '', priority: 5, notes: '' });
   const { showToast } = useToast();
 
   const load = useCallback(async () => {
@@ -696,7 +696,9 @@ function SourcesManager({ onBack }: { onBack: () => void }) {
   };
 
   const updatePriority = async (feed: RssFeed, newPriority: number) => {
-    const clamped = Math.max(0, Math.min(99, Math.round(newPriority)));
+    // UI range is 0..10 (intuitive); DB schema allows 0..99 so legacy values
+    // outside 10 are preserved. Clamp at input time, not here.
+    const clamped = Math.max(0, Math.min(10, Math.round(newPriority)));
     if (clamped === feed.priority) return;
     setFeeds(prev => prev.map(f => f.id === feed.id ? { ...f, priority: clamped } : f));
     const res = await fetch('/api/dev/pill-sources', {
@@ -754,7 +756,7 @@ function SourcesManager({ onBack }: { onBack: () => void }) {
         return;
       }
       showToast('success', 'Fonte aggiunta');
-      setForm({ display_name: '', feed_url: '', slug: '', priority: 50, notes: '' });
+      setForm({ display_name: '', feed_url: '', slug: '', priority: 5, notes: '' });
       setAddOpen(false);
       load();
     } finally {
@@ -784,8 +786,11 @@ function SourcesManager({ onBack }: { onBack: () => void }) {
           <h2 className="text-xl font-semibold text-foreground">Fonti RSS</h2>
           <p className="text-sm text-muted-foreground">
             Testate monitorate dal generator per produrre le pills.
-            Il <strong className="text-foreground">peso</strong> (0 = massima autorevolezza, 99 = minima) decide l&apos;ordine
-            con cui il generator sceglie gli articoli e se il contenuto viene passato a Gemini per intero (peso ≤ 3) o troncato.
+            Il <strong className="text-foreground">peso</strong> (da 0 a 10) decide l&apos;ordine
+            con cui il generator sceglie gli articoli:
+            <span className="text-green-500 font-medium"> 0–3 prioritarie</span>
+            {' '}(contenuto passato a Gemini per intero),
+            {' '}<span className="text-foreground">4–10 normali</span> (troncato).
           </p>
         </div>
         <button
@@ -812,8 +817,8 @@ function SourcesManager({ onBack }: { onBack: () => void }) {
               <input className={inputCls} value={form.slug} onChange={e => setForm({ ...form, slug: e.target.value })} placeholder="auto dal nome" />
             </div>
             <div>
-              <label className={labelCls}>Priorità (0 = alta, 99 = bassa)</label>
-              <input type="number" className={inputCls} value={form.priority} onChange={e => setForm({ ...form, priority: Number(e.target.value) || 50 })} />
+              <label className={labelCls}>Peso iniziale (0 = max, 10 = min)</label>
+              <input type="number" min={0} max={10} className={inputCls} value={form.priority} onChange={e => setForm({ ...form, priority: Math.max(0, Math.min(10, Number(e.target.value) || 5)) })} />
             </div>
           </div>
           <div>
@@ -854,17 +859,21 @@ function SourcesManager({ onBack }: { onBack: () => void }) {
 
                   {/* Weight editor */}
                   <div className="mt-3 pt-3 border-t border-border/50">
-                    <div className="flex items-center justify-between gap-2 mb-1">
-                      <label className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <label className="text-[10px] uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
                         Peso sorgente
-                        <span className="ml-1.5 normal-case text-[10px] text-muted-foreground/70">
-                          0 = prioritaria · 99 = minima
+                        <span className={`normal-case text-[10px] font-medium px-1.5 py-0.5 rounded ${
+                          feed.priority <= 3
+                            ? 'bg-green-500/15 text-green-500'
+                            : 'bg-muted/50 text-muted-foreground'
+                        }`}>
+                          {feed.priority <= 3 ? 'prioritaria' : 'normale'}
                         </span>
                       </label>
                       <input
                         type="number"
                         min={0}
-                        max={99}
+                        max={10}
                         value={feed.priority}
                         onChange={e => {
                           const v = Number(e.target.value);
@@ -877,16 +886,21 @@ function SourcesManager({ onBack }: { onBack: () => void }) {
                     <input
                       type="range"
                       min={0}
-                      max={99}
-                      value={feed.priority}
+                      max={10}
+                      step={1}
+                      value={Math.min(10, feed.priority)}
                       onChange={e => {
                         const v = Number(e.target.value);
                         setFeeds(prev => prev.map(f => f.id === feed.id ? { ...f, priority: v } : f));
                       }}
                       onMouseUp={e => updatePriority(feed, Number((e.target as HTMLInputElement).value))}
                       onTouchEnd={e => updatePriority(feed, Number((e.target as HTMLInputElement).value))}
-                      className="w-full accent-primary cursor-pointer"
+                      className={`w-full cursor-pointer ${feed.priority <= 3 ? 'accent-green-500' : 'accent-primary'}`}
                     />
+                    <div className="flex items-center justify-between text-[9px] text-muted-foreground mt-0.5 uppercase tracking-wide">
+                      <span>0 max</span>
+                      <span>10 min</span>
+                    </div>
                   </div>
                 </div>
                 <div className="flex flex-col items-end gap-1.5 shrink-0">
