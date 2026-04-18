@@ -15,6 +15,7 @@ export async function POST(request: Request) {
     const season = formData.get('season') as string | null;
     const episodeId = formData.get('episodeId') as string | null;
     const pillId = formData.get('pillId') as string | null;
+    const playerSlug = formData.get('playerSlug') as string | null;
     const file = formData.get('file') as File | null;
 
     if (!type || !file) {
@@ -52,17 +53,24 @@ export async function POST(request: Request) {
       case 'pill-image':
         key = `pills/manual/${pillId ?? 'new'}-${ts}.webp`;
         break;
+      case 'player-cutout':
+        if (!playerSlug) return NextResponse.json({ error: 'Missing playerSlug' }, { status: 400 });
+        // Slug goes into the path so each player has one canonical cutout file.
+        key = `players/${playerSlug}/cutout.webp`;
+        break;
       default:
         return NextResponse.json({ error: `Invalid type: ${type}` }, { status: 400 });
     }
 
-    // Convert to WebP server-side so the client can send any supported format
-    // (JPEG/PNG/HEIC/…). Keep aspect ratio, cap width to 2048px, quality 85.
+    // Convert to WebP server-side. For player cutouts we PRESERVE the alpha
+    // channel (trasparenza) and use a larger cap (2560px) because cutouts are
+    // used as hero. Other types stay at 2048/quality 85.
     const inputBuffer = Buffer.from(await file.arrayBuffer());
+    const isCutout = type === 'player-cutout';
     const webp = await sharp(inputBuffer)
       .rotate()
-      .resize({ width: 2048, withoutEnlargement: true })
-      .webp({ quality: 85 })
+      .resize({ width: isCutout ? 2560 : 2048, withoutEnlargement: true })
+      .webp({ quality: isCutout ? 90 : 85, alphaQuality: 90 })
       .toBuffer();
 
     await r2MediaClient.send(

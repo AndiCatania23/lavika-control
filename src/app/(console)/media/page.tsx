@@ -18,6 +18,7 @@ import {
   Layers,
   Search,
   Trash2,
+  Users,
 } from 'lucide-react';
 
 const MEDIA_PUBLIC_BASE_URL = 'https://pub-caae50e77b854437b46967f95fd48914.r2.dev';
@@ -528,10 +529,202 @@ function MediaPicker({
   );
 }
 
+// ── Players Cutouts Section ────────────────────────────────────────────────────
+
+interface PlayerCutoutRow {
+  id: string;
+  slug: string | null;
+  full_name: string;
+  position: string | null;
+  shirt_number: string | null;
+  photo_url: string | null;
+  cutout_url: string | null;
+  cutout_updated_at: string | null;
+  team_id: string | null;
+  hasCustomCutout: boolean;
+  cutoutBucketKey: string | null;
+}
+
+function PlayersCutoutsSection() {
+  const [players, setPlayers] = useState<PlayerCutoutRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [onlyMissing, setOnlyMissing] = useState(false);
+  const [uploadState, setUploadState] = useState<Record<string, { progress: number; error: string | null; done: boolean }>>({});
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await fetch('/api/media/players', { cache: 'no-store' });
+      const data = await r.json() as { players?: PlayerCutoutRow[] };
+      setPlayers(data.players ?? []);
+    } catch { /* ignore */ } finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleUpload = async (player: PlayerCutoutRow, file: File) => {
+    if (!player.slug) return;
+    const key = player.id;
+    setUploadState(prev => ({ ...prev, [key]: { progress: 0, error: null, done: false } }));
+    try {
+      const fd = new FormData();
+      fd.append('type', 'player-cutout');
+      fd.append('playerSlug', player.slug);
+      fd.append('file', file);
+      const res = await fetch('/api/media/upload', { method: 'POST', body: fd });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok || !payload.url) throw new Error(payload.error || `HTTP ${res.status}`);
+
+      // Persist url on the player row (cache-busted URL to force refetch).
+      const patch = await fetch('/api/media/players', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: player.id, cutout_url: payload.url }),
+      });
+      if (!patch.ok) throw new Error('Salvataggio DB fallito');
+
+      setUploadState(prev => ({ ...prev, [key]: { progress: 100, error: null, done: true } }));
+      setPlayers(prev => prev.map(p => p.id === player.id
+        ? { ...p, cutout_url: payload.url as string, cutout_updated_at: new Date().toISOString(), hasCustomCutout: true }
+        : p));
+    } catch (err) {
+      setUploadState(prev => ({ ...prev, [key]: { progress: 0, error: err instanceof Error ? err.message : 'Errore', done: false } }));
+    }
+  };
+
+  const handleRemove = async (player: PlayerCutoutRow) => {
+    if (!window.confirm(`Rimuovere cutout di ${player.full_name}? Il file WebP resta su R2 ma non sarà più linkato.`)) return;
+    const res = await fetch('/api/media/players', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: player.id, cutout_url: null }),
+    });
+    if (!res.ok) return;
+    setPlayers(prev => prev.map(p => p.id === player.id
+      ? { ...p, cutout_url: null, cutout_updated_at: null, hasCustomCutout: false }
+      : p));
+  };
+
+  const filtered = players.filter(p => {
+    if (onlyMissing && p.hasCustomCutout) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      if (!p.full_name.toLowerCase().includes(q) && !(p.slug || '').toLowerCase().includes(q)) return false;
+    }
+    return true;
+  });
+
+  const missing = players.filter(p => !p.hasCustomCutout).length;
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-lg border border-border bg-card/60 p-3 text-xs text-muted-foreground space-y-1">
+        <p>Carica qui il cutout (mezzo busto, sfondo trasparente) di ciascun giocatore o membro dello staff.</p>
+        <p>L&apos;immagine viene convertita in WebP (2560px max, alpha preservato) e salvata in
+          <span className="text-foreground font-medium"> lavika-media/players/{'{'}slug{'}'}/cutout.webp</span>.
+          L&apos;app userà quell&apos;URL come hero della pagina giocatore e per le card.</p>
+      </div>
+
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div className="text-sm text-muted-foreground">
+          <strong className="text-foreground">{players.length}</strong> giocatori · <span className={missing > 0 ? 'text-amber-500 font-medium' : 'text-green-500'}>{missing} senza cutout</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="inline-flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
+            <input type="checkbox" checked={onlyMissing} onChange={e => setOnlyMissing(e.target.checked)} className="accent-primary" />
+            Solo mancanti
+          </label>
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Cerca giocatore..."
+              className="w-44 pl-8 pr-3 h-9 bg-card border border-border rounded-lg text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center h-32">
+          <div className="w-7 h-7 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+          {filtered.map(player => {
+            const state = uploadState[player.id];
+            return (
+              <div key={player.id} className="rounded-xl border border-border bg-card p-3 space-y-2">
+                <div className="aspect-[3/4] bg-muted/30 rounded-lg border border-border overflow-hidden relative">
+                  {player.cutout_url ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img src={player.cutout_url} alt={player.full_name} className="w-full h-full object-contain" />
+                  ) : player.photo_url ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img src={player.photo_url} alt={player.full_name} className="w-full h-full object-cover opacity-30" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-muted-foreground">
+                      <Users className="w-8 h-8" />
+                    </div>
+                  )}
+                  {player.hasCustomCutout && (
+                    <div className="absolute top-1.5 right-1.5 inline-flex items-center gap-1 rounded-full bg-green-500/20 text-green-500 px-2 py-0.5 text-[10px] font-medium">
+                      <CheckCircle2 className="w-3 h-3" /> ok
+                    </div>
+                  )}
+                  {!player.hasCustomCutout && (
+                    <div className="absolute top-1.5 right-1.5 inline-flex items-center gap-1 rounded-full bg-amber-500/20 text-amber-500 px-2 py-0.5 text-[10px] font-medium">
+                      <AlertTriangle className="w-3 h-3" /> manca
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <div className="text-sm font-semibold text-foreground truncate">{player.full_name}</div>
+                  <div className="text-[10px] text-muted-foreground uppercase tracking-wide truncate">
+                    {player.position || '—'}{player.shirt_number ? ` · #${player.shirt_number}` : ''}
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <label className={`flex items-center justify-center gap-1.5 px-2 h-9 text-xs font-medium rounded-lg border border-dashed border-border cursor-pointer hover:bg-muted/40 active:scale-[0.98] ${state && !state.error && !state.done ? 'opacity-60 pointer-events-none' : ''}`}>
+                    <Upload className="w-3.5 h-3.5" />
+                    {state && !state.error && !state.done
+                      ? 'Upload…'
+                      : player.hasCustomCutout ? 'Sostituisci' : 'Carica cutout'}
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/heic"
+                      className="hidden"
+                      onChange={e => { const f = e.target.files?.[0]; if (f) { handleUpload(player, f); e.target.value = ''; } }}
+                    />
+                  </label>
+                  {player.hasCustomCutout && (
+                    <button onClick={() => handleRemove(player)} className="w-full text-[10px] text-red-500 hover:underline inline-flex items-center justify-center gap-1">
+                      <Trash2 className="w-3 h-3" /> Rimuovi link
+                    </button>
+                  )}
+                  {state?.error && <div className="text-[10px] text-red-500 line-clamp-2">{state.error}</div>}
+                  {state?.done && <div className="text-[10px] text-green-500">Caricato ✓</div>}
+                </div>
+              </div>
+            );
+          })}
+          {filtered.length === 0 && (
+            <div className="col-span-full bg-card border border-border rounded-xl p-8 text-center text-sm text-muted-foreground">
+              Nessun giocatore.
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Page ──────────────────────────────────────────────────────────────────
 
 export default function MediaPage() {
-  const [activeSection, setActiveSection] = useState<'formats' | 'episodes' | 'archive'>('formats');
+  const [activeSection, setActiveSection] = useState<'formats' | 'episodes' | 'players' | 'archive'>('formats');
 
   // Section 1: Supabase formats
   const [supaFormats, setSupaFormats] = useState<SupaFormat[]>([]);
@@ -797,10 +990,11 @@ export default function MediaPage() {
 
       {/* Section tabs */}
       <div className="rounded-xl border border-border bg-card/70 p-1">
-        <nav className="grid grid-cols-3 gap-1">
+        <nav className="grid grid-cols-2 sm:grid-cols-4 gap-1">
           {[
             { id: 'formats' as const, label: 'Immagini Format', icon: <ImageIcon className="h-3.5 w-3.5" /> },
             { id: 'episodes' as const, label: 'Thumbnail Episodi', icon: <Film className="h-3.5 w-3.5" /> },
+            { id: 'players' as const, label: 'Giocatori & Staff', icon: <Users className="h-3.5 w-3.5" /> },
             { id: 'archive' as const, label: 'Archivio R2', icon: <Cloud className="h-3.5 w-3.5" /> },
           ].map(tab => (
             <button key={tab.id} onClick={() => setActiveSection(tab.id)}
@@ -987,7 +1181,12 @@ export default function MediaPage() {
         </div>
       )}
 
-      {/* ── Section 3: Archive R2 ──────────────────────────────────────────── */}
+      {/* ── Section 3: Giocatori & Staff ───────────────────────────────────── */}
+      {activeSection === 'players' && (
+        <PlayersCutoutsSection />
+      )}
+
+      {/* ── Section 4: Archive R2 ──────────────────────────────────────────── */}
       {activeSection === 'archive' && (
         <div className="space-y-4">
           <div className="rounded-lg border border-border bg-card/60 p-3 text-xs text-muted-foreground">
