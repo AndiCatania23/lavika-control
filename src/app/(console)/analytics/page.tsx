@@ -372,20 +372,33 @@ export default function AnalyticsPage() {
   useEffect(() => {
     if (activeTab !== 'traffic') return;
 
-    const intervalId = setInterval(() => {
-      void loadTraffic();
-    }, 20000);
+    let intervalId: number | null = null;
+    const start = () => {
+      if (intervalId != null) return;
+      intervalId = window.setInterval(() => {
+        void loadTraffic();
+      }, 5 * 60 * 1000);
+    };
+    const stop = () => {
+      if (intervalId == null) return;
+      window.clearInterval(intervalId);
+      intervalId = null;
+    };
 
     const onVisibilityChange = () => {
       if (!document.hidden) {
         void loadTraffic();
+        start();
+      } else {
+        stop();
       }
     };
 
+    if (!document.hidden) start();
     document.addEventListener('visibilitychange', onVisibilityChange);
 
     return () => {
-      clearInterval(intervalId);
+      stop();
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
   }, [activeTab]);

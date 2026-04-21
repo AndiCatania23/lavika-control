@@ -92,9 +92,11 @@ async function loadSessionAggregatesByUserIds(userIds: string[]): Promise<Map<st
   const map = new Map<string, UserSessionAggregate>();
   const chunks = chunkArray(userIds, 200);
   const pageSize = 1000;
+  const maxPagesPerChunk = 10;
+  const sinceIso = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
 
   for (const chunk of chunks) {
-    for (let page = 0; page < 50; page += 1) {
+    for (let page = 0; page < maxPagesPerChunk; page += 1) {
       const from = page * pageSize;
       const to = from + pageSize - 1;
 
@@ -102,6 +104,7 @@ async function loadSessionAggregatesByUserIds(userIds: string[]): Promise<Map<st
         .from('user_sessions')
         .select('user_id,last_seen_at')
         .in('user_id', chunk)
+        .gte('last_seen_at', sinceIso)
         .order('last_seen_at', { ascending: false })
         .range(from, to);
 

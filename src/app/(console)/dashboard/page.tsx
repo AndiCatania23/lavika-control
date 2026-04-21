@@ -94,7 +94,7 @@ interface MetricItem {
   status: 'ok' | 'warn' | 'error';
 }
 
-const REFRESH_INTERVAL_MS = 30000;
+const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 
 function MetricCard({
   title,
@@ -179,8 +179,34 @@ export default function DashboardPage() {
 
   useEffect(() => {
     loadData();
-    const timer = window.setInterval(() => loadData(true), REFRESH_INTERVAL_MS);
-    return () => window.clearInterval(timer);
+    let timer: number | null = null;
+
+    const start = () => {
+      if (timer != null) return;
+      timer = window.setInterval(() => loadData(true), REFRESH_INTERVAL_MS);
+    };
+    const stop = () => {
+      if (timer == null) return;
+      window.clearInterval(timer);
+      timer = null;
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        loadData(true);
+        start();
+      } else {
+        stop();
+      }
+    };
+
+    if (document.visibilityState === 'visible') start();
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      stop();
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, [loadData]);
 
   const metricCards = useMemo<MetricItem[]>(() => {

@@ -41,9 +41,33 @@ export function Topbar({ title = 'LΛVIKΛ' }: TopbarProps) {
     };
 
     loadNotifications();
-    const interval = setInterval(loadNotifications, 15000);
+    let interval: number | null = null;
+    const start = () => {
+      if (interval != null) return;
+      interval = window.setInterval(loadNotifications, 2 * 60 * 1000);
+    };
+    const stop = () => {
+      if (interval == null) return;
+      window.clearInterval(interval);
+      interval = null;
+    };
 
-    return () => clearInterval(interval);
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        loadNotifications();
+        start();
+      } else {
+        stop();
+      }
+    };
+
+    if (document.visibilityState === 'visible') start();
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      stop();
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, []);
 
   useEffect(() => {

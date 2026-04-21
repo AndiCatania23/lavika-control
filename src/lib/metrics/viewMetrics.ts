@@ -61,13 +61,14 @@ function matchesFormatMetadata(metadata: Record<string, unknown> | null | undefi
   return false;
 }
 
-export async function loadViewStartEvents(formatId?: string): Promise<ViewEventRow[]> {
+export async function loadViewStartEvents(formatId?: string, sinceDays = 30): Promise<ViewEventRow[]> {
   if (!supabaseServer) return [];
 
   const allRows: ViewEventRow[] = [];
   const pageSize = 1000;
-  const maxPages = 100;
+  const maxPages = 20;
   const candidates = formatId ? buildCandidates(formatId) : null;
+  const sinceIso = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000).toISOString();
 
   for (let page = 0; page < maxPages; page += 1) {
     const from = page * pageSize;
@@ -77,6 +78,8 @@ export async function loadViewStartEvents(formatId?: string): Promise<ViewEventR
       .from('content_events')
       .select('user_id,format_id,season_id,episode_id,metadata')
       .eq('event_name', 'view_start')
+      .gte('occurred_at', sinceIso)
+      .order('occurred_at', { ascending: false })
       .range(from, to);
 
     if (error || !data) break;
