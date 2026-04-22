@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { SectionHeader } from '@/components/SectionHeader';
 import { getShopProducts, type ShopProduct } from '@/lib/data/shop';
-import { Package, ShoppingCart, Image as ImageIcon, Tag, ArrowRight } from 'lucide-react';
+import { Package, ShoppingCart, Image as ImageIcon, Tag, ArrowRight, Mail } from 'lucide-react';
 
 export default function ShopOverviewPage() {
   const [products, setProducts] = useState<ShopProduct[]>([]);
@@ -38,6 +38,7 @@ export default function ShopOverviewPage() {
         <NavCard href="/shop/products" icon={Package} title="Prodotti" description="Felpe, cappellini, sticker, accessori — CRUD completo con gallery e varianti." />
         <NavCard href="/shop/orders" icon={ShoppingCart} title="Ordini" description="Nuovi ordini, fulfillment, tracking." />
         <NavCard href="/shop/banners" icon={ImageIcon} title="Banner" description="Hero carousel: drop, saldi, pezzi firmati." />
+        <NavCard href="/shop/notifications" icon={Mail} title="Notifiche email" description="Destinatari mail automatiche (nuovo ordine, refund, scorta bassa)." />
         <NavCard href="/shop/inventory" icon={Tag} title="Inventario" description="Stock per taglia/colore + alert bassa disponibilita." disabled />
       </div>
     </div>
