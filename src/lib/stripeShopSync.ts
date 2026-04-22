@@ -46,6 +46,10 @@ export async function syncProductToStripe(input: StripeSyncProductInput): Promis
     name: input.name,
     description: input.description || undefined,
     images: (input.imageUrls ?? []).slice(0, 8),
+    // Beni fisici → shippable=true + tax code Clothing (abbigliamento/merch).
+    // Stripe default sarebbe "digital content", errato per merchandise.
+    shippable: true,
+    tax_code: 'txcd_30011000',
     metadata: {
       supabase_id: input.id,
       slug: input.slug,
@@ -65,6 +69,8 @@ export async function syncProductToStripe(input: StripeSyncProductInput): Promis
         name: productPayload.name,
         description: productPayload.description,
         images: productPayload.images,
+        shippable: productPayload.shippable,
+        tax_code: productPayload.tax_code,
         metadata: productPayload.metadata,
       });
     } catch (err) {
