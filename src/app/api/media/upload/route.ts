@@ -83,9 +83,35 @@ export async function POST(request: Request) {
     // used as hero. Other types stay at 2048/quality 85.
     const inputBuffer = Buffer.from(await file.arrayBuffer());
     const isCutout = type === 'player-cutout';
-    const webp = await sharp(inputBuffer)
+    const isShopProduct = type === 'shop-product-image';
+
+    let pipeline = sharp(inputBuffer)
       .rotate()
-      .resize({ width: isCutout ? 2560 : 2048, withoutEnlargement: true })
+      .resize({ width: isCutout ? 2560 : 2048, withoutEnlargement: true });
+
+    // Shop packshot: normalizza i pixel chiari neutri a bianco puro. I
+    // photographer spesso consegnano foto con background grigio chiaro
+    // (#e8e8e8 circa). Flatten da solo non basta (agisce solo su alpha),
+    // qui facciamo un pixel-scan: lum >= 215 + canali quasi uguali → #fff.
+    // Soglie conservative per preservare ombre e bordi morbidi del prodotto.
+    if (isShopProduct) {
+      pipeline = pipeline.flatten({ background: '#ffffff' }).removeAlpha();
+      const { data, info } = await pipeline.raw().toBuffer({ resolveWithObject: true });
+      const out = Buffer.from(data);
+      const LUM_MIN = 215;
+      const NEUTRAL_MAX_DIFF = 14;
+      for (let i = 0; i < out.length; i += 3) {
+        const r = out[i], g = out[i + 1], b = out[i + 2];
+        const lum = (r + g + b) / 3;
+        const diff = Math.max(r, g, b) - Math.min(r, g, b);
+        if (lum >= LUM_MIN && diff < NEUTRAL_MAX_DIFF) {
+          out[i] = 255; out[i + 1] = 255; out[i + 2] = 255;
+        }
+      }
+      pipeline = sharp(out, { raw: { width: info.width, height: info.height, channels: 3 } });
+    }
+
+    const webp = await pipeline
       .webp({ quality: isCutout ? 90 : 85, alphaQuality: 90 })
       .toBuffer();
 
