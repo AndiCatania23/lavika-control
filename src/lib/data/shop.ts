@@ -269,14 +269,36 @@ export async function getShopOrders(statusFilter?: OrderStatus | 'all'): Promise
 export async function updateShopOrder(
   id: string,
   updates: Partial<Pick<ShopOrder, 'status' | 'tracking_number' | 'tracking_url' | 'shipping_carrier' | 'staff_notes'>>,
+  actor?: { id: string | null; email: string | null },
 ): Promise<ShopOrder> {
   const res = await fetch('/api/dev/shop/orders', {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id, ...updates }),
+    body: JSON.stringify({
+      id,
+      ...updates,
+      ...(actor ? { actor_id: actor.id, actor_email: actor.email } : {}),
+    }),
   });
   await assertOk(res, 'aggiornamento ordine');
   return res.json() as Promise<ShopOrder>;
+}
+
+export type ShopOrderEvent = {
+  id: string;
+  event_type: 'status_changed' | 'tracking_updated' | 'note_updated' | 'fulfilled_by_set' | 'order_created';
+  from_status: string | null;
+  to_status: string | null;
+  actor_id: string | null;
+  actor_email: string | null;
+  data: Record<string, unknown>;
+  created_at: string;
+};
+
+export async function getShopOrderEvents(orderId: string): Promise<ShopOrderEvent[]> {
+  const res = await fetch(`/api/dev/shop/orders/${orderId}/events`, { cache: 'no-store' });
+  await assertOk(res, 'caricamento eventi ordine');
+  return res.json() as Promise<ShopOrderEvent[]>;
 }
 
 export function formatCents(cents: number, currency = 'EUR'): string {

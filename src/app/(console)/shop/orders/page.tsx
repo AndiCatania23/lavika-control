@@ -4,15 +4,18 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { SectionHeader } from '@/components/SectionHeader';
 import { useToast } from '@/lib/toast';
+import { useAuth } from '@/lib/auth';
 import {
   getShopOrders,
   updateShopOrder,
+  getShopOrderEvents,
   ORDER_STATUS_LABELS,
   formatCents,
   type ShopOrder,
   type OrderStatus,
+  type ShopOrderEvent,
 } from '@/lib/data/shop';
-import { ChevronLeft, ChevronRight, Truck, Package, CheckCircle2, XCircle, Clock, RefreshCw, ShoppingCart, Eye, PackageCheck } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Truck, Package, CheckCircle2, XCircle, Clock, RefreshCw, ShoppingCart, Eye, PackageCheck, FileText, Edit3 } from 'lucide-react';
 
 const STATUS_STYLES: Record<OrderStatus, { bg: string; text: string; icon: typeof Clock }> = {
   pending: { bg: 'bg-yellow-500/10', text: 'text-yellow-500', icon: Clock },
@@ -208,14 +211,27 @@ function OrderDetailSheet({
   onUpdate: () => Promise<void>;
 }) {
   const { showToast } = useToast();
+  const { user } = useAuth();
   const [saving, setSaving] = useState(false);
   const [statusDraft, setStatusDraft] = useState<OrderStatus>(order.status);
   const [trackingNumber, setTrackingNumber] = useState(order.tracking_number ?? '');
   const [trackingUrl, setTrackingUrl] = useState(order.tracking_url ?? '');
   const [shippingCarrier, setShippingCarrier] = useState(order.shipping_carrier ?? '');
   const [staffNotes, setStaffNotes] = useState(order.staff_notes ?? '');
+  const [events, setEvents] = useState<ShopOrderEvent[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(true);
 
   const allowedTransitions = STATUS_TRANSITIONS[order.status];
+
+  useEffect(() => {
+    let cancelled = false;
+    setEventsLoading(true);
+    getShopOrderEvents(order.id)
+      .then((data) => { if (!cancelled) setEvents(data); })
+      .catch(() => { if (!cancelled) setEvents([]); })
+      .finally(() => { if (!cancelled) setEventsLoading(false); });
+    return () => { cancelled = true; };
+  }, [order.id]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -233,7 +249,10 @@ function OrderDetailSheet({
         return;
       }
 
-      await updateShopOrder(order.id, updates);
+      await updateShopOrder(order.id, updates, {
+        id: user?.id ?? null,
+        email: user?.email ?? null,
+      });
       showToast('success', 'Ordine aggiornato');
       await onUpdate();
     } catch (err) {
@@ -392,6 +411,21 @@ function OrderDetailSheet({
             />
           </Block>
 
+          {/* Activity / audit log */}
+          <Block title={`Attivita (${events.length})`}>
+            {eventsLoading ? (
+              <p className="text-xs text-muted-foreground">Carico eventi…</p>
+            ) : events.length === 0 ? (
+              <p className="text-xs text-muted-foreground italic">Nessun evento registrato.</p>
+            ) : (
+              <ul className="space-y-2">
+                {events.map((ev) => (
+                  <OrderEventItem key={ev.id} event={ev} />
+                ))}
+              </ul>
+            )}
+          </Block>
+
           {/* Meta */}
           <Block title="Dettagli Stripe">
             <div className="space-y-1 text-xs font-mono text-muted-foreground">
@@ -429,6 +463,78 @@ function OrderDetailSheet({
         </div>
       </div>
     </div>
+  );
+}
+
+function OrderEventItem({ event }: { event: ShopOrderEvent }) {
+  const when = new Date(event.created_at).toLocaleString('it-IT', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  const actor = event.actor_email || event.actor_id?.slice(0, 8) || 'sistema';
+
+  let Icon = FileText;
+  let label = 'Evento';
+  let detail: React.ReactNode = null;
+
+  switch (event.event_type) {
+    case 'status_changed':
+      Icon = ChevronRight;
+      label = 'Status cambiato';
+      detail = (
+        <span className="font-mono text-[10px]">
+          {(event.from_status ?? '?').toUpperCase()}
+          {' → '}
+          <span className="text-foreground">{(event.to_status ?? '?').toUpperCase()}</span>
+        </span>
+      );
+      break;
+    case 'tracking_updated':
+      Icon = Truck;
+      label = 'Tracking aggiornato';
+      {
+        const data = event.data as { carrier?: string; tracking_number?: string };
+        detail = (
+          <span className="font-mono text-[10px]">
+            {data.carrier ?? '—'} · {data.tracking_number ?? '—'}
+          </span>
+        );
+      }
+      break;
+    case 'note_updated':
+      Icon = Edit3;
+      label = 'Note aggiornate';
+      {
+        const data = event.data as { preview?: string };
+        detail = data.preview ? <span className="italic text-[11px]">&ldquo;{data.preview.slice(0, 80)}&rdquo;</span> : null;
+      }
+      break;
+    case 'fulfilled_by_set':
+      Icon = Package;
+      label = 'Preso in carico';
+      detail = null;
+      break;
+    default:
+      break;
+  }
+
+  return (
+    <li className="flex items-start gap-3 rounded-lg border border-border bg-background/40 p-2.5">
+      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted/60">
+        <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+      </div>
+      <div className="min-w-0 flex-1 space-y-0.5">
+        <div className="flex items-baseline justify-between gap-2">
+          <p className="text-xs font-semibold text-foreground">{label}</p>
+          <p className="text-[10px] text-muted-foreground shrink-0">{when}</p>
+        </div>
+        {detail ? <div className="text-xs text-muted-foreground">{detail}</div> : null}
+        <p className="text-[10px] text-muted-foreground/70">da {actor}</p>
+      </div>
+    </li>
   );
 }
 
