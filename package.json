@@ -16,6 +16,7 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "sharp": "^0.34.5",
+    "stripe": "^22.0.2",
     "tweetsodium": "^0.0.4"
   },
   "devDependencies": {

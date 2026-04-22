@@ -16,6 +16,9 @@ export async function POST(request: Request) {
     const episodeId = formData.get('episodeId') as string | null;
     const pillId = formData.get('pillId') as string | null;
     const playerSlug = formData.get('playerSlug') as string | null;
+    const productSlug = formData.get('productSlug') as string | null;
+    const imageRole = formData.get('imageRole') as string | null; // main | gallery | detail
+    const bannerId = formData.get('bannerId') as string | null;
     const file = formData.get('file') as File | null;
 
     if (!type || !file) {
@@ -57,6 +60,19 @@ export async function POST(request: Request) {
         if (!playerSlug) return NextResponse.json({ error: 'Missing playerSlug' }, { status: 400 });
         // Slug goes into the path so each player has one canonical cutout file.
         key = `players/${playerSlug}/cutout.webp`;
+        break;
+      case 'shop-product-image':
+        if (!productSlug) return NextResponse.json({ error: 'Missing productSlug' }, { status: 400 });
+        // Main immutable path (stable URL); gallery uses timestamp suffix.
+        if (imageRole === 'main') {
+          key = `shop/products/${productSlug}/main.webp`;
+        } else {
+          key = `shop/products/${productSlug}/${imageRole ?? 'gallery'}-${ts}.webp`;
+        }
+        break;
+      case 'shop-banner':
+        if (!bannerId) return NextResponse.json({ error: 'Missing bannerId' }, { status: 400 });
+        key = `shop/banners/${bannerId}/hero-${ts}.webp`;
         break;
       default:
         return NextResponse.json({ error: `Invalid type: ${type}` }, { status: 400 });

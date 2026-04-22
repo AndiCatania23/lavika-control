@@ -16,6 +16,7 @@ import {
   ImageIcon,
   CalendarClock,
   Pill,
+  ShoppingBag,
   MoreHorizontal,
   X,
 } from 'lucide-react';
@@ -29,6 +30,7 @@ const navItems = [
   { href: '/media', label: 'Media', icon: ImageIcon },
   { href: '/pills', label: 'Pillole', icon: Pill },
   { href: '/palinsesto-home', label: 'Palinsesto Home', icon: CalendarClock },
+  { href: '/shop', label: 'Shop', icon: ShoppingBag },
   { href: '/settings', label: 'Impostazioni', icon: Settings },
 ];
 
@@ -41,6 +43,7 @@ const mobileNavItems = [
 
 const mobileMoreItems = [
   { href: '/pills', label: 'Pillole', icon: Pill },
+  { href: '/shop', label: 'Shop', icon: ShoppingBag },
   { href: '/palinsesto-home', label: 'Palinsesto', icon: CalendarClock },
   { href: '/media', label: 'Media', icon: ImageIcon },
 ];
