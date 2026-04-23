@@ -23,7 +23,13 @@ type LinkResult = {
 };
 
 function normalizeSize(s: string | null | undefined): string {
-  return (s ?? '').trim().toUpperCase().replace(/\s+/g, '');
+  const raw = (s ?? '').trim().toUpperCase().replace(/\s+/g, '');
+  // Normalizza XXL ↔ 2XL, XXXL ↔ 3XL per matchare nomenclature diverse
+  // tra LAVIKA e Printful.
+  const xCount = (raw.match(/^X+L$/)?.[0].length ?? 1) - 1;
+  if (xCount >= 2) return `${xCount}XL`;
+  if (/^\d+XL$/.test(raw)) return raw;
+  return raw;
 }
 
 export async function POST(request: Request) {
