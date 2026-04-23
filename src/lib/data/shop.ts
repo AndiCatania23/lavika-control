@@ -25,6 +25,9 @@ export interface ShopProductVariant {
   stock: number;
   low_stock_threshold: number;
   stripe_price_id: string | null;
+  pod_provider: string | null;
+  pod_variant_id: string | null;
+  stock_managed: boolean;
 }
 
 export interface ShopProduct {
@@ -47,6 +50,8 @@ export interface ShopProduct {
   status: ProductStatus;
   stripe_product_id: string | null;
   sort_order: number;
+  pod_provider: string | null;
+  pod_product_id: string | null;
   created_at: string;
   updated_at: string;
   published_at: string | null;
