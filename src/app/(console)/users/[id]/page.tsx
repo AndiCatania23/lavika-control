@@ -254,13 +254,17 @@ export default function UserDetailPage() {
                 {insights.topEpisodes.length > 0 ? (
                   <div className="vstack-tight">
                     {insights.topEpisodes.slice(0, 5).map((e, i) => (
-                      <div key={e.episodeId} className="flex items-center justify-between gap-2 typ-body">
-                        <div className="min-w-0">
-                          <span className="typ-mono" style={{ color: 'var(--text-muted)', fontSize: 12, marginRight: 8 }}>#{i + 1}</span>
-                          <span className="truncate">{e.episodeName}</span>
-                          {e.rewatched && <span className="pill pill-accent" style={{ fontSize: 10, padding: '1px 6px', marginLeft: 6 }}>rivisto</span>}
+                      <div key={e.episodeId} className="flex items-center gap-2">
+                        <span className="typ-mono shrink-0" style={{ color: 'var(--text-muted)', fontSize: 12, minWidth: 22 }}>#{i + 1}</span>
+                        <div className="grow min-w-0">
+                          <div className="typ-body truncate">{e.episodeName}</div>
+                          {e.rewatched && (
+                            <span className="pill pill-accent inline-block mt-0.5" style={{ fontSize: 10, padding: '1px 6px' }}>
+                              rivisto
+                            </span>
+                          )}
                         </div>
-                        <span className="typ-mono shrink-0" style={{ fontSize: 12 }}>{e.views}</span>
+                        <span className="typ-mono shrink-0 tabular-nums" style={{ fontSize: 12, color: 'var(--text-muted)' }}>{e.views}</span>
                       </div>
                     ))}
                   </div>
