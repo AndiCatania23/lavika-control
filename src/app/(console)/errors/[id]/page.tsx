@@ -6,6 +6,10 @@ import { getErrorByIdData, ErrorLog } from '@/lib/data';
 import { StatusPill } from '@/components/StatusPill';
 import { ArrowLeft, Clock, Database } from 'lucide-react';
 
+function fmtDate(iso: string) {
+  return new Date(iso).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
 export default function ErrorDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -23,89 +27,85 @@ export default function ErrorDetailPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+        <div className="w-7 h-7 border-2 border-[color:var(--accent-raw)] border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   if (!error) {
     return (
-      <div className="text-center py-16">
-        <p className="text-muted-foreground">Error not found</p>
-        <button
-          onClick={() => router.push('/errors')}
-          className="mt-4 text-primary hover:underline"
-        >
-          Back to errors
+      <div className="card card-body text-center">
+        <p className="typ-caption">Errore non trovato</p>
+        <button onClick={() => router.push('/errors')} className="btn btn-ghost btn-sm mt-3" style={{ marginLeft: 'auto', marginRight: 'auto' }}>
+          Torna agli errori
         </button>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <button
-        onClick={() => router.push('/errors')}
-        className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        Back to errors
+    <div className="vstack" style={{ gap: 'var(--s5)' }}>
+      <button onClick={() => router.push('/errors')} className="btn btn-ghost btn-sm" style={{ alignSelf: 'flex-start' }}>
+        <ArrowLeft className="w-4 h-4" /> Torna agli errori
       </button>
 
-      <div className="bg-card border border-border rounded-lg p-6">
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-3">
-            <StatusPill status={error.severity} />
-            <div>
-              <h2 className="text-lg font-semibold text-foreground">{error.source}</h2>
-              <p className="text-xs text-muted-foreground font-mono mt-1">{error.id}</p>
+      <div className="card card-body">
+        <div className="flex items-start justify-between gap-2 flex-wrap">
+          <div className="grow min-w-0">
+            <div className="typ-micro">{error.source}</div>
+            <div className="flex items-center gap-2 flex-wrap mt-1">
+              <StatusPill status={error.severity} />
             </div>
+            <p className="typ-mono mt-2" style={{ fontSize: 11, color: 'var(--text-muted)' }}>{error.id}</p>
           </div>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Clock className="w-4 h-4" />
-            {new Date(error.timestamp).toLocaleString('en-GB')}
+          <div className="typ-caption inline-flex items-center gap-1 shrink-0">
+            <Clock className="w-4 h-4" /> {fmtDate(error.timestamp)}
           </div>
         </div>
       </div>
 
-      <div className="bg-card border border-border rounded-lg p-6">
-        <h3 className="font-semibold text-foreground mb-4">Message</h3>
-        <p className="text-foreground">{error.message}</p>
+      <div>
+        <div className="typ-micro mb-1.5">Messaggio</div>
+        <div className="card card-body">
+          <p className="typ-body">{error.message}</p>
+        </div>
       </div>
 
       {error.stack && (
-        <div className="bg-card border border-border rounded-lg p-6">
-          <h3 className="font-semibold text-foreground mb-4">Stack Trace</h3>
-          <pre className="text-sm text-red-400 font-mono whitespace-pre-wrap bg-muted/30 p-4 rounded-lg overflow-x-auto">
-            {error.stack}
-          </pre>
+        <div>
+          <div className="typ-micro mb-1.5">Stack trace</div>
+          <pre className="typ-mono" style={{
+            fontSize: 12,
+            padding: 14,
+            background: 'var(--card-muted)',
+            borderRadius: 'var(--r)',
+            border: '1px solid var(--hairline-soft)',
+            color: 'var(--danger)',
+            whiteSpace: 'pre-wrap',
+            overflowX: 'auto',
+          }}>{error.stack}</pre>
         </div>
       )}
 
       {error.metadata && (
-        <div className="bg-card border border-border rounded-lg p-6">
-          <h3 className="font-semibold text-foreground mb-4">Metadata</h3>
-          <div className="bg-muted/30 rounded-lg p-4 overflow-x-auto">
-            <pre className="text-sm text-foreground font-mono whitespace-pre-wrap">
-              {JSON.stringify(error.metadata, null, 2)}
-            </pre>
-          </div>
+        <div>
+          <div className="typ-micro mb-1.5">Metadata</div>
+          <pre className="typ-mono" style={{
+            fontSize: 12,
+            padding: 14,
+            background: 'var(--card-muted)',
+            borderRadius: 'var(--r)',
+            border: '1px solid var(--hairline-soft)',
+            whiteSpace: 'pre-wrap',
+            overflowX: 'auto',
+          }}>{JSON.stringify(error.metadata, null, 2)}</pre>
         </div>
       )}
 
       {error.jobRunId && (
-        <div className="bg-card border border-border rounded-lg p-6">
-          <div className="flex items-center gap-3">
-            <Database className="w-5 h-5 text-muted-foreground" />
-            <span className="text-sm text-muted-foreground">Related Job Run:</span>
-            <button
-              onClick={() => router.push(`/jobs/runs/${error.jobRunId}`)}
-              className="text-sm font-mono text-primary hover:underline"
-            >
-              {error.jobRunId}
-            </button>
-          </div>
-        </div>
+        <button onClick={() => router.push(`/jobs/runs/${error.jobRunId}`)} className="btn btn-ghost" style={{ alignSelf: 'flex-start' }}>
+          <Database className="w-4 h-4" /> Job run <span className="typ-mono">{error.jobRunId}</span>
+        </button>
       )}
     </div>
   );
