@@ -155,100 +155,119 @@ export default function JobsPage() {
         </button>
       </div>
 
-      {/* Quick sync sources */}
+      {/* Quick sync sources — compact row with thumb + title + action */}
       <div>
         <div className="flex items-center gap-2 mb-3">
           <Video className="w-4 h-4 text-[color:var(--accent-raw)]" strokeWidth={1.75} />
           <h2 className="typ-h2 grow">Sync rapido</h2>
+          <span className="typ-micro">{QUICK_SOURCES.length} source</span>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
+        <div className="vstack-tight">
           {QUICK_SOURCES.map(source => {
             const coverUrl = formatCovers[SOURCE_FORMAT_MAP[source.id]];
             const running = runningSourceId === source.id;
             return (
-              <div key={source.id} className="card card-body">
-                <div className="relative aspect-video rounded-[var(--r-sm)] overflow-hidden mb-3" style={{ background: 'var(--card-muted)' }}>
+              <div key={source.id} className="card" style={{ padding: 10, display: 'flex', alignItems: 'center', gap: 12 }}>
+                {/* Thumb 16:9 (72×41) */}
+                <div className="shrink-0 rounded-[var(--r-sm)] overflow-hidden" style={{ width: 72, height: 41, background: 'var(--card-muted)' }}>
                   {coverUrl ? (
-                    <Image src={coverUrl} alt={source.title} width={640} height={360} className="w-full h-full object-cover" />
+                    <Image src={coverUrl} alt={source.title} width={288} height={162} className="w-full h-full object-cover" />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center typ-caption">{source.title}</div>
+                    <div className="w-full h-full flex items-center justify-center">
+                      <Video className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
+                    </div>
                   )}
                 </div>
-                <h3 className="typ-label">{source.title}</h3>
-                <div className="typ-caption mt-0.5">Sync Video</div>
-                <div className="flex items-center gap-2 pt-3 mt-3 border-t border-[color:var(--hairline-soft)]">
-                  <button
-                    onClick={() => handleRunSource(source.id)}
-                    disabled={running || hasRunningJob}
-                    className="btn btn-primary btn-sm grow"
-                  >
-                    <Play className="w-3.5 h-3.5" />
-                    {running ? 'Accodo…' : hasRunningJob ? 'Attivo' : 'Esegui'}
-                  </button>
-                  <button
-                    onClick={() => router.push(`/jobs/job_sync_video?source=${encodeURIComponent(source.id)}`)}
-                    className="btn btn-ghost btn-sm btn-icon"
-                    aria-label="Dettagli"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
+
+                {/* Title + subtitle */}
+                <div className="grow min-w-0">
+                  <div className="typ-label truncate">{source.title}</div>
+                  <div className="typ-micro truncate">Sync Video</div>
                 </div>
+
+                {/* Actions */}
+                <button
+                  onClick={() => handleRunSource(source.id)}
+                  disabled={running || hasRunningJob}
+                  className="btn btn-primary btn-sm shrink-0"
+                >
+                  <Play className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">
+                    {running ? 'Accodo…' : hasRunningJob ? 'Attivo' : 'Esegui'}
+                  </span>
+                </button>
+                <button
+                  onClick={() => router.push(`/jobs/job_sync_video?source=${encodeURIComponent(source.id)}`)}
+                  className="btn btn-quiet btn-icon btn-sm shrink-0"
+                  aria-label="Dettagli"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
               </div>
             );
           })}
         </div>
       </div>
 
-      {/* Other jobs */}
+      {/* Other jobs — compact row with status dot + info + action */}
       <div>
         <div className="flex items-center gap-2 mb-3">
           <Workflow className="w-4 h-4 text-[color:var(--accent-raw)]" strokeWidth={1.75} />
           <h2 className="typ-h2 grow">Altri job</h2>
+          <span className="typ-micro">{jobs.length}</span>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="vstack-tight">
           {jobs.map(job => {
             const running = runningJobId === job.id;
+            const canRun = job.schedule === null && job.status !== 'paused';
             return (
               <div
                 key={job.id}
                 onClick={() => router.push(`/jobs/${job.id}`)}
-                className="card card-hover card-body"
-                style={{ cursor: 'pointer' }}
+                className="card card-hover"
+                style={{ cursor: 'pointer', padding: 12, display: 'flex', alignItems: 'center', gap: 12 }}
               >
-                <div className="flex items-start justify-between gap-2">
-                  <h3 className="typ-label grow">{job.name}</h3>
-                  <StatusPill status={job.status} size="sm" />
+                {/* Status icon block */}
+                <div className="shrink-0 inline-grid place-items-center" style={{ width: 36, height: 36, borderRadius: 'var(--r-sm)', background: 'var(--card-muted)' }}>
+                  <Workflow className="w-4 h-4" style={{ color: 'var(--text-muted)' }} strokeWidth={1.75} />
                 </div>
-                <p className="typ-caption truncate-2 mt-1.5">{job.description}</p>
 
-                <div className="flex items-center gap-3 typ-caption mt-3">
-                  {job.schedule ? (
-                    <span className="inline-flex items-center gap-1"><Clock className="w-3 h-3" />{job.schedule}</span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1"><Calendar className="w-3 h-3" />Manuale</span>
-                  )}
+                {/* Info */}
+                <div className="grow min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="typ-label truncate">{job.name}</div>
+                    <StatusPill status={job.status} size="sm" />
+                  </div>
+                  <div className="typ-caption truncate mt-0.5">
+                    {job.schedule ? (
+                      <span className="inline-flex items-center gap-1"><Clock className="w-3 h-3" />{job.schedule}</span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1"><Calendar className="w-3 h-3" />Manuale</span>
+                    )}
+                    <span className="mx-1.5">·</span>
+                    Ultima: {formatDate(job.lastRun)}
+                  </div>
                 </div>
-                <div className="typ-caption mt-1">Ultima: {formatDate(job.lastRun)}</div>
 
-                <div className="flex items-center gap-2 pt-3 mt-3 border-t border-[color:var(--hairline-soft)]">
-                  {job.schedule === null && job.status !== 'paused' && (
-                    <button
-                      onClick={(e) => handleRunJob(e, job)}
-                      disabled={running || hasRunningJob}
-                      className="btn btn-primary btn-sm grow"
-                    >
-                      <Play className="w-3.5 h-3.5" />
-                      {running ? 'Accodo…' : hasRunningJob ? 'Attivo' : 'Esegui'}
-                    </button>
-                  )}
+                {/* Actions */}
+                {canRun && (
                   <button
-                    onClick={(e) => { e.stopPropagation(); router.push(`/jobs/${job.id}`); }}
-                    className="btn btn-ghost btn-sm btn-icon"
-                    aria-label="Dettagli"
+                    onClick={(e) => handleRunJob(e, job)}
+                    disabled={running || hasRunningJob}
+                    className="btn btn-primary btn-sm shrink-0"
+                    style={{ minWidth: 96 }}
                   >
-                    <ChevronRight className="w-4 h-4" />
+                    <Play className="w-3.5 h-3.5" />
+                    {running ? 'Accodo…' : hasRunningJob ? 'Attivo' : 'Esegui'}
                   </button>
-                </div>
+                )}
+                <button
+                  onClick={(e) => { e.stopPropagation(); router.push(`/jobs/${job.id}`); }}
+                  className="btn btn-quiet btn-icon btn-sm shrink-0"
+                  aria-label="Dettagli"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
               </div>
             );
           })}
