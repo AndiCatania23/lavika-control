@@ -198,9 +198,10 @@ export default function JobsPage() {
                 </button>
                 <button
                   onClick={() => router.push(`/jobs/job_sync_video?source=${encodeURIComponent(source.id)}`)}
-                  className="btn btn-quiet btn-icon btn-sm shrink-0"
+                  className="btn btn-ghost btn-sm shrink-0"
                   aria-label="Dettagli"
                 >
+                  <span className="hidden sm:inline">Dettagli</span>
                   <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
@@ -263,9 +264,10 @@ export default function JobsPage() {
                 )}
                 <button
                   onClick={(e) => { e.stopPropagation(); router.push(`/jobs/${job.id}`); }}
-                  className="btn btn-quiet btn-icon btn-sm shrink-0"
+                  className="btn btn-ghost btn-sm shrink-0"
                   aria-label="Dettagli"
                 >
+                  <span className="hidden sm:inline">Dettagli</span>
                   <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
