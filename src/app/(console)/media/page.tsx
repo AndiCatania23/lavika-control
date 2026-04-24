@@ -1025,18 +1025,19 @@ export default function MediaPage() {
                   </div>
                   <button className="btn btn-quiet btn-icon btn-sm" onClick={() => setEditingFormatId(null)} aria-label="Chiudi"><X className="w-4 h-4" /></button>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex flex-wrap gap-4">
                   {FORMAT_SLOTS.map(slot => {
                     const stateKey = `${selectedFmt.id}-${slot.key}`;
                     return (
-                      <ImageSlot
-                        key={slot.key}
-                        label={slot.label} note={slot.note} aspect={slot.aspect} minDim={slot.minDim}
-                        url={selectedFmt[slot.key]} uploadState={formatUploadStates[stateKey] ?? null}
-                        onUpload={f => handleFormatUpload(selectedFmt.id, slot.key, slot.uploadType, f)}
-                        onPicker={() => openPicker({ kind: 'format', formatId: selectedFmt.id, column: slot.key })}
-                        onRemove={() => handleFormatRemove(selectedFmt.id, slot.key)}
-                      />
+                      <div key={slot.key} style={{ width: 220, maxWidth: '100%' }}>
+                        <ImageSlot
+                          label={slot.label} note={slot.note} aspect={slot.aspect} minDim={slot.minDim}
+                          url={selectedFmt[slot.key]} uploadState={formatUploadStates[stateKey] ?? null}
+                          onUpload={f => handleFormatUpload(selectedFmt.id, slot.key, slot.uploadType, f)}
+                          onPicker={() => openPicker({ kind: 'format', formatId: selectedFmt.id, column: slot.key })}
+                          onRemove={() => handleFormatRemove(selectedFmt.id, slot.key)}
+                        />
+                      </div>
                     );
                   })}
                 </div>
@@ -1063,18 +1064,19 @@ export default function MediaPage() {
                 </div>
                 <button className="btn btn-quiet btn-icon btn-sm" onClick={() => setEditingFormatId(null)} aria-label="Chiudi"><X className="w-4 h-4" /></button>
               </div>
-              <div className="vstack" style={{ gap: 'var(--s5)' }}>
+              <div className="flex flex-wrap gap-4 justify-center sm:justify-start">
                 {FORMAT_SLOTS.map(slot => {
                   const stateKey = `${fmt.id}-${slot.key}`;
                   return (
-                    <ImageSlot
-                      key={slot.key}
-                      label={slot.label} note={slot.note} aspect={slot.aspect} minDim={slot.minDim}
-                      url={fmt[slot.key]} uploadState={formatUploadStates[stateKey] ?? null}
-                      onUpload={f => handleFormatUpload(fmt.id, slot.key, slot.uploadType, f)}
-                      onPicker={() => openPicker({ kind: 'format', formatId: fmt.id, column: slot.key })}
-                      onRemove={() => handleFormatRemove(fmt.id, slot.key)}
-                    />
+                    <div key={slot.key} style={{ width: 200, maxWidth: '100%' }}>
+                      <ImageSlot
+                        label={slot.label} note={slot.note} aspect={slot.aspect} minDim={slot.minDim}
+                        url={fmt[slot.key]} uploadState={formatUploadStates[stateKey] ?? null}
+                        onUpload={f => handleFormatUpload(fmt.id, slot.key, slot.uploadType, f)}
+                        onPicker={() => openPicker({ kind: 'format', formatId: fmt.id, column: slot.key })}
+                        onRemove={() => handleFormatRemove(fmt.id, slot.key)}
+                      />
+                    </div>
                   );
                 })}
               </div>
