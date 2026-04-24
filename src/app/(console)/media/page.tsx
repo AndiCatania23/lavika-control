@@ -595,7 +595,113 @@ function PlayersCutoutsSection() {
    MAIN PAGE
    ================================================================== */
 
+/* Wide layout threshold: >=1024 shows all 3 slots inline; below shows compact cards + sheet editor */
+function useIsWide() {
+  const [w, setW] = useState<boolean>(typeof window !== 'undefined' ? window.innerWidth >= 1024 : true);
+  useEffect(() => {
+    const onR = () => setW(window.innerWidth >= 1024);
+    window.addEventListener('resize', onR);
+    return () => window.removeEventListener('resize', onR);
+  }, []);
+  return w;
+}
+
+/* ==================================================================
+   FormatCompactCard — mobile/iPad portrait preview (name + cover + dots)
+   ================================================================== */
+function FormatCompactCard({ fmt, onOpen }: { fmt: SupaFormat; onOpen: () => void }) {
+  const cover = fmt.cover_vertical_url || fmt.cover_horizontal_url || fmt.hero_url;
+  const slots = [
+    { key: 'cover_vertical_url'   as const, label: 'Verticale',  filled: !!fmt.cover_vertical_url },
+    { key: 'cover_horizontal_url' as const, label: 'Orizzontale',filled: !!fmt.cover_horizontal_url },
+    { key: 'hero_url'             as const, label: 'Hero',       filled: !!fmt.hero_url },
+  ];
+  const missing = slots.filter(s => !s.filled).length;
+
+  return (
+    <div onClick={onOpen} className="card card-hover" style={{ cursor: 'pointer', padding: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
+      {/* Cover preview (2:3 aspect) */}
+      <div className="shrink-0 rounded-[var(--r-sm)] overflow-hidden" style={{ width: 56, height: 84, background: 'var(--card-muted)' }}>
+        {cover ? (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img src={cover} alt={fmt.title ?? fmt.id} className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <ImageIcon className="w-5 h-5" style={{ color: 'var(--text-muted)' }} />
+          </div>
+        )}
+      </div>
+
+      <div className="grow min-w-0">
+        <div className="typ-label truncate">{fmt.title ?? fmt.id}</div>
+        <div className="typ-micro typ-mono truncate mt-0.5">{fmt.id}</div>
+        <div className="flex items-center gap-1.5 mt-2">
+          {slots.map(s => (
+            <span
+              key={s.key}
+              title={`${s.label} ${s.filled ? 'presente' : 'mancante'}`}
+              className="inline-flex items-center gap-1 typ-caption"
+              style={{ fontSize: 11 }}
+            >
+              <span className={s.filled ? 'dot dot-ok' : 'dot dot-warn'} />
+              {s.label[0]}
+            </span>
+          ))}
+          {missing > 0 && (
+            <span className="pill pill-warn ml-auto" style={{ fontSize: 10, padding: '1px 6px' }}>
+              {missing} mancant{missing === 1 ? 'e' : 'i'}
+            </span>
+          )}
+          {missing === 0 && (
+            <span className="pill pill-ok ml-auto" style={{ fontSize: 10, padding: '1px 6px' }}>
+              <CheckCircle2 className="w-3 h-3" /> completo
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ==================================================================
+   FormatEditor — renders the 3 slots for a format (used in sheet/panel)
+   ================================================================== */
+function FormatEditor({
+  fmt, formatUploadStates, onUpload, onPicker, onRemove,
+}: {
+  fmt: SupaFormat;
+  formatUploadStates: Record<string, UploadState>;
+  onUpload: (formatId: string, column: FormatImageColumn, uploadType: string, file: File) => void;
+  onPicker: (formatId: string, column: FormatImageColumn) => void;
+  onRemove: (formatId: string, column: FormatImageColumn) => void;
+}) {
+  return (
+    <div className="vstack" style={{ gap: 'var(--s5)' }}>
+      <div>
+        <h3 className="typ-h1">{fmt.title ?? fmt.id}</h3>
+        <p className="typ-micro typ-mono mt-1">{fmt.id}</p>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {FORMAT_SLOTS.map(slot => {
+          const stateKey = `${fmt.id}-${slot.key}`;
+          return (
+            <ImageSlot
+              key={slot.key}
+              label={slot.label} note={slot.note} aspect={slot.aspect} minDim={slot.minDim}
+              url={fmt[slot.key]} uploadState={formatUploadStates[stateKey] ?? null}
+              onUpload={f => onUpload(fmt.id, slot.key, slot.uploadType, f)}
+              onPicker={() => onPicker(fmt.id, slot.key)}
+              onRemove={() => onRemove(fmt.id, slot.key)}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function MediaPage() {
+  const isWide = useIsWide();
   const [activeSection, setActiveSection] = useState<Section>('formats');
 
   // Formats
@@ -603,6 +709,7 @@ export default function MediaPage() {
   const [formatsLoading, setFormatsLoading] = useState(true);
   const [formatsError, setFormatsError] = useState<string | null>(null);
   const [formatUploadStates, setFormatUploadStates] = useState<Record<string, UploadState>>({});
+  const [editingFormatId, setEditingFormatId] = useState<string | null>(null);
 
   // Episodes
   const [supaEpisodes, setSupaEpisodes] = useState<SupaEpisode[]>([]);
@@ -783,26 +890,36 @@ export default function MediaPage() {
         </div>
       </div>
 
-      {/* Section tabs */}
-      <div className="flex items-center gap-1 border-b border-[color:var(--hairline-soft)]">
-        {[
-          { id: 'formats'  as const, label: 'Format',       icon: ImageIcon, count: supaFormats.length },
-          { id: 'episodes' as const, label: 'Episodi',      icon: Film,      count: episodesForSeason.length },
-          { id: 'players'  as const, label: 'Giocatori',    icon: Users,     count: null },
-          { id: 'archive'  as const, label: 'Archivio R2',  icon: Cloud,     count: archiveItems.length || null },
-        ].map(tab => {
-          const Icon = tab.icon;
-          const active = activeSection === tab.id;
-          return (
-            <button key={tab.id} onClick={() => setActiveSection(tab.id)}
-              className={`px-3 h-10 typ-label border-b-2 transition-colors inline-flex items-center gap-1.5 ${active ? 'border-[color:var(--accent-raw)] text-[color:var(--text-hi)]' : 'border-transparent text-[color:var(--text-muted)] hover:text-[color:var(--text-hi)]'}`}
-            >
-              <Icon className="w-4 h-4" strokeWidth={1.75} />
-              {tab.label}
-              {tab.count !== null && tab.count > 0 && <span className="typ-caption">({tab.count})</span>}
-            </button>
-          );
-        })}
+      {/* Section tabs — segmented control (2x2 mobile, 4-col tablet+) */}
+      <div className="p-1 rounded-[var(--r)]" style={{ background: 'var(--card-muted)', border: '1px solid var(--hairline-soft)' }}>
+        <nav className="grid grid-cols-2 sm:grid-cols-4 gap-1">
+          {[
+            { id: 'formats'  as const, label: 'Format',       icon: ImageIcon, count: supaFormats.length },
+            { id: 'episodes' as const, label: 'Episodi',      icon: Film,      count: episodesForSeason.length },
+            { id: 'players'  as const, label: 'Giocatori',    icon: Users,     count: null },
+            { id: 'archive'  as const, label: 'Archivio R2',  icon: Cloud,     count: archiveItems.length || null },
+          ].map(tab => {
+            const Icon = tab.icon;
+            const active = activeSection === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveSection(tab.id)}
+                className="inline-flex items-center justify-center gap-1.5 h-10 px-2 rounded-[calc(var(--r)-2px)] typ-label transition-colors"
+                style={{
+                  background: active ? 'var(--card)' : 'transparent',
+                  color: active ? 'var(--text-hi)' : 'var(--text-muted)',
+                  boxShadow: active ? 'var(--shadow-card)' : 'none',
+                  fontWeight: active ? 600 : 500,
+                }}
+              >
+                <Icon className="w-4 h-4" strokeWidth={1.75} />
+                <span className="truncate">{tab.label}</span>
+                {tab.count !== null && tab.count > 0 && <span className="typ-caption">({tab.count})</span>}
+              </button>
+            );
+          })}
+        </nav>
       </div>
 
       {/* ── Formats ── */}
@@ -826,35 +943,66 @@ export default function MediaPage() {
               <ImageIcon className="w-8 h-8 mx-auto mb-3" style={{ color: 'var(--text-muted)', opacity: 0.4 }} />
               <p className="typ-caption">Nessun format in <code>content_formats</code>.</p>
             </div>
-          ) : (
+          ) : isWide ? (
+            /* Desktop: full inline view — 3 slots per format */
             <div className="vstack" style={{ gap: 'var(--s5)' }}>
               {supaFormats.map(fmt => (
                 <div key={fmt.id} className="card card-body">
-                  <div className="mb-4">
-                    <h3 className="typ-h2">{fmt.title ?? fmt.id}</h3>
-                    <p className="typ-micro typ-mono mt-0.5">{fmt.id}</p>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    {FORMAT_SLOTS.map(slot => {
-                      const stateKey = `${fmt.id}-${slot.key}`;
-                      return (
-                        <ImageSlot
-                          key={slot.key}
-                          label={slot.label} note={slot.note} aspect={slot.aspect} minDim={slot.minDim}
-                          url={fmt[slot.key]} uploadState={formatUploadStates[stateKey] ?? null}
-                          onUpload={f => handleFormatUpload(fmt.id, slot.key, slot.uploadType, f)}
-                          onPicker={() => openPicker({ kind: 'format', formatId: fmt.id, column: slot.key })}
-                          onRemove={() => handleFormatRemove(fmt.id, slot.key)}
-                        />
-                      );
-                    })}
-                  </div>
+                  <FormatEditor
+                    fmt={fmt}
+                    formatUploadStates={formatUploadStates}
+                    onUpload={handleFormatUpload}
+                    onPicker={(fid, col) => openPicker({ kind: 'format', formatId: fid, column: col })}
+                    onRemove={handleFormatRemove}
+                  />
                 </div>
+              ))}
+            </div>
+          ) : (
+            /* Mobile/iPad portrait: compact list, tap → sheet editor */
+            <div className="vstack-tight">
+              {supaFormats.map(fmt => (
+                <FormatCompactCard key={fmt.id} fmt={fmt} onOpen={() => setEditingFormatId(fmt.id)} />
               ))}
             </div>
           )}
         </div>
       )}
+
+      {/* Format editor sheet (mobile/iPad portrait) */}
+      {!isWide && editingFormatId && (() => {
+        const fmt = supaFormats.find(f => f.id === editingFormatId);
+        if (!fmt) return null;
+        return (
+          <>
+            <div className="sheet-backdrop" onClick={() => setEditingFormatId(null)} />
+            <div className="sheet" style={{ maxHeight: '92vh' }}>
+              <div className="sheet-grip" />
+              <div className="flex items-center gap-2 mb-4">
+                <ImageIcon className="w-5 h-5 text-[color:var(--accent-raw)]" />
+                <h2 className="typ-h1 grow truncate">{fmt.title ?? fmt.id}</h2>
+                <button className="btn btn-quiet btn-icon btn-sm" onClick={() => setEditingFormatId(null)} aria-label="Chiudi"><X className="w-4 h-4" /></button>
+              </div>
+              <p className="typ-micro typ-mono mb-4">{fmt.id}</p>
+              <div className="vstack" style={{ gap: 'var(--s5)' }}>
+                {FORMAT_SLOTS.map(slot => {
+                  const stateKey = `${fmt.id}-${slot.key}`;
+                  return (
+                    <ImageSlot
+                      key={slot.key}
+                      label={slot.label} note={slot.note} aspect={slot.aspect} minDim={slot.minDim}
+                      url={fmt[slot.key]} uploadState={formatUploadStates[stateKey] ?? null}
+                      onUpload={f => handleFormatUpload(fmt.id, slot.key, slot.uploadType, f)}
+                      onPicker={() => openPicker({ kind: 'format', formatId: fmt.id, column: slot.key })}
+                      onRemove={() => handleFormatRemove(fmt.id, slot.key)}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          </>
+        );
+      })()}
 
       {/* ── Episodes ── */}
       {activeSection === 'episodes' && (
