@@ -923,13 +923,18 @@ export default function MediaPage() {
       </div>
 
       {/* ── Formats ── */}
-      {activeSection === 'formats' && (
-        <div className="vstack" style={{ gap: 'var(--s4)' }}>
-          {formatsLoading ? (
+      {activeSection === 'formats' && (() => {
+        const selectedFmt = editingFormatId ? supaFormats.find(f => f.id === editingFormatId) ?? null : null;
+
+        if (formatsLoading) {
+          return (
             <div className="flex items-center justify-center h-32">
               <div className="w-7 h-7 border-2 border-[color:var(--accent-raw)] border-t-transparent rounded-full animate-spin" />
             </div>
-          ) : formatsError ? (
+          );
+        }
+        if (formatsError) {
+          return (
             <div className="card card-body flex items-start gap-3" style={{ borderColor: 'color-mix(in oklab, var(--danger) 30%, transparent)', background: 'color-mix(in oklab, var(--danger) 8%, var(--card))' }}>
               <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" style={{ color: 'var(--danger)' }} />
               <div>
@@ -938,36 +943,108 @@ export default function MediaPage() {
                 <button onClick={loadFormats} className="btn btn-ghost btn-sm mt-2">Riprova</button>
               </div>
             </div>
-          ) : supaFormats.length === 0 ? (
+          );
+        }
+        if (supaFormats.length === 0) {
+          return (
             <div className="card card-body text-center">
               <ImageIcon className="w-8 h-8 mx-auto mb-3" style={{ color: 'var(--text-muted)', opacity: 0.4 }} />
               <p className="typ-caption">Nessun format in <code>content_formats</code>.</p>
             </div>
-          ) : isWide ? (
-            /* Desktop: full inline view — 3 slots per format */
-            <div className="vstack" style={{ gap: 'var(--s5)' }}>
-              {supaFormats.map(fmt => (
-                <div key={fmt.id} className="card card-body">
-                  <FormatEditor
-                    fmt={fmt}
-                    formatUploadStates={formatUploadStates}
-                    onUpload={handleFormatUpload}
-                    onPicker={(fid, col) => openPicker({ kind: 'format', formatId: fid, column: col })}
-                    onRemove={handleFormatRemove}
-                  />
-                </div>
-              ))}
-            </div>
-          ) : (
-            /* Mobile/iPad portrait: compact list, tap → sheet editor */
+          );
+        }
+
+        /* Master-detail on wide, stacked list on narrow */
+        return (
+          <div className="grid gap-4" style={{ gridTemplateColumns: isWide && selectedFmt ? 'minmax(320px, 420px) 1fr' : '1fr' }}>
+            {/* Master: list of compact cards */}
             <div className="vstack-tight">
-              {supaFormats.map(fmt => (
-                <FormatCompactCard key={fmt.id} fmt={fmt} onOpen={() => setEditingFormatId(fmt.id)} />
-              ))}
+              {supaFormats.map(fmt => {
+                const selected = selectedFmt?.id === fmt.id;
+                return (
+                  <div
+                    key={fmt.id}
+                    onClick={() => setEditingFormatId(fmt.id)}
+                    className="card card-hover"
+                    style={{
+                      cursor: 'pointer',
+                      padding: 12,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 12,
+                      borderColor: selected ? 'var(--accent-raw)' : 'var(--hairline-soft)',
+                      boxShadow: selected ? 'none' : 'var(--shadow-card)',
+                    }}
+                  >
+                    {/* Cover preview */}
+                    <div className="shrink-0 rounded-[var(--r-sm)] overflow-hidden" style={{ width: 56, height: 84, background: 'var(--card-muted)' }}>
+                      {(fmt.cover_vertical_url || fmt.cover_horizontal_url || fmt.hero_url) ? (
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        <img src={fmt.cover_vertical_url || fmt.cover_horizontal_url || fmt.hero_url || ''} alt={fmt.title ?? fmt.id} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <ImageIcon className="w-5 h-5" style={{ color: 'var(--text-muted)' }} />
+                        </div>
+                      )}
+                    </div>
+                    <div className="grow min-w-0">
+                      <div className="typ-label truncate">{fmt.title ?? fmt.id}</div>
+                      <div className="typ-micro typ-mono truncate mt-0.5">{fmt.id}</div>
+                      <div className="flex items-center gap-1.5 mt-2">
+                        {[
+                          { k: 'cover_vertical_url'   as const, l: 'V', filled: !!fmt.cover_vertical_url },
+                          { k: 'cover_horizontal_url' as const, l: 'O', filled: !!fmt.cover_horizontal_url },
+                          { k: 'hero_url'             as const, l: 'H', filled: !!fmt.hero_url },
+                        ].map(s => (
+                          <span key={s.k} className="inline-flex items-center gap-1" style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                            <span className={s.filled ? 'dot dot-ok' : 'dot dot-warn'} />
+                            {s.l}
+                          </span>
+                        ))}
+                        {(() => {
+                          const missing = [fmt.cover_vertical_url, fmt.cover_horizontal_url, fmt.hero_url].filter(v => !v).length;
+                          return missing > 0
+                            ? <span className="pill pill-warn ml-auto" style={{ fontSize: 10, padding: '1px 6px' }}>{missing} mancant{missing === 1 ? 'e' : 'i'}</span>
+                            : <span className="pill pill-ok ml-auto" style={{ fontSize: 10, padding: '1px 6px' }}><CheckCircle2 className="w-3 h-3" /> completo</span>;
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          )}
-        </div>
-      )}
+
+            {/* Detail panel (wide only, when selected) */}
+            {isWide && selectedFmt && (
+              <div className="card card-body" style={{ position: 'sticky', top: 80, alignSelf: 'start', maxHeight: 'calc(100vh - 100px)', overflowY: 'auto' }}>
+                <div className="flex items-center gap-2 mb-4">
+                  <ImageIcon className="w-5 h-5 text-[color:var(--accent-raw)]" />
+                  <div className="grow min-w-0">
+                    <h2 className="typ-h1 truncate">{selectedFmt.title ?? selectedFmt.id}</h2>
+                    <p className="typ-micro typ-mono truncate">{selectedFmt.id}</p>
+                  </div>
+                  <button className="btn btn-quiet btn-icon btn-sm" onClick={() => setEditingFormatId(null)} aria-label="Chiudi"><X className="w-4 h-4" /></button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {FORMAT_SLOTS.map(slot => {
+                    const stateKey = `${selectedFmt.id}-${slot.key}`;
+                    return (
+                      <ImageSlot
+                        key={slot.key}
+                        label={slot.label} note={slot.note} aspect={slot.aspect} minDim={slot.minDim}
+                        url={selectedFmt[slot.key]} uploadState={formatUploadStates[stateKey] ?? null}
+                        onUpload={f => handleFormatUpload(selectedFmt.id, slot.key, slot.uploadType, f)}
+                        onPicker={() => openPicker({ kind: 'format', formatId: selectedFmt.id, column: slot.key })}
+                        onRemove={() => handleFormatRemove(selectedFmt.id, slot.key)}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Format editor sheet (mobile/iPad portrait) */}
       {!isWide && editingFormatId && (() => {
@@ -980,10 +1057,12 @@ export default function MediaPage() {
               <div className="sheet-grip" />
               <div className="flex items-center gap-2 mb-4">
                 <ImageIcon className="w-5 h-5 text-[color:var(--accent-raw)]" />
-                <h2 className="typ-h1 grow truncate">{fmt.title ?? fmt.id}</h2>
+                <div className="grow min-w-0">
+                  <h2 className="typ-h1 truncate">{fmt.title ?? fmt.id}</h2>
+                  <p className="typ-micro typ-mono truncate">{fmt.id}</p>
+                </div>
                 <button className="btn btn-quiet btn-icon btn-sm" onClick={() => setEditingFormatId(null)} aria-label="Chiudi"><X className="w-4 h-4" /></button>
               </div>
-              <p className="typ-micro typ-mono mb-4">{fmt.id}</p>
               <div className="vstack" style={{ gap: 'var(--s5)' }}>
                 {FORMAT_SLOTS.map(slot => {
                   const stateKey = `${fmt.id}-${slot.key}`;
