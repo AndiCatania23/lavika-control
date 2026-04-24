@@ -1,41 +1,41 @@
 'use client';
 
-import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { SectionHeader } from '@/components/SectionHeader';
 import { useToast } from '@/lib/toast';
 import { useAuth } from '@/lib/auth';
 import {
-  getShopOrders,
-  updateShopOrder,
-  getShopOrderEvents,
-  ORDER_STATUS_LABELS,
-  formatCents,
-  type ShopOrder,
-  type OrderStatus,
-  type ShopOrderEvent,
+  getShopOrders, updateShopOrder, getShopOrderEvents,
+  ORDER_STATUS_LABELS, formatCents,
+  type ShopOrder, type OrderStatus, type ShopOrderEvent,
 } from '@/lib/data/shop';
-import { ChevronLeft, ChevronRight, Truck, Package, CheckCircle2, XCircle, Clock, RefreshCw, ShoppingCart, Eye, PackageCheck, FileText, Edit3 } from 'lucide-react';
+import {
+  X, Truck, Package, CheckCircle2, XCircle, Clock, RefreshCw, ShoppingCart,
+  PackageCheck, FileText, Edit3, ChevronRight,
+} from 'lucide-react';
 
-const STATUS_STYLES: Record<OrderStatus, { bg: string; text: string; icon: typeof Clock }> = {
-  pending: { bg: 'bg-yellow-500/10', text: 'text-yellow-500', icon: Clock },
-  paid: { bg: 'bg-blue-500/10', text: 'text-blue-500', icon: ShoppingCart },
-  fulfilling: { bg: 'bg-orange-500/10', text: 'text-orange-500', icon: Package },
-  shipped: { bg: 'bg-purple-500/10', text: 'text-purple-500', icon: Truck },
-  delivered: { bg: 'bg-green-500/10', text: 'text-green-500', icon: CheckCircle2 },
-  refunded: { bg: 'bg-muted', text: 'text-muted-foreground', icon: RefreshCw },
-  cancelled: { bg: 'bg-red-500/10', text: 'text-red-500', icon: XCircle },
+const STATUS_META: Record<OrderStatus, { pill: string; icon: typeof Clock }> = {
+  pending:    { pill: 'pill pill-warn', icon: Clock },
+  paid:       { pill: 'pill pill-info', icon: ShoppingCart },
+  fulfilling: { pill: 'pill pill-warn', icon: Package },
+  shipped:    { pill: 'pill pill-info', icon: Truck },
+  delivered:  { pill: 'pill pill-ok',   icon: CheckCircle2 },
+  refunded:   { pill: 'pill',           icon: RefreshCw },
+  cancelled:  { pill: 'pill pill-err',  icon: XCircle },
 };
 
 const STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
-  pending: ['paid', 'cancelled'],
-  paid: ['fulfilling', 'refunded', 'cancelled'],
+  pending:    ['paid', 'cancelled'],
+  paid:       ['fulfilling', 'refunded', 'cancelled'],
   fulfilling: ['shipped', 'refunded'],
-  shipped: ['delivered', 'refunded'],
-  delivered: ['refunded'],
-  refunded: [],
-  cancelled: [],
+  shipped:    ['delivered', 'refunded'],
+  delivered:  ['refunded'],
+  refunded:   [],
+  cancelled:  [],
 };
+
+function fmtDateTime(iso: string) {
+  return new Date(iso).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
 
 export default function ShopOrdersPage() {
   const [orders, setOrders] = useState<ShopOrder[]>([]);
@@ -51,149 +51,107 @@ export default function ShopOrdersPage() {
       setOrders(data);
     } catch (err) {
       showToast('error', err instanceof Error ? err.message : 'Errore caricamento');
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
-  useEffect(() => {
-    void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter]);
+  useEffect(() => { void load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [statusFilter]);
 
   const counts = orders.reduce(
-    (acc, o) => {
-      acc.total++;
-      acc[o.status] = (acc[o.status] ?? 0) + 1;
-      return acc;
-    },
+    (acc, o) => { acc.total++; acc[o.status] = (acc[o.status] ?? 0) + 1; return acc; },
     { total: 0 } as Record<string, number>,
   );
 
   return (
-    <div className="space-y-6">
-      <SectionHeader
-        title="Ordini"
-        description={`${orders.length} ordini${statusFilter !== 'all' ? ` (${ORDER_STATUS_LABELS[statusFilter as OrderStatus]})` : ''}`}
-      />
-
-      {/* Status filter tabs */}
-      <div className="flex flex-wrap items-center gap-2">
-        <FilterChip
-          active={statusFilter === 'all'}
+    <div className="vstack" style={{ gap: 'var(--s4)' }}>
+      {/* Filter chips */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        <button
           onClick={() => setStatusFilter('all')}
-          label={`Tutti · ${counts.total ?? 0}`}
-        />
-        {(Object.keys(ORDER_STATUS_LABELS) as OrderStatus[]).map((s) => (
-          <FilterChip
+          className={statusFilter === 'all' ? 'pill pill-accent' : 'pill'}
+          style={{ cursor: 'pointer', padding: '6px 12px', fontSize: 12 }}
+        >
+          Tutti · {counts.total ?? 0}
+        </button>
+        {(Object.keys(ORDER_STATUS_LABELS) as OrderStatus[]).map(s => (
+          <button
             key={s}
-            active={statusFilter === s}
             onClick={() => setStatusFilter(s)}
-            label={`${ORDER_STATUS_LABELS[s]} · ${counts[s] ?? 0}`}
-          />
+            className={statusFilter === s ? 'pill pill-accent' : 'pill'}
+            style={{ cursor: 'pointer', padding: '6px 12px', fontSize: 12 }}
+          >
+            {ORDER_STATUS_LABELS[s]} · {counts[s] ?? 0}
+          </button>
         ))}
       </div>
 
       {/* Empty */}
-      {!loading && orders.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border bg-card/50 p-12 text-center">
-          <PackageCheck className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-          <p className="text-base font-semibold text-foreground">Nessun ordine</p>
-          <p className="text-sm text-muted-foreground mt-1">
-            {statusFilter === 'all' ? 'Non sono ancora arrivati ordini.' : 'Nessun ordine con questo status.'}
+      {!loading && orders.length === 0 && (
+        <div className="card card-body text-center">
+          <PackageCheck className="w-10 h-10 mx-auto mb-3" style={{ color: 'var(--text-muted)', opacity: 0.4 }} />
+          <p className="typ-label">Nessun ordine</p>
+          <p className="typ-caption mt-1">
+            {statusFilter === 'all' ? 'Non sono arrivati ordini.' : 'Nessun ordine con questo status.'}
           </p>
         </div>
-      ) : null}
+      )}
 
-      {/* Loading skeleton */}
-      {loading ? (
-        <div className="space-y-2">
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="h-20 rounded-xl border border-border bg-card animate-pulse" />
+      {/* Loading */}
+      {loading && (
+        <div className="vstack-tight">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="card" style={{ height: 72, opacity: 0.4 }} />
           ))}
         </div>
-      ) : null}
+      )}
 
       {/* List */}
-      {!loading && orders.length > 0 ? (
-        <div className="space-y-2">
-          {orders.map((order) => {
-            const StatusIcon = STATUS_STYLES[order.status].icon;
-            const statusStyle = STATUS_STYLES[order.status];
+      {!loading && orders.length > 0 && (
+        <div className="vstack-tight">
+          {orders.map(order => {
+            const meta = STATUS_META[order.status];
+            const SIcon = meta.icon;
             const itemCount = (order.line_items ?? []).reduce((acc, it) => acc + (it.quantity ?? 0), 0);
             return (
-              <button
+              <div
                 key={order.id}
-                type="button"
                 onClick={() => setSelected(order)}
-                className="w-full text-left rounded-xl border border-border bg-card hover:border-muted-foreground/30 hover:bg-muted/30 transition-colors p-4 flex items-center gap-4"
+                className="card card-hover"
+                style={{ cursor: 'pointer', padding: 12, display: 'flex', alignItems: 'center', gap: 12 }}
               >
-                <div
-                  className={`flex items-center justify-center w-10 h-10 rounded-lg ${statusStyle.bg} ${statusStyle.text} shrink-0`}
-                >
-                  <StatusIcon className="w-5 h-5" />
+                <div className="shrink-0 inline-grid place-items-center" style={{ width: 40, height: 40, borderRadius: 'var(--r-sm)', background: 'var(--card-muted)' }}>
+                  <span className={meta.pill} style={{ padding: 4, borderRadius: 8 }}>
+                    <SIcon className="w-4 h-4" />
+                  </span>
                 </div>
-
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 text-sm">
-                    <span className="font-mono font-semibold text-foreground">{order.order_number ?? '—'}</span>
-                    <span className="text-muted-foreground">·</span>
-                    <span className="text-muted-foreground truncate">
-                      {order.customer_name || order.customer_email || 'Cliente guest'}
+                <div className="grow min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="typ-mono" style={{ fontWeight: 600 }}>{order.order_number ?? '—'}</span>
+                    <span className={meta.pill} style={{ fontSize: 10, padding: '1px 6px' }}>
+                      {ORDER_STATUS_LABELS[order.status]}
                     </span>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {new Date(order.created_at).toLocaleString('it-IT', {
-                      day: '2-digit',
-                      month: '2-digit',
-                      year: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                    {' · '}
-                    {itemCount} {itemCount === 1 ? 'articolo' : 'articoli'}
-                  </p>
+                  <div className="typ-caption truncate mt-0.5">
+                    {order.customer_name || order.customer_email || 'Cliente guest'} · {fmtDateTime(order.created_at)} · {itemCount} {itemCount === 1 ? 'articolo' : 'articoli'}
+                  </div>
                 </div>
-
-                <div className="flex items-center gap-3 shrink-0">
-                  <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded ${statusStyle.bg} ${statusStyle.text}`}>
-                    {ORDER_STATUS_LABELS[order.status]}
-                  </span>
-                  <span className="text-sm font-semibold text-foreground">{formatCents(order.total_amount, order.currency)}</span>
-                  <Eye className="w-4 h-4 text-muted-foreground" />
+                <div className="typ-label shrink-0" style={{ fontWeight: 700 }}>
+                  {formatCents(order.total_amount, order.currency)}
                 </div>
-              </button>
+              </div>
             );
           })}
         </div>
-      ) : null}
+      )}
 
       {/* Detail sheet */}
-      {selected ? (
+      {selected && (
         <OrderDetailSheet
           order={selected}
           onClose={() => setSelected(null)}
-          onUpdate={async () => {
-            setSelected(null);
-            await load();
-          }}
+          onUpdate={async () => { setSelected(null); await load(); }}
         />
-      ) : null}
+      )}
     </div>
-  );
-}
-
-function FilterChip({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`h-9 px-3 rounded-full text-xs font-semibold transition-colors ${
-        active ? 'bg-foreground text-background' : 'bg-card border border-border text-foreground/70 hover:bg-muted'
-      }`}
-    >
-      {label}
-    </button>
   );
 }
 
@@ -202,9 +160,7 @@ function FilterChip({ active, onClick, label }: { active: boolean; onClick: () =
    ═══════════════════════════════════════════════════════ */
 
 function OrderDetailSheet({
-  order,
-  onClose,
-  onUpdate,
+  order, onClose, onUpdate,
 }: {
   order: ShopOrder;
   onClose: () => void;
@@ -227,7 +183,7 @@ function OrderDetailSheet({
     let cancelled = false;
     setEventsLoading(true);
     getShopOrderEvents(order.id)
-      .then((data) => { if (!cancelled) setEvents(data); })
+      .then(data => { if (!cancelled) setEvents(data); })
       .catch(() => { if (!cancelled) setEvents([]); })
       .finally(() => { if (!cancelled) setEventsLoading(false); });
     return () => { cancelled = true; };
@@ -249,10 +205,7 @@ function OrderDetailSheet({
         return;
       }
 
-      await updateShopOrder(order.id, updates, {
-        id: user?.id ?? null,
-        email: user?.email ?? null,
-      });
+      await updateShopOrder(order.id, updates, { id: user?.id ?? null, email: user?.email ?? null });
       showToast('success', 'Ordine aggiornato');
       await onUpdate();
     } catch (err) {
@@ -261,219 +214,176 @@ function OrderDetailSheet({
     }
   };
 
+  const meta = STATUS_META[order.status];
+
   return (
-    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-      <div
-        className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-card border border-border rounded-t-2xl md:rounded-2xl shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="sticky top-0 bg-card border-b border-border px-5 py-4 flex items-center justify-between">
-          <div>
-            <p className="text-xs text-muted-foreground">Ordine</p>
-            <h2 className="text-lg font-mono font-bold text-foreground">{order.order_number ?? '—'}</h2>
+    <>
+      <div className="sheet-backdrop" onClick={onClose} />
+      <div className="sheet" style={{ maxHeight: '92vh' }}>
+        <div className="sheet-grip" />
+        <div className="flex items-center gap-2 mb-3">
+          <div className="grow min-w-0">
+            <div className="typ-micro">Ordine</div>
+            <h2 className="typ-h1 typ-mono truncate">{order.order_number ?? '—'}</h2>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex items-center justify-center h-9 w-9 rounded-lg border border-border hover:bg-muted text-foreground"
-          >
-            <ChevronLeft className="w-4 h-4" />
+          <button onClick={onClose} className="btn btn-quiet btn-icon btn-sm" aria-label="Chiudi">
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        <div className="p-5 space-y-5">
+        <div className="vstack" style={{ gap: 'var(--s5)' }}>
           {/* Customer */}
-          <Block title="Cliente">
-            <div className="space-y-0.5">
-              <p className="text-sm text-foreground font-semibold">{order.customer_name ?? '—'}</p>
-              <p className="text-sm text-muted-foreground">{order.customer_email ?? '—'}</p>
-              {order.customer_phone ? <p className="text-sm text-muted-foreground">{order.customer_phone}</p> : null}
+          <Section title="Cliente">
+            <div className="typ-body">
+              <div className="typ-label">{order.customer_name ?? '—'}</div>
+              <div className="typ-caption">{order.customer_email ?? '—'}</div>
+              {order.customer_phone && <div className="typ-caption">{order.customer_phone}</div>}
             </div>
-            {order.shipping_address ? (
-              <pre className="mt-2 text-xs text-muted-foreground font-mono whitespace-pre-wrap leading-relaxed bg-background/50 rounded p-2 border border-border">
-                {JSON.stringify(order.shipping_address, null, 2)}
-              </pre>
-            ) : null}
-          </Block>
+            {order.shipping_address && (
+              <pre className="typ-mono mt-2 whitespace-pre-wrap" style={{
+                fontSize: 11, padding: 10, background: 'var(--card-muted)', borderRadius: 'var(--r-sm)',
+                border: '1px solid var(--hairline-soft)',
+              }}>{JSON.stringify(order.shipping_address, null, 2)}</pre>
+            )}
+          </Section>
 
           {/* Items */}
-          <Block title={`Articoli (${(order.line_items ?? []).length})`}>
-            <div className="space-y-2">
+          <Section title={`Articoli (${(order.line_items ?? []).length})`}>
+            <div className="vstack-tight">
               {(order.line_items ?? []).map((item, idx) => (
-                <div key={idx} className="flex items-center gap-3 p-2 rounded-lg bg-background/50 border border-border">
+                <div key={idx} className="flex items-center gap-3 p-2 rounded-[var(--r-sm)]" style={{ background: 'var(--card-muted)', border: '1px solid var(--hairline-soft)' }}>
                   {item.image_url ? (
                     /* eslint-disable-next-line @next/next/no-img-element */
-                    <img src={item.image_url} alt={item.name} className="w-12 h-12 rounded object-cover shrink-0" />
+                    <img src={item.image_url} alt={item.name} className="w-12 h-12 rounded-[var(--r-xs)] object-cover shrink-0" />
                   ) : (
-                    <div className="w-12 h-12 rounded bg-muted shrink-0" />
+                    <div className="w-12 h-12 rounded-[var(--r-xs)] shrink-0" style={{ background: 'var(--hairline-soft)' }} />
                   )}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-foreground truncate">{item.name ?? 'Articolo'}</p>
-                    <p className="text-xs text-muted-foreground">
+                  <div className="grow min-w-0">
+                    <div className="typ-label truncate">{item.name ?? 'Articolo'}</div>
+                    <div className="typ-caption">
                       {[item.size, item.color].filter(Boolean).join(' · ') || 'No variante'} · Qty {item.quantity}
-                    </p>
+                    </div>
                   </div>
                   {item.unit_amount ? (
-                    <p className="text-sm text-foreground shrink-0">{formatCents((item.unit_amount as number) * item.quantity)}</p>
+                    <div className="typ-label shrink-0">{formatCents((item.unit_amount as number) * item.quantity)}</div>
                   ) : item.unit_price_eur ? (
-                    <p className="text-sm text-foreground shrink-0">€{(item.unit_price_eur * item.quantity).toFixed(2)}</p>
+                    <div className="typ-label shrink-0">€{(item.unit_price_eur * item.quantity).toFixed(2)}</div>
                   ) : null}
                 </div>
               ))}
             </div>
-            <div className="flex items-center justify-between pt-3 mt-3 border-t border-border">
-              <span className="text-xs uppercase tracking-wider text-muted-foreground">Totale</span>
-              <span className="text-lg font-bold text-foreground">{formatCents(order.total_amount, order.currency)}</span>
+            <div className="flex items-center justify-between pt-3 mt-3 border-t border-[color:var(--hairline-soft)]">
+              <span className="typ-micro">Totale</span>
+              <span className="typ-h2" style={{ fontWeight: 700 }}>{formatCents(order.total_amount, order.currency)}</span>
             </div>
-          </Block>
+          </Section>
 
-          {/* Status + transition */}
-          <Block title="Status">
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs uppercase tracking-wider text-muted-foreground">Attuale:</span>
-                <span
-                  className={`text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded ${STATUS_STYLES[order.status].bg} ${STATUS_STYLES[order.status].text}`}
-                >
-                  {ORDER_STATUS_LABELS[order.status]}
-                </span>
-              </div>
-              {allowedTransitions.length > 0 ? (
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Cambia a:</p>
-                  <div className="flex flex-wrap gap-2">
-                    {allowedTransitions.map((s) => (
-                      <button
-                        key={s}
-                        type="button"
-                        onClick={() => setStatusDraft(s)}
-                        className={`inline-flex items-center gap-1.5 h-9 px-3 rounded-lg text-xs font-semibold transition-colors ${
-                          statusDraft === s
-                            ? 'bg-foreground text-background'
-                            : 'bg-card border border-border text-foreground/70 hover:bg-muted'
-                        }`}
-                      >
-                        <ChevronRight className="w-3 h-3" />
-                        {ORDER_STATUS_LABELS[s]}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <p className="text-xs text-muted-foreground italic">Nessuna transizione disponibile (stato finale).</p>
-              )}
+          {/* Status */}
+          <Section title="Status">
+            <div className="flex items-center gap-2 flex-wrap mb-3">
+              <span className="typ-micro">Attuale:</span>
+              <span className={meta.pill} style={{ fontSize: 11 }}>
+                {ORDER_STATUS_LABELS[order.status]}
+              </span>
             </div>
-          </Block>
+            {allowedTransitions.length > 0 ? (
+              <>
+                <div className="typ-micro mb-2">Cambia a:</div>
+                <div className="flex flex-wrap gap-2">
+                  {allowedTransitions.map(s => (
+                    <button
+                      key={s}
+                      onClick={() => setStatusDraft(s)}
+                      className={statusDraft === s ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm'}
+                    >
+                      <ChevronRight className="w-3.5 h-3.5" />
+                      {ORDER_STATUS_LABELS[s]}
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <p className="typ-caption italic">Nessuna transizione disponibile (stato finale).</p>
+            )}
+          </Section>
 
           {/* Shipping */}
-          <Block title="Spedizione">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <FieldBlock label="Corriere">
-                <input
-                  type="text"
-                  value={shippingCarrier}
-                  onChange={(e) => setShippingCarrier(e.target.value)}
-                  placeholder="BRT, SDA, Poste…"
-                  className={inputBlockClass}
-                />
-              </FieldBlock>
-              <FieldBlock label="Numero tracking">
-                <input
-                  type="text"
-                  value={trackingNumber}
-                  onChange={(e) => setTrackingNumber(e.target.value)}
-                  placeholder="Codice tracking"
-                  className={inputBlockClass + ' font-mono'}
-                />
-              </FieldBlock>
+          <Section title="Spedizione">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="typ-micro block mb-1.5">Corriere</label>
+                <input type="text" value={shippingCarrier} onChange={e => setShippingCarrier(e.target.value)} placeholder="BRT, SDA, Poste…" className="input" />
+              </div>
+              <div>
+                <label className="typ-micro block mb-1.5">Numero tracking</label>
+                <input type="text" value={trackingNumber} onChange={e => setTrackingNumber(e.target.value)} placeholder="Codice tracking" className="input typ-mono" />
+              </div>
             </div>
-            <FieldBlock label="URL tracking">
-              <input
-                type="url"
-                value={trackingUrl}
-                onChange={(e) => setTrackingUrl(e.target.value)}
-                placeholder="https://…"
-                className={inputBlockClass}
-              />
-            </FieldBlock>
-          </Block>
+            <div className="mt-3">
+              <label className="typ-micro block mb-1.5">URL tracking</label>
+              <input type="url" value={trackingUrl} onChange={e => setTrackingUrl(e.target.value)} placeholder="https://…" className="input" />
+            </div>
+          </Section>
 
           {/* Staff notes */}
-          <Block title="Note interne (staff)">
+          <Section title="Note interne (staff)">
             <textarea
               rows={3}
               value={staffNotes}
-              onChange={(e) => setStaffNotes(e.target.value)}
-              placeholder="Note visibili solo allo staff — non visibili al cliente"
-              className={inputBlockClass + ' resize-y'}
+              onChange={e => setStaffNotes(e.target.value)}
+              placeholder="Note visibili solo allo staff — non al cliente"
+              className="textarea"
             />
-          </Block>
+          </Section>
 
-          {/* Activity / audit log */}
-          <Block title={`Attivita (${events.length})`}>
+          {/* Activity log */}
+          <Section title={`Attività (${events.length})`}>
             {eventsLoading ? (
-              <p className="text-xs text-muted-foreground">Carico eventi…</p>
+              <p className="typ-caption">Carico eventi…</p>
             ) : events.length === 0 ? (
-              <p className="text-xs text-muted-foreground italic">Nessun evento registrato.</p>
+              <p className="typ-caption italic">Nessun evento registrato.</p>
             ) : (
-              <ul className="space-y-2">
-                {events.map((ev) => (
-                  <OrderEventItem key={ev.id} event={ev} />
-                ))}
-              </ul>
+              <div className="vstack-tight">
+                {events.map(ev => <OrderEventItem key={ev.id} event={ev} />)}
+              </div>
             )}
-          </Block>
+          </Section>
 
-          {/* Meta */}
-          <Block title="Dettagli Stripe">
-            <div className="space-y-1 text-xs font-mono text-muted-foreground">
-              <p>Session: {order.stripe_session_id}</p>
-              {order.stripe_payment_intent_id ? <p>Payment Intent: {order.stripe_payment_intent_id}</p> : null}
-              {order.receipt_url ? (
-                <p>
-                  Receipt:{' '}
-                  <a href={order.receipt_url} target="_blank" rel="noreferrer" className="underline">
-                    apri
-                  </a>
-                </p>
-              ) : null}
+          {/* Stripe meta */}
+          <Section title="Dettagli Stripe">
+            <div className="vstack-tight typ-mono typ-caption" style={{ fontSize: 11 }}>
+              <div>Session: {order.stripe_session_id}</div>
+              {order.stripe_payment_intent_id && <div>Payment Intent: {order.stripe_payment_intent_id}</div>}
+              {order.receipt_url && (
+                <div>Receipt: <a href={order.receipt_url} target="_blank" rel="noreferrer" style={{ textDecoration: 'underline', color: 'var(--accent-raw)' }}>apri</a></div>
+              )}
             </div>
-          </Block>
+          </Section>
         </div>
 
         {/* Actions footer */}
-        <div className="sticky bottom-0 bg-card border-t border-border px-5 py-3 flex items-center justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex items-center h-10 px-4 rounded-lg border border-border hover:bg-muted text-sm font-medium text-foreground"
-          >
-            Chiudi
-          </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={saving}
-            className="inline-flex items-center h-10 px-4 rounded-lg bg-foreground text-background text-sm font-semibold disabled:opacity-50"
-          >
+        <div className="flex items-center justify-end gap-2 mt-4 pt-4 border-t border-[color:var(--hairline-soft)]">
+          <button onClick={onClose} className="btn btn-ghost">Chiudi</button>
+          <button onClick={handleSave} disabled={saving} className="btn btn-primary">
             {saving ? 'Salvataggio…' : 'Salva modifiche'}
           </button>
         </div>
       </div>
+    </>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <div className="typ-micro mb-2">{title}</div>
+      <div>{children}</div>
     </div>
   );
 }
 
 function OrderEventItem({ event }: { event: ShopOrderEvent }) {
-  const when = new Date(event.created_at).toLocaleString('it-IT', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  const when = new Date(event.created_at).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   const actor = event.actor_email || event.actor_id?.slice(0, 8) || 'sistema';
 
   let Icon = FileText;
@@ -484,77 +394,43 @@ function OrderEventItem({ event }: { event: ShopOrderEvent }) {
     case 'status_changed':
       Icon = ChevronRight;
       label = 'Status cambiato';
-      detail = (
-        <span className="font-mono text-[10px]">
-          {(event.from_status ?? '?').toUpperCase()}
-          {' → '}
-          <span className="text-foreground">{(event.to_status ?? '?').toUpperCase()}</span>
-        </span>
-      );
+      detail = <span className="typ-mono">{(event.from_status ?? '?').toUpperCase()} → <span style={{ color: 'var(--text-hi)' }}>{(event.to_status ?? '?').toUpperCase()}</span></span>;
       break;
-    case 'tracking_updated':
+    case 'tracking_updated': {
       Icon = Truck;
       label = 'Tracking aggiornato';
-      {
-        const data = event.data as { carrier?: string; tracking_number?: string };
-        detail = (
-          <span className="font-mono text-[10px]">
-            {data.carrier ?? '—'} · {data.tracking_number ?? '—'}
-          </span>
-        );
-      }
+      const data = event.data as { carrier?: string; tracking_number?: string };
+      detail = <span className="typ-mono">{data.carrier ?? '—'} · {data.tracking_number ?? '—'}</span>;
       break;
-    case 'note_updated':
+    }
+    case 'note_updated': {
       Icon = Edit3;
       label = 'Note aggiornate';
-      {
-        const data = event.data as { preview?: string };
-        detail = data.preview ? <span className="italic text-[11px]">&ldquo;{data.preview.slice(0, 80)}&rdquo;</span> : null;
-      }
+      const data = event.data as { preview?: string };
+      detail = data.preview ? <span className="italic">&ldquo;{data.preview.slice(0, 80)}&rdquo;</span> : null;
       break;
+    }
     case 'fulfilled_by_set':
       Icon = Package;
       label = 'Preso in carico';
-      detail = null;
       break;
     default:
       break;
   }
 
   return (
-    <li className="flex items-start gap-3 rounded-lg border border-border bg-background/40 p-2.5">
-      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted/60">
-        <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+    <div className="flex items-start gap-3 p-2.5 rounded-[var(--r-sm)]" style={{ background: 'var(--card-muted)', border: '1px solid var(--hairline-soft)' }}>
+      <div className="inline-grid place-items-center shrink-0" style={{ width: 28, height: 28, borderRadius: 6, background: 'var(--card)' }}>
+        <Icon className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />
       </div>
-      <div className="min-w-0 flex-1 space-y-0.5">
+      <div className="min-w-0 grow">
         <div className="flex items-baseline justify-between gap-2">
-          <p className="text-xs font-semibold text-foreground">{label}</p>
-          <p className="text-[10px] text-muted-foreground shrink-0">{when}</p>
+          <span className="typ-label">{label}</span>
+          <span className="typ-caption shrink-0" style={{ fontSize: 11 }}>{when}</span>
         </div>
-        {detail ? <div className="text-xs text-muted-foreground">{detail}</div> : null}
-        <p className="text-[10px] text-muted-foreground/70">da {actor}</p>
+        {detail && <div className="typ-caption">{detail}</div>}
+        <div className="typ-caption" style={{ fontSize: 11, opacity: 0.7 }}>da {actor}</div>
       </div>
-    </li>
+    </div>
   );
 }
-
-function Block({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section>
-      <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">{title}</h3>
-      <div>{children}</div>
-    </section>
-  );
-}
-
-function FieldBlock({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="block space-y-1">
-      <span className="block text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
-      {children}
-    </label>
-  );
-}
-
-const inputBlockClass =
-  'w-full min-h-10 px-3 py-2 rounded-lg border border-border bg-background text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-muted-foreground/60';

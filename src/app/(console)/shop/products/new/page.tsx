@@ -3,7 +3,6 @@
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
-import { SectionHeader } from '@/components/SectionHeader';
 import { useToast } from '@/lib/toast';
 import { ChevronLeft } from 'lucide-react';
 import { ProductForm, type ProductFormValue } from '@/components/shop/ProductForm';
@@ -71,20 +70,15 @@ export default function NewProductPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <SectionHeader
-        title="Nuovo prodotto"
-        description="Compila i campi base. Immagini e varianti le aggiungi dopo aver creato il prodotto."
-        actions={
-          <Link
-            href="/shop/products"
-            className="inline-flex items-center gap-1.5 h-10 px-4 rounded-lg border border-border bg-card hover:bg-muted text-sm font-medium text-foreground transition-colors"
-          >
-            <ChevronLeft className="w-4 h-4" />
-            Torna ai prodotti
-          </Link>
-        }
-      />
+    <div className="vstack" style={{ gap: 'var(--s4)' }}>
+      <Link href="/shop/products" className="btn btn-ghost btn-sm" style={{ alignSelf: 'flex-start' }}>
+        <ChevronLeft className="w-4 h-4" /> Torna ai prodotti
+      </Link>
+
+      <div>
+        <h1 className="typ-h1">Nuovo prodotto</h1>
+        <p className="typ-caption mt-1">Compila i campi base. Immagini e varianti si aggiungono dopo.</p>
+      </div>
 
       <ProductForm
         value={value}

@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { SectionHeader } from '@/components/SectionHeader';
 import { useToast } from '@/lib/toast';
 import { ChevronLeft } from 'lucide-react';
 import { ProductForm, type ProductFormValue } from '@/components/shop/ProductForm';
@@ -83,28 +82,23 @@ export default function EditProductPage() {
 
   if (loading || !formValue || !product) {
     return (
-      <div className="space-y-6">
-        <div className="h-20 rounded-xl bg-card border border-border animate-pulse" />
-        <div className="h-96 rounded-xl bg-card border border-border animate-pulse" />
+      <div className="vstack" style={{ gap: 'var(--s4)' }}>
+        <div className="card" style={{ height: 80, opacity: 0.4 }} />
+        <div className="card" style={{ height: 380, opacity: 0.4 }} />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <SectionHeader
-        title={product.name || 'Modifica prodotto'}
-        description={`Slug: ${product.slug} · Creato il ${new Date(product.created_at).toLocaleDateString('it-IT')}`}
-        actions={
-          <Link
-            href="/shop/products"
-            className="inline-flex items-center gap-1.5 h-10 px-4 rounded-lg border border-border bg-card hover:bg-muted text-sm font-medium text-foreground transition-colors"
-          >
-            <ChevronLeft className="w-4 h-4" />
-            Torna ai prodotti
-          </Link>
-        }
-      />
+    <div className="vstack" style={{ gap: 'var(--s4)' }}>
+      <Link href="/shop/products" className="btn btn-ghost btn-sm" style={{ alignSelf: 'flex-start' }}>
+        <ChevronLeft className="w-4 h-4" /> Torna ai prodotti
+      </Link>
+
+      <div>
+        <h1 className="typ-h1">{product.name || 'Modifica prodotto'}</h1>
+        <p className="typ-caption mt-1">Slug: <span className="typ-mono">{product.slug}</span> · Creato {new Date(product.created_at).toLocaleDateString('it-IT')}</p>
+      </div>
 
       <ProductForm
         value={formValue}
