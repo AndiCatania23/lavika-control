@@ -759,10 +759,10 @@ export default function PillsPage() {
     if (action === 'delete')  return setConfirmModal({ open: true, title: 'Elimina', message: `Eliminare "${pill.title}"? Irreversibile.`, variant: 'danger', onConfirm: () => { setConfirmModal(m => ({ ...m, open: false })); doDelete(pill); } });
   };
 
-  // Detect wide viewport (>= 768px)
-  const [isWide, setIsWide] = useState<boolean>(typeof window !== 'undefined' ? window.innerWidth >= 768 : true);
+  // Master-detail split at >=1024 (iPad landscape + desktop). Below = sheet.
+  const [isWide, setIsWide] = useState<boolean>(typeof window !== 'undefined' ? window.innerWidth >= 1024 : true);
   useEffect(() => {
-    const onResize = () => setIsWide(window.innerWidth >= 768);
+    const onResize = () => setIsWide(window.innerWidth >= 1024);
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
