@@ -43,11 +43,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="it" data-theme="dark" suppressHydrationWarning>
+    <html lang="it" suppressHydrationWarning>
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var key='lavika_theme';var saved=window.localStorage.getItem(key);var theme=saved==='light'||saved==='dark'?saved:'dark';document.documentElement.setAttribute('data-theme',theme);}catch(_e){document.documentElement.setAttribute('data-theme','dark');}})();`,
+            __html: `(function(){try{var key='lavika_theme';var saved=window.localStorage.getItem(key);if(saved==='dark'){document.documentElement.setAttribute('data-theme','dark');}else if(saved==='light'){document.documentElement.removeAttribute('data-theme');}}catch(_e){}})();`,
           }}
         />
       </head>

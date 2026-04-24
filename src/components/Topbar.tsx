@@ -1,25 +1,29 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Search, Bell, Settings, CircleCheck, TriangleAlert, Ban, Clapperboard } from 'lucide-react';
+import { Search, Bell, Settings, CircleCheck, TriangleAlert, Ban, Clapperboard, Sun, Moon } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { getNotificationsData, AppNotification, getGlobalSearchData, GlobalSearchResult } from '@/lib/data';
+import { useTheme } from '@/lib/theme';
 
 interface TopbarProps {
   title?: string;
 }
 
 const quickSearchItems: Array<{ id: string; href: string; title: string; keywords: string[] }> = [
-  { id: 'page_dashboard', href: '/dashboard', title: 'Dashboard', keywords: ['home', 'overview'] },
-  { id: 'page_analytics', href: '/analytics', title: 'Analisi', keywords: ['analytics', 'metriche', 'kpi'] },
-  { id: 'page_users', href: '/users', title: 'Utenti', keywords: ['users', 'profili'] },
-  { id: 'page_sessions', href: '/sessions', title: 'Sessioni', keywords: ['session', 'accessi', 'login'] },
-  { id: 'page_jobs', href: '/jobs', title: 'Job', keywords: ['run', 'workflow', 'sync'] },
-  { id: 'page_runs', href: '/jobs/runs', title: 'Esecuzioni Job', keywords: ['runs', 'esecuzioni'] },
-  { id: 'page_errors', href: '/errors', title: 'Errori', keywords: ['error', 'warning', 'fail'] },
-  { id: 'page_notifications', href: '/notifications', title: 'Notifiche', keywords: ['alert', 'campanella'] },
-  { id: 'page_settings', href: '/settings', title: 'Impostazioni', keywords: ['settings', 'config'] },
+  { id: 'page_dashboard',   href: '/dashboard',       title: 'Oggi — Dashboard',   keywords: ['home', 'overview', 'oggi'] },
+  { id: 'page_analytics',   href: '/analytics',       title: 'Analisi',            keywords: ['analytics', 'metriche', 'kpi'] },
+  { id: 'page_pills',       href: '/pills',           title: 'Pillole',            keywords: ['pills', 'editoriale'] },
+  { id: 'page_palinsesto',  href: '/palinsesto-home', title: 'Palinsesto Home',    keywords: ['schedule', 'editoriale', 'card', 'serie'] },
+  { id: 'page_media',       href: '/media',           title: 'Media — Copertine',  keywords: ['cover', 'format', 'episodi', 'player', 'cutout'] },
+  { id: 'page_jobs',        href: '/jobs',            title: 'Job & Runs',         keywords: ['run', 'workflow', 'sync', 'daemon'] },
+  { id: 'page_runs',        href: '/jobs/runs',       title: 'Esecuzioni Job',     keywords: ['runs', 'esecuzioni'] },
+  { id: 'page_errors',      href: '/errors',          title: 'Errori',             keywords: ['error', 'warning', 'fail'] },
+  { id: 'page_notifications', href: '/notifications', title: 'Notifiche',          keywords: ['alert', 'campanella'] },
+  { id: 'page_users',       href: '/users',           title: 'Utenti',             keywords: ['users', 'profili'] },
+  { id: 'page_shop',        href: '/shop',            title: 'Shop',               keywords: ['shop', 'prodotti', 'ordini'] },
+  { id: 'page_settings',    href: '/settings',        title: 'Impostazioni',       keywords: ['settings', 'config'] },
 ];
 
 export function Topbar({ title = 'LΛVIKΛ' }: TopbarProps) {
@@ -30,6 +34,7 @@ export function Topbar({ title = 'LΛVIKΛ' }: TopbarProps) {
   const [searchLoading, setSearchLoading] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const { theme, toggleTheme } = useTheme();
   const searchPanelRef = useRef<HTMLDivElement>(null);
   const notificationPanelRef = useRef<HTMLDivElement>(null);
 
@@ -301,6 +306,15 @@ export function Topbar({ title = 'LΛVIKΛ' }: TopbarProps) {
             </div>
 
             <div className="h-6 w-px bg-border" />
+
+            <button
+              onClick={toggleTheme}
+              className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
+              title={theme === 'light' ? 'Passa a dark' : 'Passa a light'}
+              aria-label="Cambia tema"
+            >
+              {theme === 'light' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
+            </button>
 
             <Link
               href="/settings"

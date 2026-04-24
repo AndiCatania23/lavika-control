@@ -130,11 +130,11 @@ function PillsDashboard({ pills }: { pills: Pill[] }) {
   ];
 
   return (
-    <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-6">
+    <div className="lk-kpi-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
       {cards.map(c => (
-        <div key={c.label} className="bg-card border border-border rounded-lg p-2.5 sm:p-3">
-          <span className="text-[10px] sm:text-xs text-muted-foreground line-clamp-1">{c.label}</span>
-          <div className={`text-lg sm:text-xl font-semibold mt-0.5 ${c.color}`}>{c.value}</div>
+        <div key={c.label} className="lk-kpi-cell">
+          <span className="lk-micro truncate">{c.label}</span>
+          <div className={`lk-metric ${c.color}`}>{c.value}</div>
         </div>
       ))}
     </div>
@@ -216,11 +216,10 @@ function PillForm({ initial, onSave, onCancel, saving }: PillFormProps) {
           className={inputCls}
           value={title}
           onChange={e => setTitle(e.target.value)}
-          maxLength={60}
           required
-          placeholder="Max 60 caratteri, con emoji iniziale"
+          placeholder="Titolo della pill, libero — emoji iniziale consigliata"
         />
-        <span className="text-[10px] text-muted-foreground mt-0.5 block">{title.length}/60</span>
+        <span className="text-[10px] text-muted-foreground mt-0.5 block">{title.length} caratteri</span>
       </div>
 
       <div>

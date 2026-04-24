@@ -12,7 +12,7 @@ interface ThemeContextType {
 }
 
 const THEME_STORAGE_KEY = 'lavika_theme';
-const DEFAULT_THEME: Theme = 'dark';
+const DEFAULT_THEME: Theme = 'light';
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 function applyTheme(theme: Theme) {
