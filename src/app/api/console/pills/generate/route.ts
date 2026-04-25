@@ -109,7 +109,8 @@ export async function POST(request: Request) {
         tools: [{ google_search: {} }],
         generationConfig: {
           temperature: 0.7,
-          maxOutputTokens: 1200,
+          maxOutputTokens: 4000,
+          thinkingConfig: { thinkingBudget: 0 },
         },
       }),
       signal: AbortSignal.timeout(30000),
@@ -128,10 +129,13 @@ export async function POST(request: Request) {
   }
 
   const rawText = geminiData.candidates?.[0]?.content?.parts?.map(p => p.text ?? '').join('') ?? '';
+  const finishReason = (geminiData.candidates?.[0] as unknown as { finishReason?: string })?.finishReason;
   const parsed = extractJsonBlock(rawText);
   if (!parsed) {
+    console.error('[pills/generate] JSON parse failed. finishReason=%s rawLength=%d raw=%s',
+      finishReason ?? 'unknown', rawText.length, rawText.slice(0, 800));
     return NextResponse.json(
-      { error: 'Gemini ha restituito un formato non valido', raw: rawText.slice(0, 500) },
+      { error: 'Gemini ha restituito un formato non valido', finishReason, raw: rawText.slice(0, 500) },
       { status: 502 },
     );
   }

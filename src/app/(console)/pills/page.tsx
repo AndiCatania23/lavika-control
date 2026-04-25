@@ -8,7 +8,7 @@ import { useToast } from '@/lib/toast';
 import {
   Plus, X, Check, Ban, Undo2, Pencil, Trash2, Zap, Sparkles, Upload,
   AlertTriangle, Rss, ExternalLink, Search, Eye, BookOpen, Clock, BellRing,
-  MousePointerClick, BarChart3, ChevronLeft, Filter,
+  MousePointerClick, BarChart3, ChevronLeft, Filter, ImagePlus, RefreshCw,
 } from 'lucide-react';
 
 /* ==================================================================
@@ -187,7 +187,7 @@ function PillDetail({
 }: {
   pill: Pill;
   onClose: () => void;
-  onAction: (action: 'approve' | 'reject' | 'cancel' | 'edit' | 'delete' | 'publish') => void;
+  onAction: (action: 'approve' | 'reject' | 'cancel' | 'edit' | 'delete' | 'publish' | 'generate-cover') => void;
   saving: boolean;
 }) {
   const st = statusPill(pill.status);
@@ -282,6 +282,19 @@ function PillDetail({
           <div className="typ-label mt-0.5">{fmtDateIT(pill.published_at)}</div>
         </div>
       </div>
+
+      {/* Cover AI — solo per draft. Apre file picker → upload foto soggetto → Nano Banana */}
+      {pill.status === 'draft' && (
+        <button
+          className="btn btn-ghost"
+          disabled={saving}
+          onClick={() => onAction('generate-cover')}
+          title="Scegli una foto del soggetto e genera la cover con Nano Banana"
+        >
+          {pill.image_url ? <RefreshCw className="w-4 h-4" /> : <ImagePlus className="w-4 h-4" />}
+          {pill.image_url ? 'Rigenera cover (scegli foto)' : 'Genera cover (scegli foto)'}
+        </button>
+      )}
 
       {/* Actions */}
       <div className="grid grid-cols-2 gap-2">
@@ -760,13 +773,50 @@ export default function PillsPage() {
   const handleQuickApprove = (pill: Pill) => doUpdate(pill.id, { status: 'scheduled' }, 'Pill approvata');
   const handleQuickReject  = (pill: Pill) => doUpdate(pill.id, { status: 'rejected' }, 'Pill rifiutata');
 
-  const handleAction = (pill: Pill, action: 'approve' | 'reject' | 'cancel' | 'edit' | 'delete' | 'publish') => {
+  const coverFileInputRef = useRef<HTMLInputElement>(null);
+  const coverPillRef = useRef<Pill | null>(null);
+
+  const doGenerateCover = async (pill: Pill, file: File) => {
+    setSaving(true);
+    try {
+      const fd = new FormData();
+      fd.append('pill_id', pill.id);
+      fd.append('subject', file);
+      const res = await fetch('/api/console/pills/cover', { method: 'POST', body: fd });
+      const payload = (await res.json().catch(() => ({}))) as { error?: string; image_url?: string };
+      if (!res.ok || !payload.image_url) {
+        throw new Error(payload.error ?? `Errore HTTP ${res.status}`);
+      }
+      showToast('success', 'Cover generata');
+      await load();
+    } catch (err) {
+      showToast('error', err instanceof Error ? err.message : 'Errore generazione cover');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const onCoverFilePicked = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // reset so same file can be re-picked
+    const pill = coverPillRef.current;
+    coverPillRef.current = null;
+    if (!file || !pill) return;
+    void doGenerateCover(pill, file);
+  };
+
+  const handleAction = (pill: Pill, action: 'approve' | 'reject' | 'cancel' | 'edit' | 'delete' | 'publish' | 'generate-cover') => {
     if (action === 'edit') { setSelectedPill(pill); setView('edit'); return; }
     if (action === 'approve') return setConfirmModal({ open: true, title: 'Approva', message: `Approvare "${pill.title}"? Verrà programmata.`, variant: 'default', onConfirm: () => { setConfirmModal(m => ({ ...m, open: false })); doUpdate(pill.id, { status: 'scheduled' }, 'Approvata'); } });
     if (action === 'reject')  return setConfirmModal({ open: true, title: 'Rifiuta', message: `Rifiutare "${pill.title}"?`, variant: 'danger', onConfirm: () => { setConfirmModal(m => ({ ...m, open: false })); doUpdate(pill.id, { status: 'rejected' }, 'Rifiutata'); } });
     if (action === 'cancel')  return setConfirmModal({ open: true, title: 'Torna draft', message: `Riportare "${pill.title}" in draft?`, variant: 'default', onConfirm: () => { setConfirmModal(m => ({ ...m, open: false })); doUpdate(pill.id, { status: 'draft' }, 'In draft'); } });
     if (action === 'publish') return setConfirmModal({ open: true, title: 'Pubblica ora', message: `Pubblicare "${pill.title}" immediatamente?`, variant: 'default', onConfirm: () => { setConfirmModal(m => ({ ...m, open: false })); doUpdate(pill.id, { status: 'published' }, 'Pubblicata'); } });
     if (action === 'delete')  return setConfirmModal({ open: true, title: 'Elimina', message: `Eliminare "${pill.title}"? Irreversibile.`, variant: 'danger', onConfirm: () => { setConfirmModal(m => ({ ...m, open: false })); doDelete(pill); } });
+    if (action === 'generate-cover') {
+      coverPillRef.current = pill;
+      coverFileInputRef.current?.click();
+      return;
+    }
   };
 
   // Master-detail split at >=1024 (iPad landscape + desktop). Below = sheet.
@@ -784,6 +834,15 @@ export default function PillsPage() {
 
   return (
     <div className="vstack" style={{ gap: 'var(--s5)' }}>
+
+      {/* Hidden file input per "Genera cover AI" */}
+      <input
+        ref={coverFileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={onCoverFilePicked}
+        style={{ display: 'none' }}
+      />
 
       {/* Toolbar — mobile: search fullwidth, buttons row below; wide: single row */}
       <div className="flex items-center gap-2 flex-col sm:flex-row sm:flex-wrap">

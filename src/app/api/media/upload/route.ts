@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
-import { PutObjectCommand } from '@aws-sdk/client-s3';
+import { PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import sharp from 'sharp';
 import { r2MediaClient, MEDIA_BUCKET_NAME, MEDIA_PUBLIC_BASE_URL } from '@/lib/r2MediaClient';
+import { supabaseServer } from '@/lib/supabaseServer';
 
 export async function POST(request: Request) {
   if (!r2MediaClient) {
@@ -114,6 +115,27 @@ export async function POST(request: Request) {
     const webp = await pipeline
       .webp({ quality: isCutout ? 90 : 85, alphaQuality: 90 })
       .toBuffer();
+
+    // Cleanup: se questa è una pill-image manuale che sostituisce una cover precedente,
+    // elimina la vecchia (se è su R2 e ha key diversa). Stessa key = overwrite, no cleanup.
+    if (type === 'pill-image' && pillId && supabaseServer) {
+      try {
+        const { data: existing } = await supabaseServer
+          .from('pills')
+          .select('image_url')
+          .eq('id', pillId)
+          .single();
+        const oldUrl = (existing?.image_url as string | null) ?? null;
+        if (oldUrl && oldUrl.startsWith(MEDIA_PUBLIC_BASE_URL)) {
+          const oldKey = oldUrl.replace(`${MEDIA_PUBLIC_BASE_URL}/`, '').split('?')[0];
+          if (oldKey && oldKey !== key) {
+            await r2MediaClient.send(new DeleteObjectCommand({ Bucket: MEDIA_BUCKET_NAME, Key: oldKey }));
+          }
+        }
+      } catch (cleanupErr) {
+        console.warn('[media/upload] cleanup vecchia pill-image fallito:', cleanupErr);
+      }
+    }
 
     await r2MediaClient.send(
       new PutObjectCommand({
