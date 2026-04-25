@@ -9,7 +9,7 @@ import {
   PRODUCT_TYPE_LABELS, CATEGORY_LABELS, SECTOR_LABELS, STATUS_LABELS, formatPrice,
   type ShopProduct, type ProductStatus, type ProductType, type ProductCategory,
 } from '@/lib/data/shop';
-import { Plus, Pencil, Trash2, Eye, EyeOff, PackageOpen, Archive, Search, Filter } from 'lucide-react';
+import { Plus, Pencil, Trash2, Eye, EyeOff, PackageOpen, Archive, Search, Filter, ChevronLeft } from 'lucide-react';
 
 function statusPillClass(s: ProductStatus): string {
   return s === 'active' ? 'pill pill-ok'
@@ -76,6 +76,10 @@ export default function ShopProductsPage() {
 
   return (
     <div className="vstack" style={{ gap: 'var(--s4)' }}>
+      <Link href="/shop" className="btn btn-ghost btn-sm" style={{ alignSelf: 'flex-start' }}>
+        <ChevronLeft className="w-4 h-4" /> Shop
+      </Link>
+
       {/* Toolbar */}
       <div className="flex items-center gap-2 flex-col sm:flex-row">
         <div className="relative w-full sm:grow">

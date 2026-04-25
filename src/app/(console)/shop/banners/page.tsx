@@ -7,7 +7,8 @@ import {
   BANNER_TYPE_LABELS,
   type ShopBanner, type BannerType, type BannerAccent,
 } from '@/lib/data/shop';
-import { Plus, Pencil, Trash2, Eye, EyeOff, X, Upload, Loader2, ImageIcon } from 'lucide-react';
+import { Plus, Pencil, Trash2, Eye, EyeOff, X, Upload, Loader2, ImageIcon, ChevronLeft } from 'lucide-react';
+import Link from 'next/link';
 
 interface BannerDraft {
   id?: string;
@@ -101,6 +102,10 @@ export default function ShopBannersPage() {
 
   return (
     <div className="vstack" style={{ gap: 'var(--s4)' }}>
+      <Link href="/shop" className="btn btn-ghost btn-sm" style={{ alignSelf: 'flex-start' }}>
+        <ChevronLeft className="w-4 h-4" /> Shop
+      </Link>
+
       <div className="flex items-center gap-2">
         <div className="typ-caption grow">{banners.length} banner · {banners.filter(b => b.active).length} attivi</div>
         <button onClick={handleStartNew} className="btn btn-primary btn-sm">

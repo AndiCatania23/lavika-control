@@ -10,8 +10,9 @@ import {
 } from '@/lib/data/shop';
 import {
   X, Truck, Package, CheckCircle2, XCircle, Clock, RefreshCw, ShoppingCart,
-  PackageCheck, FileText, Edit3, ChevronRight,
+  PackageCheck, FileText, Edit3, ChevronRight, ChevronLeft,
 } from 'lucide-react';
+import Link from 'next/link';
 
 const STATUS_META: Record<OrderStatus, { pill: string; icon: typeof Clock }> = {
   pending:    { pill: 'pill pill-warn', icon: Clock },
@@ -63,6 +64,10 @@ export default function ShopOrdersPage() {
 
   return (
     <div className="vstack" style={{ gap: 'var(--s4)' }}>
+      <Link href="/shop" className="btn btn-ghost btn-sm" style={{ alignSelf: 'flex-start' }}>
+        <ChevronLeft className="w-4 h-4" /> Shop
+      </Link>
+
       {/* Filter chips */}
       <div className="flex flex-wrap items-center gap-1.5">
         <button
