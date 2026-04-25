@@ -104,38 +104,28 @@ export function normalizeWindowMinutes(value: string | null, fallback = 5): numb
 export async function loadActiveUsers(windowMinutes: number): Promise<ActiveUserSession[]> {
   if (!supabaseServer) return [];
 
-  const cutoffIso = new Date(Date.now() - windowMinutes * 60 * 1000).toISOString();
-  const pageSize = 1000;
-  const maxPages = 50;
-  const latestByUser = new Map<string, ActiveUserSession>();
+  // Aggregato lato DB via RPC: ritorna 1 riga per utente attivo (latest event)
+  // invece di scaricare tutti i view_start. Riduce egress da MB a KB.
+  const { data, error } = await supabaseServer.rpc('active_users_recent', {
+    window_minutes: windowMinutes,
+  });
 
-  for (let page = 0; page < maxPages; page += 1) {
-    const from = page * pageSize;
-    const to = from + pageSize - 1;
-
-    const { data, error } = await supabaseServer
-      .from('content_events')
-      .select('user_id,occurred_at,metadata')
-      .eq('event_name', 'view_start')
-      .not('user_id', 'is', null)
-      .gte('occurred_at', cutoffIso)
-      .order('occurred_at', { ascending: false })
-      .range(from, to);
-
-    if (error || !data || data.length === 0) break;
-
-    for (const row of data as ContentEventTelemetryRow[]) {
-      const mapped = mapRowToActiveUser(row);
-      if (!mapped) continue;
-      if (!latestByUser.has(mapped.user_id)) {
-        latestByUser.set(mapped.user_id, mapped);
-      }
-    }
-
-    if (data.length < pageSize) break;
+  if (error || !data) {
+    console.error('Error loading active_users_recent:', error);
+    return [];
   }
 
-  return Array.from(latestByUser.values()).sort(
+  const sessions: ActiveUserSession[] = [];
+  for (const row of data as ContentEventTelemetryRow[]) {
+    const mapped = mapRowToActiveUser({
+      user_id: row.user_id,
+      occurred_at: (row as unknown as { last_seen_at: string }).last_seen_at,
+      metadata: row.metadata,
+    });
+    if (mapped) sessions.push(mapped);
+  }
+
+  return sessions.sort(
     (a, b) => new Date(b.last_seen_at).getTime() - new Date(a.last_seen_at).getTime()
   );
 }

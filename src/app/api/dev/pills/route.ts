@@ -9,45 +9,23 @@ interface PillViewStats {
 async function loadPillViewStats(): Promise<Map<string, PillViewStats>> {
   if (!supabaseServer) return new Map();
 
-  const map = new Map<string, PillViewStats>();
-  const pageSize = 1000;
+  // Aggregato lato DB via RPC: ritorna ~N righe (1 per pill) invece di
+  // scaricare tutti i page_view eventi (riduce egress da MB a KB).
+  const { data, error } = await supabaseServer.rpc('pill_view_stats');
 
-  for (let page = 0; page < 20; page++) {
-    const from = page * pageSize;
-    const to = from + pageSize - 1;
-
-    const { data, error } = await supabaseServer
-      .from('content_events')
-      .select('metadata')
-      .eq('event_name', 'page_view')
-      .like('metadata->>path', '/pills/%')
-      .range(from, to);
-
-    if (error || !data || data.length === 0) break;
-
-    for (const row of data) {
-      const meta = row.metadata as Record<string, unknown> | null;
-      if (!meta) continue;
-      const path = (meta.path ?? meta.pathname ?? '') as string;
-      // Extract pill ID from /pills/{uuid}
-      const match = path.match(/^\/pills\/([0-9a-f-]{36})$/);
-      if (!match) continue;
-
-      const pillId = match[1];
-      const sessionId = (meta.session_id ?? '') as string;
-      const existing = map.get(pillId);
-
-      if (!existing) {
-        map.set(pillId, { views: 1, unique_sessions: sessionId ? 1 : 0 });
-      } else {
-        existing.views += 1;
-        // Approximate unique sessions — exact count would need a Set per pill
-      }
-    }
-
-    if (data.length < pageSize) break;
+  if (error || !data) {
+    console.error('Error loading pill_view_stats:', error);
+    return new Map();
   }
 
+  const map = new Map<string, PillViewStats>();
+  for (const row of data as Array<{ pill_id: string; views: number; unique_sessions: number }>) {
+    if (!row.pill_id) continue;
+    map.set(row.pill_id, {
+      views: Number(row.views) || 0,
+      unique_sessions: Number(row.unique_sessions) || 0,
+    });
+  }
   return map;
 }
 
