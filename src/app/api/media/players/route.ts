@@ -72,12 +72,16 @@ export async function GET() {
     } catch { /* ignore — we'll return without bucket enrichment */ }
   }
 
-  // 4. Filter the list: keep only players that are either
-  //    - part of the Catania team (coaches + any future proper join), or
-  //    - have an existing folder in the R2 media bucket (implicit roster).
+  // 4. Filter to Catania roster only.
+  //    Il sync API-Football salva il roster Catania con team_id NULL
+  //    (~36 giocatori), mentre i coach speciali hanno team_id = Catania.
+  //    I giocatori con team_id = una squadra avversaria sono i capitani
+  //    delle altre squadre del girone (uno per squadra) — vanno esclusi.
+  //    Mantieni anche eventuali slug con folder R2 esistente (legacy).
   const relevant = players.filter(p => {
-    if (cataniaId && p.team_id === cataniaId) return true;
-    if (p.slug && slugsWithFolder.has(p.slug)) return true;
+    if (p.team_id === null) return true;                    // roster Catania (team_id non popolato)
+    if (cataniaId && p.team_id === cataniaId) return true;  // coach Catania
+    if (p.slug && slugsWithFolder.has(p.slug)) return true; // legacy R2 folder
     return false;
   });
 
