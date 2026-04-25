@@ -19,6 +19,7 @@ import {
   CheckCircle2,
   XCircle,
   ImageIcon,
+  Archive,
 } from 'lucide-react';
 
 /* ==================================================================
@@ -90,6 +91,7 @@ export default function DashboardPage() {
   const [macStatus, setMacStatus] = useState<MacStatus | null>(null);
   const [r2Summary, setR2Summary] = useState<R2Summary | null>(null);
   const [pills, setPills] = useState<Pill[]>([]);
+  const [printfulOrphans, setPrintfulOrphans] = useState<number>(0);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<string>('');
 
@@ -104,6 +106,7 @@ export default function DashboardPage() {
       fetch('/api/dev/mac-status',        { cache: 'no-store' }).then(r => r.json() as Promise<MacStatus>).then(p => setMacStatus(p)).catch(() => {}),
       fetch('/api/dev/r2/summary?fast=1', { cache: 'no-store' }).then(r => r.json() as Promise<R2Summary>).then(p => setR2Summary(p)).catch(() => {}),
       fetch('/api/dev/pills',             { cache: 'no-store' }).then(r => r.json() as Promise<Pill[]>).then(p => setPills(p ?? [])).catch(() => {}),
+      fetch('/api/dev/pod/printful/orphans', { cache: 'no-store' }).then(r => r.json() as Promise<{ count?: number }>).then(p => setPrintfulOrphans(p?.count ?? 0)).catch(() => {}),
     ];
     Promise.allSettled(all).finally(() => {
       setRefreshing(false);
@@ -146,8 +149,12 @@ export default function DashboardPage() {
       key: 'scheduled', icon: <CalendarClock className="w-5 h-5" strokeWidth={1.75} />, label: 'In programma oggi', count: scheduledToday.length,
       urgent: false, href: '/pills?filter=scheduled', hint: 'Auto-publish',
     });
+    if (printfulOrphans > 0) items.push({
+      key: 'printful-orphans', icon: <Archive className="w-5 h-5" strokeWidth={1.75} />, label: 'Prodotti Printful orfani', count: printfulOrphans,
+      urgent: false, href: '/shop/printful', hint: 'Da archiviare',
+    });
     return items;
-  }, [drafts.length, errors24h, pendingStuck, scheduledToday.length, flaggedDrafts.length]);
+  }, [drafts.length, errors24h, pendingStuck, scheduledToday.length, flaggedDrafts.length, printfulOrphans]);
 
   const loaded = diagnostics !== null && macStatus !== null && r2Summary !== null;
 
