@@ -28,9 +28,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Body non è multipart/form-data' }, { status: 400 });
   }
   const pillId = formData.get('pill_id') as string | null;
-  const subjectFile = formData.get('subject') as File | null;
+  const assetFiles = formData.getAll('asset').filter((v): v is File => v instanceof File);
   if (!pillId) return NextResponse.json({ error: 'pill_id mancante' }, { status: 400 });
-  if (!subjectFile) return NextResponse.json({ error: 'foto soggetto mancante' }, { status: 400 });
+  if (assetFiles.length === 0) return NextResponse.json({ error: 'serve almeno un asset' }, { status: 400 });
 
   const { data: pill, error: pillErr } = await supabaseServer
     .from('pills')
@@ -41,21 +41,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: pillErr?.message ?? 'Pill non trovata' }, { status: 404 });
   }
 
-  // Prepara i 2 input image: base (da R2) + soggetto (dall'upload)
+  // Base template + asset uploadati dall'utente.
   const baseImage = await fetchImageBytes(baseUrl);
   if (!baseImage) {
     return NextResponse.json({ error: 'Impossibile scaricare base template' }, { status: 502 });
   }
-  const subjectBuffer = Buffer.from(await subjectFile.arrayBuffer());
-  const subjectMime = subjectFile.type || 'image/jpeg';
-  const subjectImage = { data: subjectBuffer, mimeType: subjectMime };
+  const assets = await Promise.all(
+    assetFiles.map(async (f) => ({
+      data: Buffer.from(await f.arrayBuffer()),
+      mimeType: f.type || 'image/jpeg',
+    })),
+  );
 
-  // Chiama Nano Banana
   let pngBuffer: Buffer;
   try {
     pngBuffer = await generateCover({
       baseImage,
-      subjectImage,
+      assets,
       pillContent: pill.content as string,
     });
   } catch (err) {

@@ -34,51 +34,69 @@ export async function fetchImageBytes(imageUrl: string): Promise<{ data: Buffer;
 }
 
 /**
- * Genera la cover. Inputs minimi:
- *  - baseImage: template (Image 1)
- *  - subjectImage: foto soggetto fornita dall'utente (Image 2)
- *  - pillContent: testo pill (NO titolo)
+ * Genera la cover preservando la base. Inputs:
+ *  - baseImage: template (Image 1) — DA PRESERVARE INTEGRALMENTE
+ *  - assets: N immagini (foto, loghi, scene) da integrare DENTRO la base esistente
+ *  - pillContent: testo pill per scegliere mood/atmosfera
  */
 export async function generateCover(opts: {
   baseImage: { data: Buffer; mimeType: string };
-  subjectImage: { data: Buffer; mimeType: string };
+  assets: Array<{ data: Buffer; mimeType: string }>;
   pillContent: string;
 }): Promise<Buffer> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GEMINI_API_KEY mancante');
 
-  const prompt = `Compose a 16:9 sports magazine cover by combining the two attached images.
+  const assetCount = opts.assets.length;
+  const assetList = Array.from({ length: assetCount }, (_, i) => `Image ${i + 2}`).join(', ');
 
-Image 1 is the layout base — keep its left-side white panel with halftone dots and the two thin diagonal navy/red lines, and keep the diagonal red stripe accent on the right. Replace the center and right area with new content as described.
+  const prompt = `You are a senior art director. Generate a premium 16:9 editorial sports magazine cover by COMPOSING — not stamping — using the brand identity from Image 1 plus the content assets that follow.
 
-Image 2 is the central hero element of the composition — use it as the main visual in the center, slightly right-of-center, 3/4 framing. Cut it out from its original background and integrate it cleanly into the new dark blue gradient center area. Add a soft "ghost echo" of image 2 behind it (same image desaturated to monochrome blue, low opacity ~30%, offset to upper-left).
+🎨 IMAGE 1 = BRAND IDENTITY & LAYOUT GRAMMAR (use it as a visual blueprint, not as a flat background to overlay)
+Take from Image 1:
+- The left-side white textured panel with halftone dots and the two thin diagonal navy/red accent lines
+- The deep blue central area as palette/atmosphere
+- The diagonal RED stripe accent on the right
+- The 16:9 proportions and overall composition grammar (left-graphic / center-hero / right-context)
+Recreate this brand identity faithfully in the output, but the center and right-context areas must be NEWLY COMPOSED with the assets below — this is generative editorial design, not flat overlay.
 
-The right side should show a subtle, desaturated atmospheric backdrop (an ultras crowd, stadium lights, smoke from flares, or similar mood-matching scene) — keep it muted so it never competes with the central element. The diagonal red stripe accent stays on top.
+📥 CONTENT ASSETS TO INTEGRATE (${assetCount} attached: ${assetList}):
+Use ALL of them and decide intelligently where each belongs:
+- A **PHOTO of a person/scene** → becomes the central HERO, slightly right-of-center, 3/4 cinematic framing. Cut out and re-lit to fit the deep blue gradient atmosphere. CRITICAL FRAMING: the subject must NOT touch the top border of the cover — leave clear breathing room (~10-15% padding) above the head. Crop the subject from chest/waist up; do NOT extend full-body floor-to-ceiling. Add a soft "ghost echo" of the same image behind (monochrome blue, ~25% opacity, offset upper-left), but the ghost echo MUST stay entirely INSIDE the deep blue central area — it MUST NOT bleed into or overlap the white left panel.
+- A **LOGO/CREST** (transparent square) → becomes a smaller branded accent: applied on a player's kit, floating subtly in the corner, or as small decorative element. Never inflated to fill the canvas.
+- **Mixed**: hero photo dominates, logos are integrated as small editorial accents around or on the hero.
 
-Mood reference text (use this to pick the atmosphere — do NOT render any of this text in the image):
+🌆 RIGHT-SIDE CONTEXT AREA (under the red stripe):
+Newly composed contextual scene that fits the pill mood — desaturated, atmospheric, never competing with the hero (e.g. ultras crowd, stadium lights, smoke from flares, training ground, press conference). The diagonal RED stripe stays bold on top.
+
+📝 MOOD & STORY (use this to drive the artistic interpretation — do NOT render any of this text):
 """
 ${opts.pillContent}
 """
 
-Style: premium editorial sports cover, cinematic lighting, deep shadows.
+OUTPUT:
+- A finished, premium-looking sports magazine cover where the brand identity of Image 1 is unmistakable AND the assets are beautifully integrated
+- Cinematic lighting, deep shadows, controlled highlights
+- 16:9
+- NO text, NO words, NO numbers, NO captions, NO emoji rendered anywhere`;
 
-Strict constraints: no text, no words, no numbers, no captions, no emoji rendered anywhere. The title will be overlaid by the app afterwards.`;
+  const parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = [
+    { text: prompt },
+    { inlineData: { mimeType: opts.baseImage.mimeType, data: opts.baseImage.data.toString('base64') } },
+  ];
+  for (const a of opts.assets) {
+    parts.push({ inlineData: { mimeType: a.mimeType, data: a.data.toString('base64') } });
+  }
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_IMAGE_MODEL}:generateContent?key=${apiKey}`;
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      contents: [{
-        parts: [
-          { text: prompt },
-          { inlineData: { mimeType: opts.baseImage.mimeType, data: opts.baseImage.data.toString('base64') } },
-          { inlineData: { mimeType: opts.subjectImage.mimeType, data: opts.subjectImage.data.toString('base64') } },
-        ],
-      }],
-      generationConfig: { responseModalities: ['IMAGE'], temperature: 0.9 },
+      contents: [{ parts }],
+      generationConfig: { responseModalities: ['IMAGE'], temperature: 0.85 },
     }),
-    signal: AbortSignal.timeout(60_000),
+    signal: AbortSignal.timeout(90_000),
   });
   if (!res.ok) {
     const errBody = await res.text().catch(() => '');

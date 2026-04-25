@@ -292,7 +292,7 @@ function PillDetail({
           title="Scegli una foto del soggetto e genera la cover con Nano Banana"
         >
           {pill.image_url ? <RefreshCw className="w-4 h-4" /> : <ImagePlus className="w-4 h-4" />}
-          {pill.image_url ? 'Rigenera cover (scegli foto)' : 'Genera cover (scegli foto)'}
+          {pill.image_url ? 'Rigenera cover (scegli foto/loghi)' : 'Genera cover (scegli foto/loghi)'}
         </button>
       )}
 
@@ -776,18 +776,18 @@ export default function PillsPage() {
   const coverFileInputRef = useRef<HTMLInputElement>(null);
   const coverPillRef = useRef<Pill | null>(null);
 
-  const doGenerateCover = async (pill: Pill, file: File) => {
+  const doGenerateCover = async (pill: Pill, files: File[]) => {
     setSaving(true);
     try {
       const fd = new FormData();
       fd.append('pill_id', pill.id);
-      fd.append('subject', file);
+      files.forEach((f) => fd.append('asset', f));
       const res = await fetch('/api/console/pills/cover', { method: 'POST', body: fd });
       const payload = (await res.json().catch(() => ({}))) as { error?: string; image_url?: string };
       if (!res.ok || !payload.image_url) {
         throw new Error(payload.error ?? `Errore HTTP ${res.status}`);
       }
-      showToast('success', 'Cover generata');
+      showToast('success', `Cover generata (${files.length} asset)`);
       await load();
     } catch (err) {
       showToast('error', err instanceof Error ? err.message : 'Errore generazione cover');
@@ -797,12 +797,12 @@ export default function PillsPage() {
   };
 
   const onCoverFilePicked = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = ''; // reset so same file can be re-picked
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = ''; // reset so same files can be re-picked
     const pill = coverPillRef.current;
     coverPillRef.current = null;
-    if (!file || !pill) return;
-    void doGenerateCover(pill, file);
+    if (files.length === 0 || !pill) return;
+    void doGenerateCover(pill, files);
   };
 
   const handleAction = (pill: Pill, action: 'approve' | 'reject' | 'cancel' | 'edit' | 'delete' | 'publish' | 'generate-cover') => {
@@ -840,6 +840,7 @@ export default function PillsPage() {
         ref={coverFileInputRef}
         type="file"
         accept="image/*"
+        multiple
         onChange={onCoverFilePicked}
         style={{ display: 'none' }}
       />
