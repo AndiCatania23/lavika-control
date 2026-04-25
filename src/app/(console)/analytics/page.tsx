@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { SectionHeader } from '@/components/SectionHeader';
-import { Users, DollarSign, FileText, HardDrive, RefreshCw, Film, ImageIcon, Layers, Activity, Eye } from 'lucide-react';
+import { Users, DollarSign, FileText, HardDrive, RefreshCw, Film, ImageIcon, Layers, Activity, Eye, ChevronLeft } from 'lucide-react';
 
 type Tab = 'users' | 'revenue' | 'content' | 'traffic';
 
@@ -600,6 +600,9 @@ export default function AnalyticsPage() {
 
   return (
     <div className="space-y-6">
+      <Link href="/dashboard" className="btn btn-ghost btn-sm" style={{ alignSelf: 'flex-start', display: 'inline-flex' }}>
+        <ChevronLeft className="w-4 h-4" /> Oggi
+      </Link>
       <SectionHeader title="Analisi" description="Vista KPI operativa per team DEV" />
 
       <div className="rounded-xl border border-border bg-card/70 p-1">

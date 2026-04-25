@@ -37,7 +37,7 @@ Categoria: ${category} — ${CATEGORY_HINT[category]}
 Tipo: ${type}
 
 Regole rigide:
-- Titolo: max 60 caratteri, in italiano, diretto, con UNA emoji iniziale pertinente.
+- Titolo: in italiano, diretto, con UNA emoji iniziale pertinente. Concisione consigliata (~60-80 caratteri) ma nessun limite hard — l'editor può rifinire in autonomia.
 - Contenuto: 2-4 frasi in italiano, max 400 caratteri totali, tono giornalistico sintetico e coinvolgente. NESSUNA emoji nel contenuto.
 - Prospettiva: focus sul Catania; se la notizia riguarda rivali/girone, evidenzia sempre l'impatto sul Catania.
 - Niente frasi filler, niente disclaimer, niente richieste all'utente.
@@ -139,7 +139,7 @@ export async function POST(request: Request) {
   const { data: inserted, error: insertErr } = await supabaseServer
     .from('pills')
     .insert({
-      title: parsed.title.slice(0, 60),
+      title: parsed.title,
       content: parsed.content.slice(0, 800),
       type: body.type,
       pill_category: body.category,

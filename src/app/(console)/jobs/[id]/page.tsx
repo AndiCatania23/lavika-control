@@ -6,7 +6,10 @@ import Image from 'next/image';
 import { getJobById, getJobRunsData, getErrorsData, Job, JobRun, ErrorLog } from '@/lib/data';
 import { getRunSourceMapping, saveRunSourceMapping } from '@/lib/jobRunSourceRegistry';
 import { StatusPill } from '@/components/StatusPill';
-import { Play, ArrowLeft, Clock, Calendar, CheckCircle, XCircle, AlertTriangle, CircleDashed, Ban } from 'lucide-react';
+import {
+  Play, ArrowLeft, Clock, Calendar, CheckCircle, XCircle, AlertTriangle,
+  CircleDashed, Ban, ChevronRight,
+} from 'lucide-react';
 
 type JobSourceSummary = {
   title: string;
@@ -23,13 +26,36 @@ type JobSummary = {
   sources: JobSourceSummary[];
 };
 
-// Map from quickSource.id → Supabase content_formats.id
 const SOURCE_FORMAT_MAP: Record<string, string> = {
   'catanista-live':          'catanista',
   'serie-c-2025-2026':       'highlights',
   'catania-press-conference':'press-conference',
   'unica-sport-live':        'unica-sport',
 };
+
+function fmtDate(iso: string) {
+  return new Date(iso).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function getStatusIcon(status: string) {
+  switch (status) {
+    case 'success':   return <CheckCircle  className="w-4 h-4" style={{ color: 'var(--ok)' }} />;
+    case 'failed':    return <XCircle      className="w-4 h-4" style={{ color: 'var(--danger)' }} />;
+    case 'cancelled': return <Ban          className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />;
+    case 'running':   return <CircleDashed className="w-4 h-4 animate-spin" style={{ color: 'var(--info)' }} />;
+    default:          return null;
+  }
+}
+
+function getStatusLabel(status: JobRun['status']): string {
+  switch (status) {
+    case 'success':   return 'Completato';
+    case 'failed':    return 'Fallito';
+    case 'cancelled': return 'Annullato';
+    case 'running':   return 'In corso';
+    default:          return status;
+  }
+}
 
 export default function JobDetailPage() {
   const params = useParams();
@@ -44,53 +70,21 @@ export default function JobDetailPage() {
   const [visibleErrors, setVisibleErrors] = useState(10);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
-  // formatId → cover_horizontal_url from Supabase/R2
   const [formatCovers, setFormatCovers] = useState<Record<string, string>>({});
 
   const getJobSummary = (id: string, sourceId?: string | null): JobSummary | null => {
     if (id !== 'job_sync_video') return null;
-
     const sources: JobSourceSummary[] = [
-      {
-        id: 'catanista-live',
-        title: 'CATANISTA LIVE',
-        source: 'Facebook @catanista.redazione · /live_videos',
-        scope: 'Video Facebook con titolo 💥 CATANISTA LIVE sulla pagina live_videos.',
-        filters: 'Titolo contiene "💥 CATANISTA LIVE".',
-      },
-      {
-        id: 'serie-c-2025-2026',
-        title: 'HIGHLIGHTS',
-        source: 'YouTube playlist Serie C (serie-c-2025-2026)',
-        scope: 'Partite categoria highlights stagione 2025/2026.',
-        filters: 'Titoli con CATANIA, durata 1m-60m, esclusi Allenamento/Primavera/Under.',
-      },
-      {
-        id: 'catania-press-conference',
-        title: 'PRESS CONFERENCE',
-        source: 'YouTube @officialcataniafc streams (catania-press-conference)',
-        scope: 'Conferenze pre-gara con risoluzione match e naming canonico.',
-        filters: 'Parole chiave conferenza pre-gara, durata 3m-2h, esclusi Highlights/settori giovanili.',
-      },
-      {
-        id: 'unica-sport-live',
-        title: 'UNICA SPORT',
-        source: 'YouTube @unicasport2025 streams (unica-sport-live)',
-        scope: 'Live Unica Sport con naming stile Catanista e stagione per anno upload.',
-        filters: 'Titoli LIVE UNICA SPORT con data, durata 20m-4h, esclusi Clip/Short, ingest da 2026 in poi.',
-      },
+      { id: 'catanista-live',           title: 'CATANISTA LIVE',   source: 'Facebook @catanista.redazione · /live_videos',       scope: 'Video Facebook con titolo 💥 CATANISTA LIVE sulla pagina live_videos.',           filters: 'Titolo contiene "💥 CATANISTA LIVE".' },
+      { id: 'serie-c-2025-2026',        title: 'HIGHLIGHTS',       source: 'YouTube playlist Serie C (serie-c-2025-2026)',       scope: 'Partite categoria highlights stagione 2025/2026.',                                 filters: 'Titoli con CATANIA, durata 1m-60m, esclusi Allenamento/Primavera/Under.' },
+      { id: 'catania-press-conference', title: 'PRESS CONFERENCE', source: 'YouTube @officialcataniafc streams (catania-press-conference)', scope: 'Conferenze pre-gara con risoluzione match e naming canonico.',                    filters: 'Parole chiave conferenza pre-gara, durata 3m-2h, esclusi Highlights/settori giovanili.' },
+      { id: 'unica-sport-live',         title: 'UNICA SPORT',      source: 'YouTube @unicasport2025 streams (unica-sport-live)', scope: 'Live Unica Sport con naming stile Catanista e stagione per anno upload.',           filters: 'Titoli LIVE UNICA SPORT con data, durata 20m-4h, esclusi Clip/Short, ingest da 2026.' },
     ];
-
-    const filteredSources = sourceId
-      ? sources.filter(source => source.id === sourceId)
-      : sources;
-
+    const filteredSources = sourceId ? sources.filter(s => s.id === sourceId) : sources;
     return {
       objective: 'Sincronizza i video nelle librerie Lavika su R2 e aggiorna il database.',
-      output: 'Scarica nuovi video idonei, li carica su storage e aggiorna i metadati usati dall\'app.',
-      mode: sourceId
-        ? 'Dettaglio source specifica: il run avvia solo questa source.'
-        : 'Puoi avviarlo completo oppure su singola source dalle mini-card della pagina Job.',
+      output:    'Scarica nuovi video idonei, li carica su storage e aggiorna i metadati usati dall\'app.',
+      mode:      sourceId ? 'Dettaglio source specifica: il run avvia solo questa source.' : 'Puoi avviarlo completo oppure su singola source dalle mini-card della pagina Job.',
       sources: filteredSources,
     };
   };
@@ -102,9 +96,7 @@ export default function JobDetailPage() {
       getJobById(jobId),
       getJobRunsData({ jobId }),
       getErrorsData(),
-      fetch('/api/media/formats')
-        .then(r => r.ok ? r.json() as Promise<Array<{ id: string; cover_horizontal_url: string | null }>> : [])
-        .catch(() => [] as Array<{ id: string; cover_horizontal_url: string | null }>),
+      fetch('/api/media/formats').then(r => r.ok ? r.json() as Promise<Array<{ id: string; cover_horizontal_url: string | null }>> : []).catch(() => []),
     ]).then(([jobData, runsData, errorsData, formatsData]) => {
       setJob(jobData || null);
       setRuns(runsData);
@@ -115,9 +107,7 @@ export default function JobDetailPage() {
       setVisibleErrors(10);
       setLoading(false);
       const covers: Record<string, string> = {};
-      for (const fmt of formatsData) {
-        if (fmt.cover_horizontal_url) covers[fmt.id] = fmt.cover_horizontal_url;
-      }
+      for (const fmt of formatsData) if (fmt.cover_horizontal_url) covers[fmt.id] = fmt.cover_horizontal_url;
       setFormatCovers(covers);
     });
   }, [jobId]);
@@ -125,29 +115,18 @@ export default function JobDetailPage() {
   const handleRun = async () => {
     if (!job) return;
     setRunning(true);
-    
     try {
       const response = await fetch('/api/jobs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jobId: job.id,
-          triggeredBy: 'manual',
-          ...(selectedSourceId ? { source: selectedSourceId } : {}),
-        }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId: job.id, triggeredBy: 'manual', ...(selectedSourceId ? { source: selectedSourceId } : {}) }),
       });
-
       if (response.ok && selectedSourceId) {
         const payload = await response.json().catch(() => null) as { run?: { id?: string } } | null;
         const runId = payload?.run?.id;
-        if (runId) {
-          saveRunSourceMapping(runId, selectedSourceId);
-        }
+        if (runId) saveRunSourceMapping(runId, selectedSourceId);
       }
-    } catch (error) {
-      console.error('Error triggering job:', error);
-    }
-    
+    } catch (error) { console.error('Error triggering job:', error); }
+
     setTimeout(async () => {
       const [updatedRuns, updatedErrors] = await Promise.all([
         getJobRunsData({ jobId }),
@@ -163,52 +142,11 @@ export default function JobDetailPage() {
     }, 6000);
   };
 
-  const formatDate = (date: string) => {
-    return new Date(date).toLocaleString('it-IT', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'success':
-        return <CheckCircle className="w-4 h-4 text-green-500" />;
-      case 'failed':
-        return <XCircle className="w-4 h-4 text-red-500" />;
-      case 'cancelled':
-        return <Ban className="w-4 h-4 text-muted-foreground" />;
-      case 'running':
-        return <CircleDashed className="w-4 h-4 text-blue-500 animate-spin" />;
-      default:
-        return null;
-    }
-  };
-
-  const getStatusLabel = (status: JobRun['status']) => {
-    switch (status) {
-      case 'success':
-        return 'Completato';
-      case 'failed':
-        return 'Fallito';
-      case 'cancelled':
-        return 'Annullato';
-      case 'running':
-        return 'In corso';
-      default:
-        return status;
-    }
-  };
-
   const recentRuns = [...runs]
     .filter(run => {
       if (!selectedSourceId) return true;
-
-      const mappedSource = getRunSourceMapping(run.id);
-      return mappedSource === selectedSourceId;
+      const mapped = getRunSourceMapping(run.id);
+      return mapped === selectedSourceId;
     })
     .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())
     .slice(0, 5);
@@ -219,169 +157,153 @@ export default function JobDetailPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+        <div className="w-7 h-7 border-2 border-[color:var(--accent-raw)] border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   if (!job) {
     return (
-      <div className="text-center py-12">
-        <p className="text-muted-foreground">Job non trovato</p>
+      <div className="card card-body text-center">
+        <p className="typ-caption">Job non trovato</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      <button
-        onClick={() => router.back()}
-        className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        Torna ai job
+    <div className="vstack" style={{ gap: 'var(--s5)' }}>
+      <button onClick={() => router.back()} className="btn btn-ghost btn-sm" style={{ alignSelf: 'flex-start' }}>
+        <ArrowLeft className="w-4 h-4" /> Torna ai job
       </button>
 
-      <div className="bg-card border border-border rounded-lg p-4">
-        <div className="flex items-start justify-between mb-3">
-          <div>
-            <h1 className="text-xl font-bold text-foreground">{job.name}</h1>
-            {selectedSourceId && (
-              <p className="text-xs text-muted-foreground mt-1">Source selezionata: {selectedSourceId}</p>
-            )}
-            <p className="text-sm text-muted-foreground mt-1">{job.description}</p>
+      {/* Header */}
+      <div className="card card-body">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div className="grow min-w-0">
+            <div className="typ-micro">{selectedSourceId ? `Source · ${selectedSourceId}` : 'Job'}</div>
+            <h1 className="typ-h1 mt-1">{job.name}</h1>
+            <p className="typ-caption mt-1">{job.description}</p>
           </div>
           <StatusPill status={job.status} />
         </div>
 
-        <div className="flex flex-wrap gap-4 text-sm text-muted-foreground mb-4">
+        <div className="flex flex-wrap gap-3 mt-4 pt-4 border-t border-[color:var(--hairline-soft)]">
           {job.schedule ? (
-            <div className="flex items-center gap-1">
-              <Clock className="w-4 h-4" />
-              <span>Schedule: {job.schedule}</span>
-            </div>
+            <span className="pill"><Clock className="w-3 h-3" />Schedule: {job.schedule}</span>
           ) : (
-            <div className="flex items-center gap-1">
-              <Calendar className="w-4 h-4" />
-              <span>Esecuzione manuale</span>
-            </div>
+            <span className="pill"><Calendar className="w-3 h-3" />Esecuzione manuale</span>
           )}
         </div>
 
         {job.schedule === null && job.status !== 'paused' && (
-          <button
-            onClick={handleRun}
-            disabled={running}
-            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 disabled:opacity-50"
-          >
-            <Play className="w-4 h-4" />
-            {running ? 'Esecuzione in corso...' : 'ESEGUI JOB'}
-          </button>
+          <div className="mt-4">
+            <button onClick={handleRun} disabled={running} className="btn btn-primary w-full">
+              <Play className="w-4 h-4" />
+              {running ? 'Esecuzione in corso…' : 'Esegui job'}
+            </button>
+          </div>
         )}
       </div>
 
+      {/* Job summary */}
       {jobSummary && (
-        <div className="bg-card border border-border rounded-lg p-4 space-y-3">
-          <h2 className="text-lg font-semibold text-foreground">Cosa fa questo job</h2>
-          <div className="space-y-2 text-sm text-muted-foreground">
-            <p><span className="text-foreground font-medium">Obiettivo:</span> {jobSummary.objective}</p>
-            <p><span className="text-foreground font-medium">Output:</span> {jobSummary.output}</p>
-            <p><span className="text-foreground font-medium">Modalita:</span> {jobSummary.mode}</p>
+        <div className="card card-body">
+          <h2 className="typ-h2 mb-3">Cosa fa questo job</h2>
+          <div className="vstack-tight typ-body">
+            <p><strong>Obiettivo:</strong> {jobSummary.objective}</p>
+            <p><strong>Output:</strong> {jobSummary.output}</p>
+            <p><strong>Modalità:</strong> {jobSummary.mode}</p>
           </div>
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {jobSummary.sources.map(source => (
-              <div key={source.title} className="border border-border rounded-lg p-3">
-                <div className="mb-2 overflow-hidden rounded-md border border-border bg-muted/20 aspect-video">
-                  {formatCovers[SOURCE_FORMAT_MAP[source.id]] ? (
-                    <Image
-                      src={formatCovers[SOURCE_FORMAT_MAP[source.id]]}
-                      alt={`${source.title} card`}
-                      width={640}
-                      height={360}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className="h-full w-full flex items-center justify-center text-muted-foreground text-xs">
-                      {source.title}
-                    </div>
-                  )}
+          {jobSummary.sources.length > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mt-4">
+              {jobSummary.sources.map(source => (
+                <div key={source.title} className="card card-body" style={{ background: 'var(--card-muted)', boxShadow: 'none' }}>
+                  <div className="aspect-video rounded-[var(--r-sm)] overflow-hidden mb-2" style={{ background: 'var(--card-muted)' }}>
+                    {formatCovers[SOURCE_FORMAT_MAP[source.id]] ? (
+                      <Image src={formatCovers[SOURCE_FORMAT_MAP[source.id]]} alt={source.title} width={640} height={360} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center typ-caption">{source.title}</div>
+                    )}
+                  </div>
+                  <div className="typ-label">{source.title}</div>
+                  <div className="typ-caption mt-1">{source.source}</div>
+                  <div className="typ-caption mt-2">{source.scope}</div>
+                  <div className="typ-caption mt-2" style={{ fontStyle: 'italic' }}>{source.filters}</div>
                 </div>
-                <div className="text-sm font-semibold text-foreground">{source.title}</div>
-                <div className="text-xs text-muted-foreground mt-1">{source.source}</div>
-                <div className="text-xs text-muted-foreground mt-2">{source.scope}</div>
-                <div className="text-xs text-muted-foreground mt-2">{source.filters}</div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
+      {/* Recent runs */}
       <div>
-        <h2 className="text-lg font-semibold text-foreground mb-3">Esecuzioni</h2>
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <h2 className="typ-h2">Esecuzioni recenti</h2>
+          <button onClick={() => router.push('/jobs/runs')} className="btn btn-quiet btn-sm">
+            Tutte →
+          </button>
+        </div>
         {recentRuns.length === 0 ? (
-          <div className="bg-card border border-border rounded-lg p-6 text-center text-muted-foreground">
-            {selectedSourceId ? 'Nessuna esecuzione trovata per questa source' : 'Nessuna esecuzione trovata'}
+          <div className="card card-body text-center">
+            <p className="typ-caption">
+              {selectedSourceId ? 'Nessuna esecuzione trovata per questa source' : 'Nessuna esecuzione trovata'}
+            </p>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="vstack-tight">
             {recentRuns.map(run => (
               <div
                 key={run.id}
-                className="bg-card border border-border rounded-lg p-3 flex items-center justify-between"
+                onClick={() => router.push(`/jobs/runs/${run.id}`)}
+                className="card card-hover card-body"
+                style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12 }}
               >
-                <div className="flex items-center gap-3">
+                <div className="shrink-0 inline-grid place-items-center" style={{ width: 36, height: 36, borderRadius: 'var(--r-sm)', background: 'var(--card-muted)' }}>
                   {getStatusIcon(run.status)}
-                  <div>
-                    <button
-                      onClick={() => router.push(`/jobs/runs/${run.id}`)}
-                      className="text-sm font-medium text-foreground hover:text-primary transition-colors"
-                    >
-                      {run.jobName} - #{run.id}
-                    </button>
-                    <div className="text-xs text-muted-foreground">{formatDate(run.startedAt)}</div>
+                </div>
+                <div className="grow min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <StatusPill status={run.status} size="sm" />
+                    <span className="typ-caption">{getStatusLabel(run.status)}</span>
+                  </div>
+                  <div className="typ-label mt-1 truncate">{run.jobName} · <span className="typ-mono" style={{ fontSize: 11 }}>{run.id.slice(0, 8)}</span></div>
+                  <div className="typ-caption mt-0.5">
+                    {fmtDate(run.startedAt)}{run.duration ? ` · ${run.duration}s` : ''}
                   </div>
                 </div>
-                <div className="text-right text-xs space-y-1">
-                  <div className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground">
-                    {getStatusIcon(run.status)}
-                    <span>{getStatusLabel(run.status)}</span>
-                  </div>
-                  {run.duration && <div className="text-muted-foreground">{run.duration}s</div>}
-                  <div className="text-muted-foreground">
-                    Scans: {run.scannedCount} | Ins: {run.insertedCount} | Err: {run.errorCount}
-                  </div>
-                </div>
+                <ChevronRight className="w-4 h-4 shrink-0" style={{ color: 'var(--text-muted)' }} />
               </div>
             ))}
           </div>
         )}
       </div>
 
+      {/* Errors */}
       {errors.length > 0 && (
         <div>
-          <h2 className="text-lg font-semibold text-foreground mb-3">Errori</h2>
-          <div className="space-y-2">
+          <h2 className="typ-h2 mb-3">Errori ({errors.length})</h2>
+          <div className="vstack-tight">
             {displayedErrors.map(error => (
               <div
                 key={error.id}
                 onClick={() => router.push(`/errors/${error.id}`)}
-                className="bg-card border border-border rounded-lg p-3 flex items-start gap-3 hover:border-primary/50 cursor-pointer"
+                className="card card-hover card-body"
+                style={{ cursor: 'pointer', display: 'flex', alignItems: 'flex-start', gap: 12 }}
               >
-                <AlertTriangle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-foreground truncate">{error.message}</div>
-                  <div className="text-xs text-muted-foreground">{formatDate(error.timestamp)}</div>
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-1" style={{ color: 'var(--danger)' }} />
+                <div className="grow min-w-0">
+                  <div className="typ-label truncate">{error.message}</div>
+                  <div className="typ-caption mt-0.5">{fmtDate(error.timestamp)}</div>
                 </div>
+                <ChevronRight className="w-4 h-4 shrink-0" style={{ color: 'var(--text-muted)' }} />
               </div>
             ))}
 
             {hasMoreErrors && (
-              <button
-                onClick={() => setVisibleErrors(count => count + 5)}
-                className="w-full py-2 text-sm text-primary hover:text-primary/80 border border-dashed border-border rounded-lg"
-              >
-                Clicca per vedere altro
+              <button onClick={() => setVisibleErrors(c => c + 5)} className="btn btn-ghost w-full" style={{ borderStyle: 'dashed' }}>
+                Mostra altri ({errors.length - visibleErrors})
               </button>
             )}
           </div>

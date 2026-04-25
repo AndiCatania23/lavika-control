@@ -5,178 +5,187 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
-  BarChart3,
-  Users,
+  FileEdit,
   Workflow,
-  AlertTriangle,
-  Settings,
+  Users,
+  ShoppingBag,
   ChevronLeft,
   ChevronRight,
-  Home,
-  ImageIcon,
-  CalendarClock,
   Pill,
-  ShoppingBag,
-  MoreHorizontal,
-  X,
+  CalendarClock,
+  ImageIcon,
+  AlertTriangle,
+  Bell,
 } from 'lucide-react';
 
-const navItems = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/analytics', label: 'Analisi', icon: BarChart3 },
-  { href: '/users', label: 'Utenti', icon: Users },
-  { href: '/jobs', label: 'Job', icon: Workflow },
-  { href: '/errors', label: 'Errori', icon: AlertTriangle },
-  { href: '/media', label: 'Media', icon: ImageIcon },
-  { href: '/pills', label: 'Pillole', icon: Pill },
-  { href: '/palinsesto-home', label: 'Palinsesto Home', icon: CalendarClock },
-  { href: '/shop', label: 'Shop', icon: ShoppingBag },
-  { href: '/settings', label: 'Impostazioni', icon: Settings },
+type NavItem = {
+  href: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  children?: Array<{ href: string; label: string; icon: typeof LayoutDashboard; match?: string[] }>;
+  match?: string[];
+};
+
+const NAV: NavItem[] = [
+  {
+    href: '/dashboard',
+    label: 'Oggi',
+    icon: LayoutDashboard,
+    match: ['/dashboard', '/analytics'],
+  },
+  {
+    href: '/pills',
+    label: 'Editoriale',
+    icon: FileEdit,
+    match: ['/pills', '/palinsesto-home', '/media'],
+    children: [
+      { href: '/pills',            label: 'Pillole',   icon: Pill },
+      { href: '/palinsesto-home',  label: 'Palinsesto',icon: CalendarClock },
+      { href: '/media',            label: 'Media',     icon: ImageIcon },
+    ],
+  },
+  {
+    href: '/jobs',
+    label: 'Sync & Jobs',
+    icon: Workflow,
+    match: ['/jobs', '/errors', '/notifications'],
+    children: [
+      { href: '/jobs',          label: 'Job / Runs',     icon: Workflow },
+      { href: '/errors',        label: 'Errori',         icon: AlertTriangle },
+      { href: '/notifications', label: 'Notifiche',      icon: Bell },
+    ],
+  },
+  {
+    href: '/users',
+    label: 'Utenti',
+    icon: Users,
+    match: ['/users'],
+  },
+  {
+    href: '/shop',
+    label: 'Shop',
+    icon: ShoppingBag,
+    match: ['/shop'],
+  },
 ];
 
-const mobileNavItems = [
-  { href: '/dashboard', label: 'Home', icon: Home },
-  { href: '/analytics', label: 'Analisi', icon: BarChart3 },
-  { href: '/users', label: 'Utenti', icon: Users },
-  { href: '/jobs', label: 'Job', icon: Workflow },
-];
-
-const mobileMoreItems = [
-  { href: '/pills', label: 'Pillole', icon: Pill },
-  { href: '/shop', label: 'Shop', icon: ShoppingBag },
-  { href: '/palinsesto-home', label: 'Palinsesto', icon: CalendarClock },
-  { href: '/media', label: 'Media', icon: ImageIcon },
-];
+function isItemActive(pathname: string, item: NavItem): boolean {
+  if (item.match?.some(m => pathname === m || pathname.startsWith(m + '/'))) return true;
+  return pathname === item.href;
+}
 
 export function Sidebar() {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
-  const [moreOpen, setMoreOpen] = useState(false);
-
-  const isMoreActive = mobileMoreItems.some(
-    item => pathname === item.href || pathname.startsWith(item.href)
-  );
 
   return (
     <>
-      <aside className={`
-        fixed lg:static inset-y-0 left-0 z-40
-        bg-card border-r border-border
-        flex flex-col lg:h-screen lg:shrink-0 overflow-hidden
-        transition-all duration-300
-        ${collapsed ? 'w-16' : 'w-64'}
-        -translate-x-full lg:translate-x-0
-      `}>
-        <div className="flex items-center justify-between h-16 px-4 border-b border-border">
+      {/* Desktop sidebar */}
+      <aside
+        className={`hidden lg:flex flex-col shrink-0 h-screen bg-card border-r border-[color:var(--hairline)] overflow-hidden transition-[width] duration-200 ${collapsed ? 'w-[72px]' : 'w-[248px]'}`}
+      >
+        <div className="flex items-center justify-between h-16 px-4 border-b border-[color:var(--hairline-s)]">
           {!collapsed && (
-            <span className="text-lg font-semibold text-foreground">LΛVIKΛ</span>
+            <span className="text-[18px] font-semibold tracking-tight text-[color:var(--text-hi)]">
+              LΛVIKΛ
+            </span>
           )}
           <button
-            onClick={() => setCollapsed(!collapsed)}
-            className="hidden lg:flex p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
+            onClick={() => setCollapsed(v => !v)}
+            className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-[color:var(--surface-2)] rounded-md transition-colors"
+            aria-label={collapsed ? 'Espandi' : 'Comprimi'}
           >
             {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
           </button>
         </div>
 
-        <nav className="flex-1 py-4 px-2 space-y-1">
-          {navItems.map(item => {
-            const isActive = pathname === item.href ||
-              (item.href !== '/dashboard' && pathname.startsWith(item.href));
+        <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto">
+          {NAV.map(item => {
+            const active = isItemActive(pathname, item);
+            const Icon = item.icon;
+            const showChildren = !collapsed && item.children && active;
             return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`
-                  flex items-center gap-3 px-3 py-2.5 rounded-lg
-                  transition-colors
-                  ${isActive
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                  }
-                `}
-              >
-                <item.icon className="w-5 h-5 shrink-0" />
-                {!collapsed && <span className="text-sm font-medium">{item.label}</span>}
-              </Link>
+              <div key={item.href}>
+                <Link
+                  href={item.href}
+                  className={`flex items-center gap-3 h-10 px-3 rounded-lg transition-colors ${
+                    active
+                      ? 'bg-[color:var(--accent-soft)] text-[color:var(--primary)]'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-[color:var(--surface-2)]'
+                  }`}
+                  title={collapsed ? item.label : undefined}
+                >
+                  <Icon className="w-[18px] h-[18px] shrink-0" strokeWidth={1.75} />
+                  {!collapsed && (
+                    <span className="text-[13px] font-medium truncate">{item.label}</span>
+                  )}
+                </Link>
+                {showChildren && (
+                  <div className="ml-6 mt-0.5 mb-1 pl-3 border-l border-[color:var(--hairline-s)] space-y-0.5">
+                    {item.children!.map(sub => {
+                      const subActive = pathname === sub.href || pathname.startsWith(sub.href + '/');
+                      const SubIcon = sub.icon;
+                      return (
+                        <Link
+                          key={sub.href}
+                          href={sub.href}
+                          className={`flex items-center gap-2.5 h-8 px-2.5 rounded-md transition-colors text-[12.5px] ${
+                            subActive
+                              ? 'text-[color:var(--primary)] font-medium'
+                              : 'text-muted-foreground hover:text-foreground hover:bg-[color:var(--surface-2)]'
+                          }`}
+                        >
+                          <SubIcon className="w-[14px] h-[14px] shrink-0" strokeWidth={1.75} />
+                          <span className="truncate">{sub.label}</span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             );
           })}
         </nav>
+
+        <div className="p-2 border-t border-[color:var(--hairline-s)]">
+          <Link
+            href="/settings"
+            className={`flex items-center gap-3 h-10 px-3 rounded-lg transition-colors text-[13px] ${
+              pathname.startsWith('/settings')
+                ? 'text-[color:var(--primary)]'
+                : 'text-muted-foreground hover:text-foreground hover:bg-[color:var(--surface-2)]'
+            }`}
+            title={collapsed ? 'Impostazioni' : undefined}
+          >
+            <span className="inline-grid place-items-center w-[18px] h-[18px] shrink-0">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-[18px] h-[18px]">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+              </svg>
+            </span>
+            {!collapsed && <span className="font-medium">Impostazioni</span>}
+          </Link>
+        </div>
       </aside>
 
-      {/* Mobile bottom nav */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-card border-t border-border pb-safe">
-        <div className="flex justify-around items-center h-20">
-          {mobileNavItems.map(item => {
-            const isActive = pathname === item.href ||
-              (item.href !== '/dashboard' && pathname.startsWith(item.href));
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setMoreOpen(false)}
-                className={`
-                  flex flex-col items-center justify-center flex-1 h-full
-                  transition-colors
-                  ${isActive
-                    ? 'text-primary'
-                    : 'text-muted-foreground'
-                  }
-                `}
-              >
-                <item.icon className="w-5 h-5" />
-                <span className="text-[10px] mt-1">{item.label}</span>
-              </Link>
-            );
-          })}
-
-          {/* "Altro" button */}
-          <button
-            onClick={() => setMoreOpen(prev => !prev)}
-            className={`
-              flex flex-col items-center justify-center flex-1 h-full
-              transition-colors
-              ${isMoreActive || moreOpen ? 'text-primary' : 'text-muted-foreground'}
-            `}
-          >
-            {moreOpen ? <X className="w-5 h-5" /> : <MoreHorizontal className="w-5 h-5" />}
-            <span className="text-[10px] mt-1">Altro</span>
-          </button>
-        </div>
+      {/* Mobile bottom tab bar (5 tab) */}
+      <nav className="m-tabbar lg:hidden">
+        {NAV.map(item => {
+          const active = isItemActive(pathname, item);
+          const Icon = item.icon;
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className="m-tab"
+              data-active={active ? 'true' : 'false'}
+            >
+              <Icon className="w-5 h-5" strokeWidth={1.75} />
+              <span className="truncate max-w-full px-1">{item.label}</span>
+            </Link>
+          );
+        })}
       </nav>
-
-      {/* Mobile "Altro" popup */}
-      {moreOpen && (
-        <>
-          <div
-            className="lg:hidden fixed inset-0 z-40 bg-black/40"
-            onClick={() => setMoreOpen(false)}
-          />
-          <div className="lg:hidden fixed bottom-20 left-3 right-3 z-50 bg-card border border-border rounded-xl p-2 pb-safe shadow-2xl animate-slide-in">
-            {mobileMoreItems.map(item => {
-              const isActive = pathname === item.href || pathname.startsWith(item.href);
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setMoreOpen(false)}
-                  className={`
-                    flex items-center gap-3 px-4 py-3 rounded-lg
-                    transition-colors
-                    ${isActive
-                      ? 'bg-primary/10 text-primary'
-                      : 'text-foreground hover:bg-muted'
-                    }
-                  `}
-                >
-                  <item.icon className="w-5 h-5" />
-                  <span className="text-sm font-medium">{item.label}</span>
-                </Link>
-              );
-            })}
-          </div>
-        </>
-      )}
     </>
   );
 }

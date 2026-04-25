@@ -2,478 +2,385 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { SectionHeader } from '@/components/SectionHeader';
 import {
+  Pill as PillIcon,
   AlertTriangle,
-  ArrowLeft,
+  CalendarClock,
   ArrowRight,
-  CheckCircle2,
-  Clock,
-  Coins,
-  Cpu,
   Database,
   HardDrive,
-  Hourglass,
+  Cpu,
   RefreshCw,
-  UserCheck,
   Users,
-  XCircle,
+  UserCheck,
   Zap,
+  Coins,
+  Hourglass,
+  CheckCircle2,
+  XCircle,
+  ImageIcon,
 } from 'lucide-react';
 
-interface OverviewKpi {
-  key: string;
-  title: string;
-  value: number;
-  unit?: string;
-}
+/* ==================================================================
+   Types
+   ================================================================== */
+
+interface OverviewKpi { key: string; title: string; value: number; unit?: string; }
 
 interface DashboardRun {
-  id: string;
-  jobName: string;
+  id: string; jobName: string;
   status: 'running' | 'success' | 'failed' | 'cancelled';
-  startedAt: string;
-  triggeredBy: string;
+  startedAt: string; triggeredBy: string;
 }
 
-interface DiagnosticsData {
-  database: {
-    connected: boolean;
-  };
-}
+interface DiagnosticsData { database: { connected: boolean }; }
 
 interface MacStatus {
-  daemon: {
-    name: string;
-    state: 'online' | 'stale' | 'offline' | 'unknown';
-    lastSeenAt: string | null;
-    startedAt: string | null;
-    ageSeconds: number | null;
-    pid: number | null;
-    hostname: string | null;
-    meta: Record<string, unknown> | null;
-  };
-  queue: {
-    pending: number;
-    pendingStuck: number;
-    running: number;
-    success24h: number;
-    failed24h: number;
-  };
-  sources: Array<{
-    source: string;
-    lastRunAt: string | null;
-    lastStatus: string | null;
-    lastSuccessAt: string | null;
-  }>;
+  daemon: { name: string; state: 'online' | 'stale' | 'offline' | 'unknown'; lastSeenAt: string | null; ageSeconds: number | null; hostname: string | null; };
+  queue: { pending: number; pendingStuck: number; running: number; success24h: number; failed24h: number };
+  sources: Array<{ source: string; lastRunAt: string | null; lastStatus: string | null; lastSuccessAt: string | null }>;
 }
 
-interface R2Summary {
-  connected: boolean;
-  totals: {
-    allAssets: number;
-    sizeHuman: string;
-  };
-}
+interface R2Summary { connected: boolean; totals: { allAssets: number; sizeHuman: string }; }
 
-interface HealthItem {
-  label: string;
-  status: 'ok' | 'warn' | 'error';
-  detail: string;
-  icon: React.ReactNode;
-}
-
-interface MetricItem {
-  key: string;
-  title: string;
-  value: string;
-  hint: string;
-  icon: React.ReactNode;
-  iconClassName: string;
-  status: 'ok' | 'warn' | 'error';
+interface Pill {
+  id: string; title: string; status: 'draft' | 'scheduled' | 'published' | 'rejected';
+  scheduled_at: string | null; audit_flags: Array<{ term: string }> | null;
 }
 
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 
-function MetricCard({
-  title,
-  value,
-  hint,
-  icon,
-  iconClassName,
-  status,
-}: {
-  title: string;
-  value: string;
-  hint: string;
-  icon: React.ReactNode;
-  iconClassName: string;
-  status?: 'ok' | 'warn' | 'error';
-}) {
-  const statusClass =
-    status === 'error'
-      ? 'border-red-500/30'
-      : status === 'warn'
-      ? 'border-yellow-500/30'
-      : 'border-border';
+/* ==================================================================
+   Helpers
+   ================================================================== */
 
-  return (
-    <div className={`bg-card border rounded-lg p-3 sm:p-3.5 ${statusClass}`}>
-      <div className="flex items-center justify-between gap-2 mb-1">
-        <span className="text-xs text-muted-foreground line-clamp-1">{title}</span>
-        <span className={iconClassName}>{icon}</span>
-      </div>
-      <div className="text-lg sm:text-xl font-semibold text-foreground leading-tight">{value}</div>
-      <div className="text-[11px] text-muted-foreground mt-1 line-clamp-1">{hint}</div>
-    </div>
-  );
+function fmtTime(iso: string | null): string {
+  if (!iso) return '-';
+  const d = new Date(iso);
+  const diffMs = Date.now() - d.getTime();
+  const mins = Math.floor(diffMs / 60_000);
+  if (mins < 1) return 'ora';
+  if (mins < 60) return `${mins}m fa`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h fa`;
+  return d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' });
 }
 
+function countDraftsAndScheduled(pills: Pill[]) {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
+  const scheduledToday = pills.filter(p => {
+    if (p.status !== 'scheduled' || !p.scheduled_at) return false;
+    const d = new Date(p.scheduled_at);
+    return d >= today && d < tomorrow;
+  });
+  const drafts = pills.filter(p => p.status === 'draft');
+  const flaggedDrafts = drafts.filter(p => Array.isArray(p.audit_flags) && p.audit_flags.length > 0);
+  return { drafts, scheduledToday, flaggedDrafts };
+}
+
+/* ==================================================================
+   Page
+   ================================================================== */
+
 export default function DashboardPage() {
-  const router = useRouter();
   const [kpis, setKpis] = useState<OverviewKpi[]>([]);
   const [runs, setRuns] = useState<DashboardRun[]>([]);
   const [diagnostics, setDiagnostics] = useState<DiagnosticsData | null>(null);
   const [macStatus, setMacStatus] = useState<MacStatus | null>(null);
   const [r2Summary, setR2Summary] = useState<R2Summary | null>(null);
+  const [pills, setPills] = useState<Pill[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<string>('');
 
-  const getKpi = useCallback(
-    (key: string) => kpis.find(item => item.key === key)?.value ?? 0,
-    [kpis]
-  );
+  const getKpi = useCallback((key: string) => kpis.find(k => k.key === key)?.value ?? 0, [kpis]);
 
   const loadData = useCallback((background = false) => {
     if (background) setRefreshing(true);
-
-    const fetches = [
-      fetch('/api/dev/overview', { cache: 'no-store' })
-        .then(r => r.json() as Promise<{ kpis?: OverviewKpi[] }>)
-        .then(p => setKpis(p.kpis ?? []))
-        .catch(() => {}),
-      fetch('/api/jobs/runs', { cache: 'no-store' })
-        .then(r => r.json() as Promise<DashboardRun[]>)
-        .then(p => setRuns((p ?? []).slice(0, 6)))
-        .catch(() => {}),
-      fetch('/api/dev/diagnostics', { cache: 'no-store' })
-        .then(r => r.json() as Promise<DiagnosticsData>)
-        .then(p => setDiagnostics(p))
-        .catch(() => {}),
-      fetch('/api/dev/mac-status', { cache: 'no-store' })
-        .then(r => r.json() as Promise<MacStatus>)
-        .then(p => setMacStatus(p))
-        .catch(() => {}),
-      fetch('/api/dev/r2/summary?fast=1', { cache: 'no-store' })
-        .then(r => r.json() as Promise<R2Summary>)
-        .then(p => setR2Summary(p))
-        .catch(() => {}),
+    const all = [
+      fetch('/api/dev/overview',          { cache: 'no-store' }).then(r => r.json() as Promise<{ kpis?: OverviewKpi[] }>).then(p => setKpis(p.kpis ?? [])).catch(() => {}),
+      fetch('/api/jobs/runs',             { cache: 'no-store' }).then(r => r.json() as Promise<DashboardRun[]>).then(p => setRuns((p ?? []).slice(0, 5))).catch(() => {}),
+      fetch('/api/dev/diagnostics',       { cache: 'no-store' }).then(r => r.json() as Promise<DiagnosticsData>).then(p => setDiagnostics(p)).catch(() => {}),
+      fetch('/api/dev/mac-status',        { cache: 'no-store' }).then(r => r.json() as Promise<MacStatus>).then(p => setMacStatus(p)).catch(() => {}),
+      fetch('/api/dev/r2/summary?fast=1', { cache: 'no-store' }).then(r => r.json() as Promise<R2Summary>).then(p => setR2Summary(p)).catch(() => {}),
+      fetch('/api/dev/pills',             { cache: 'no-store' }).then(r => r.json() as Promise<Pill[]>).then(p => setPills(p ?? [])).catch(() => {}),
     ];
-
-    Promise.allSettled(fetches).finally(() => {
+    Promise.allSettled(all).finally(() => {
       setRefreshing(false);
-      setLastUpdated(new Date().toLocaleTimeString('it-IT'));
+      setLastUpdated(new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }));
     });
   }, []);
 
   useEffect(() => {
     loadData();
-    let timer: number | null = null;
-
-    const start = () => {
-      if (timer != null) return;
-      timer = window.setInterval(() => loadData(true), REFRESH_INTERVAL_MS);
-    };
-    const stop = () => {
-      if (timer == null) return;
-      window.clearInterval(timer);
-      timer = null;
-    };
-
-    const onVisibility = () => {
-      if (document.visibilityState === 'visible') {
-        loadData(true);
-        start();
-      } else {
-        stop();
-      }
-    };
-
+    let t: number | null = null;
+    const start = () => { if (t == null) t = window.setInterval(() => loadData(true), REFRESH_INTERVAL_MS); };
+    const stop  = () => { if (t != null) { window.clearInterval(t); t = null; } };
+    const onVis = () => document.visibilityState === 'visible' ? (loadData(true), start()) : stop();
     if (document.visibilityState === 'visible') start();
-    document.addEventListener('visibilitychange', onVisibility);
-
-    return () => {
-      stop();
-      document.removeEventListener('visibilitychange', onVisibility);
-    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => { stop(); document.removeEventListener('visibilitychange', onVis); };
   }, [loadData]);
 
-  const metricCards = useMemo<MetricItem[]>(() => {
-    const syncErrors = macStatus?.queue.failed24h ?? 0;
-    const pendingStuck = macStatus?.queue.pendingStuck ?? 0;
+  const { drafts, scheduledToday, flaggedDrafts } = useMemo(() => countDraftsAndScheduled(pills), [pills]);
+  const errors24h = macStatus?.queue.failed24h ?? 0;
+  const pendingStuck = macStatus?.queue.pendingStuck ?? 0;
 
-    return [
-      {
-        key: 'total_users',
-        title: 'Utenti Totali',
-        value: getKpi('total_users').toLocaleString('it-IT'),
-        hint: 'Base utenti autenticati',
-        icon: <Users className="w-4 h-4" />,
-        iconClassName: 'text-sky-500',
-        status: 'ok' as const,
-      },
-      {
-        key: 'active_users_now',
-        title: 'Attivi Ora',
-        value: getKpi('active_users_now').toLocaleString('it-IT'),
-        hint: 'Attivita app ultimi 30 minuti',
-        icon: <UserCheck className="w-4 h-4" />,
-        iconClassName: 'text-sky-500',
-        status: 'ok' as const,
-      },
-      {
-        key: 'active_users_24h',
-        title: 'Attivi 24h',
-        value: getKpi('active_users_24h').toLocaleString('it-IT'),
-        hint: 'Attivita app ultime 24 ore',
-        icon: <UserCheck className="w-4 h-4" />,
-        iconClassName: 'text-sky-500',
-        status: 'ok' as const,
-      },
-      {
-        key: 'sync_24h',
-        title: 'Sync 24h',
-        value: (macStatus?.queue.success24h ?? 0).toLocaleString('it-IT'),
-        hint: 'Job completati dal daemon',
-        icon: <Zap className="w-4 h-4" />,
-        iconClassName: 'text-indigo-500',
-        status: 'ok' as const,
-      },
-      {
-        key: 'sync_errors_24h',
-        title: 'Errori Sync 24h',
-        value: syncErrors.toLocaleString('it-IT'),
-        hint: 'Job falliti nelle ultime 24h',
-        icon: <AlertTriangle className="w-4 h-4" />,
-        iconClassName: syncErrors > 0 ? 'text-amber-500' : 'text-indigo-500',
-        status: syncErrors > 0 ? 'warn' as const : 'ok' as const,
-      },
-      {
-        key: 'queue_pending',
-        title: 'In coda',
-        value: (macStatus?.queue.pending ?? 0).toLocaleString('it-IT'),
-        hint: pendingStuck > 0 ? `${pendingStuck} bloccati > 15min` : 'Pending in attesa',
-        icon: <Hourglass className="w-4 h-4" />,
-        iconClassName: pendingStuck > 0 ? 'text-red-500' : 'text-muted-foreground',
-        status: pendingStuck > 0 ? 'error' as const : 'ok' as const,
-      },
-      {
-        key: 'users_revenue_total',
-        title: 'Revenue Totale',
-        value: `EUR ${getKpi('users_revenue_total').toLocaleString('it-IT')}`,
-        hint: 'Somma revenue/ltv',
-        icon: <Coins className="w-4 h-4" />,
-        iconClassName: 'text-emerald-500',
-        status: 'ok' as const,
-      },
-      {
-        key: 'r2_assets',
-        title: 'Asset R2',
-        value: (r2Summary?.totals.allAssets ?? 0).toLocaleString('it-IT'),
-        hint: `Storage: ${r2Summary?.totals.sizeHuman ?? '-'}`,
-        icon: <HardDrive className="w-4 h-4" />,
-        iconClassName: r2Summary?.connected ? 'text-violet-500' : 'text-red-500',
-        status: r2Summary?.connected ? 'ok' as const : 'error' as const,
-      },
-    ];
-  }, [getKpi, macStatus, r2Summary]);
+  // Actions for inbox hero
+  const actions = useMemo(() => {
+    const items: Array<{ key: string; icon: React.ReactNode; label: string; count: number; urgent: boolean; href: string; hint: string }> = [];
+    if (drafts.length > 0) items.push({
+      key: 'draft-pills', icon: <PillIcon className="w-5 h-5" strokeWidth={1.75} />, label: 'Pill da approvare', count: drafts.length,
+      urgent: flaggedDrafts.length > 0, href: '/pills?filter=draft',
+      hint: flaggedDrafts.length > 0 ? `${flaggedDrafts.length} con audit flag` : 'Da revisionare',
+    });
+    if (errors24h > 0) items.push({
+      key: 'errors', icon: <AlertTriangle className="w-5 h-5" strokeWidth={1.75} />, label: 'Errori sync', count: errors24h,
+      urgent: true, href: '/errors', hint: 'Ultime 24h',
+    });
+    if (pendingStuck > 0) items.push({
+      key: 'stuck', icon: <Hourglass className="w-5 h-5" strokeWidth={1.75} />, label: 'Job bloccati', count: pendingStuck,
+      urgent: true, href: '/jobs', hint: 'Pendenti > 15 min',
+    });
+    if (scheduledToday.length > 0) items.push({
+      key: 'scheduled', icon: <CalendarClock className="w-5 h-5" strokeWidth={1.75} />, label: 'In programma oggi', count: scheduledToday.length,
+      urgent: false, href: '/pills?filter=scheduled', hint: 'Auto-publish',
+    });
+    return items;
+  }, [drafts.length, errors24h, pendingStuck, scheduledToday.length, flaggedDrafts.length]);
 
-  const healthItems = useMemo<HealthItem[]>(() => {
-    const supabaseOk = diagnostics?.database.connected ?? false;
-    const r2Ok = r2Summary?.connected ?? false;
-    const daemonState = macStatus?.daemon.state ?? 'unknown';
-    const daemonAge = macStatus?.daemon.ageSeconds;
-
-    const daemonStatus: 'ok' | 'warn' | 'error' =
-      daemonState === 'online' ? 'ok' : daemonState === 'stale' ? 'warn' : 'error';
-    const daemonDetail =
-      daemonState === 'online'
-        ? `Online · hb ${daemonAge ?? '-'}s fa`
-        : daemonState === 'stale'
-          ? `Heartbeat in ritardo (${daemonAge ?? '-'}s)`
-          : daemonState === 'offline'
-            ? 'Daemon offline'
-            : 'Stato sconosciuto';
-
-    return [
-      {
-        label: 'Supabase',
-        status: supabaseOk ? 'ok' : 'error',
-        detail: supabaseOk ? 'Connesso' : 'Non raggiungibile',
-        icon: <Database className="w-4 h-4" />,
-      },
-      {
-        label: 'R2',
-        status: r2Ok ? 'ok' : 'error',
-        detail: r2Ok ? 'Bucket online' : 'Connessione assente',
-        icon: <HardDrive className="w-4 h-4" />,
-      },
-      {
-        label: 'Mac Mini',
-        status: daemonStatus,
-        detail: daemonDetail,
-        icon: <Cpu className="w-4 h-4" />,
-      },
-    ];
-  }, [diagnostics, macStatus, r2Summary]);
-
-  const kpisLoaded = kpis.length > 0;
-  const diagnosticsLoaded = diagnostics !== null;
-  const macLoaded = macStatus !== null;
-  const r2Loaded = r2Summary !== null;
+  const loaded = diagnostics !== null && macStatus !== null && r2Summary !== null;
 
   return (
-    <div className="space-y-6">
-      <button
-        type="button"
-        onClick={() => router.back()}
-        className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-muted/40 lg:hidden"
-      >
-        <ArrowLeft className="h-3.5 w-3.5" />
-        Indietro
-      </button>
+    <div className="vstack" style={{ gap: 'var(--s6)' }}>
 
-      <SectionHeader
-        title="Dashboard"
-        description="Stato sistema e KPI operativi a colpo d occhio"
-        actions={
-          <button
-            type="button"
-            onClick={() => loadData(true)}
-            disabled={refreshing}
-            className="inline-flex items-center gap-2 px-3 py-2 text-sm border border-border rounded-lg hover:bg-muted/40 disabled:opacity-60"
-          >
-            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-            Aggiorna {lastUpdated ? `(${lastUpdated})` : ''}
-          </button>
-        }
-      />
+      {/* ============ Refresh row ============ */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="typ-display">Ciao</h1>
+          <p className="typ-caption mt-1">
+            {lastUpdated ? `Aggiornato ${lastUpdated}` : 'Caricamento…'}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => loadData(true)}
+          disabled={refreshing}
+          className="btn btn-ghost btn-sm"
+        >
+          <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} strokeWidth={1.75} />
+          <span className="hidden sm:inline">Aggiorna</span>
+        </button>
+      </div>
 
-      <div className="grid grid-cols-3 gap-2 md:gap-3">
-        {(diagnosticsLoaded && macLoaded && r2Loaded) ? healthItems.map(item => (
-          <div key={item.label} className="bg-card border border-border rounded-lg p-2 sm:p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-2 min-w-0">
-            <div className="min-w-0">
-              <div className="text-[10px] sm:text-xs text-muted-foreground truncate">{item.label}</div>
-              <div className="text-[11px] sm:text-sm font-medium text-foreground truncate">{item.detail}</div>
-            </div>
-            <div className={`inline-flex items-center gap-1 px-0 py-0 sm:px-2 sm:py-1 rounded text-[10px] leading-none sm:text-xs shrink-0 ${
-              item.status === 'ok'
-                ? 'bg-transparent text-green-600 sm:bg-green-500/10'
-                : item.status === 'warn'
-                ? 'bg-transparent text-yellow-600 sm:bg-yellow-500/10'
-                : 'bg-transparent text-red-600 sm:bg-red-500/10'
-            }`}>
-              {item.status === 'ok' ? <CheckCircle2 className="w-3 h-3 shrink-0 sm:w-3.5 sm:h-3.5" /> : <XCircle className="w-3 h-3 shrink-0 sm:w-3.5 sm:h-3.5" />}
-              <span className="inline-flex shrink-0">{item.icon}</span>
-            </div>
+      {/* ============ HERO: le tue azioni ============ */}
+      <section className="card">
+        <div className="card-head">
+          <div>
+            <div className="typ-micro">Le tue azioni</div>
+            <div className="typ-h2 mt-1">{actions.length > 0 ? `${actions.length} da sistemare` : 'Tutto tranquillo'}</div>
           </div>
-        )) : Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="bg-card border border-border rounded-lg p-2 sm:p-3 h-[52px] animate-pulse" />
-        ))}
-      </div>
-
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
-        {(kpisLoaded && macLoaded) ? metricCards.map(card => (
-          <MetricCard
-            key={card.key}
-            title={card.title}
-            value={card.value}
-            hint={card.hint}
-            icon={card.icon}
-            iconClassName={card.iconClassName}
-            status={card.status}
-          />
-        )) : Array.from({ length: 8 }).map((_, i) => (
-          <div key={i} className="bg-card border border-border rounded-lg p-3 sm:p-3.5 h-[78px] animate-pulse" />
-        ))}
-      </div>
-
-      {/* Mac Mini sync per source */}
-      <div className="bg-card border border-border rounded-xl p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="font-semibold text-foreground">Ultimi Sync per Source</h3>
-          {macStatus?.daemon.hostname && (
-            <span className="text-[10px] text-muted-foreground uppercase tracking-wide">{macStatus.daemon.hostname}</span>
+          {actions.length === 0 && <CheckCircle2 className="w-6 h-6 text-[color:var(--ok)]" />}
+        </div>
+        <div className="card-body">
+          {actions.length === 0 ? (
+            <p className="typ-body text-[color:var(--text-muted)]">
+              Nessuna pill in attesa, zero errori, nessun job bloccato. Puoi proseguire senza interventi urgenti.
+            </p>
+          ) : (
+            <div
+              className="grid gap-3"
+              style={{
+                gridTemplateColumns: `repeat(auto-fit, minmax(min(280px, 100%), 1fr))`,
+              }}
+            >
+              {actions.map(a => (
+                <Link
+                  key={a.key}
+                  href={a.href}
+                  className="card card-hover flex items-center gap-4 p-4"
+                  style={{ boxShadow: 'none', borderColor: a.urgent ? 'color-mix(in oklab, var(--danger) 26%, transparent)' : 'var(--hairline-soft)' }}
+                >
+                  <div
+                    className={a.urgent ? 'pill pill-err' : 'pill pill-accent'}
+                    style={{ width: 48, height: 48, padding: 0, justifyContent: 'center', borderRadius: 'var(--r)', flexShrink: 0 }}
+                  >
+                    {a.icon}
+                  </div>
+                  <div className="grow min-w-0">
+                    <div className="typ-micro truncate">{a.hint}</div>
+                    <div className="flex items-baseline gap-2 mt-1 min-w-0 flex-wrap">
+                      <span className="typ-metric shrink-0" style={{ fontSize: 26 }}>{a.count}</span>
+                      <span className="typ-label truncate-2">{a.label}</span>
+                    </div>
+                  </div>
+                  <ArrowRight className="w-4 h-4 text-[color:var(--text-muted)] shrink-0" strokeWidth={1.75} />
+                </Link>
+              ))}
+            </div>
           )}
         </div>
-        <div className="space-y-2">
-          {(macStatus?.sources ?? []).map(s => (
-            <div key={s.source} className="flex items-center justify-between gap-2 py-2 border-b border-border/50 last:border-0">
-              <div className="min-w-0">
-                <div className="text-sm text-foreground truncate font-medium">{s.source}</div>
-                <div className="text-[11px] text-muted-foreground">
-                  Ultimo sync: {s.lastSuccessAt ? new Date(s.lastSuccessAt).toLocaleString('it-IT') : 'mai'}
-                </div>
+      </section>
+
+      {/* ============ Health strip (Supabase / R2 / Daemon) ============ */}
+      <section>
+        <div className="typ-micro mb-2" style={{ paddingLeft: 2 }}>Stato sistema</div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {loaded ? [
+            { label: 'Supabase', ok: diagnostics!.database.connected, icon: <Database className="w-[18px] h-[18px]" strokeWidth={1.75} />, detail: diagnostics!.database.connected ? 'Connesso' : 'Non raggiungibile' },
+            { label: 'R2 Bucket', ok: r2Summary!.connected, icon: <HardDrive className="w-[18px] h-[18px]" strokeWidth={1.75} />, detail: r2Summary!.connected ? `Online · ${r2Summary!.totals.sizeHuman}` : 'Offline' },
+            { label: 'Daemon Mac',  ok: macStatus!.daemon.state === 'online', warn: macStatus!.daemon.state === 'stale', icon: <Cpu className="w-[18px] h-[18px]" strokeWidth={1.75} />, detail: macStatus!.daemon.state === 'online' ? `Online · hb ${macStatus!.daemon.ageSeconds ?? '-'}s fa` : macStatus!.daemon.state === 'stale' ? `Lento (${macStatus!.daemon.ageSeconds ?? '-'}s)` : 'Offline' },
+          ].map(h => (
+            <div key={h.label} className="card card-body flex items-center gap-3">
+              <div
+                className="inline-flex items-center justify-center shrink-0"
+                style={{
+                  width: 40, height: 40, borderRadius: 'var(--r)',
+                  background: h.ok ? 'color-mix(in oklab, var(--ok) 10%, transparent)' : h.warn ? 'color-mix(in oklab, var(--warn) 12%, transparent)' : 'color-mix(in oklab, var(--danger) 10%, transparent)',
+                  color: h.ok ? 'var(--ok)' : h.warn ? 'var(--warn)' : 'var(--danger)',
+                }}
+              >
+                {h.icon}
               </div>
-              <div className={`text-[11px] uppercase px-2 py-1 rounded shrink-0 ${
-                s.lastStatus === 'success'
-                  ? 'bg-green-500/10 text-green-600'
-                  : s.lastStatus === 'failed'
-                  ? 'bg-red-500/10 text-red-600'
-                  : s.lastStatus === 'running' || s.lastStatus === 'pending'
-                  ? 'bg-blue-500/10 text-blue-600'
-                  : 'bg-yellow-500/10 text-yellow-600'
-              }`}>
-                {s.lastStatus ?? '-'}
+              <div className="grow min-w-0">
+                <div className="typ-micro">{h.label}</div>
+                <div className="typ-label truncate">{h.detail}</div>
               </div>
+              {h.ok ? <CheckCircle2 className="w-4 h-4 text-[color:var(--ok)] shrink-0" /> : h.warn ? <span className="dot dot-warn dot-pulse" /> : <XCircle className="w-4 h-4 text-[color:var(--danger)] shrink-0" />}
             </div>
+          )) : Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="card" style={{ height: 72, opacity: 0.4 }} />
           ))}
-          {(!macStatus || macStatus.sources.length === 0) && (
-            <div className="text-sm text-muted-foreground">Nessun sync recente</div>
+        </div>
+      </section>
+
+      {/* ============ KPI grid ============ */}
+      <section>
+        <div className="typ-micro mb-2" style={{ paddingLeft: 2 }}>Numeri</div>
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+          <KpiTile label="Attivi ora"   icon={<UserCheck className="w-[14px] h-[14px]" />} value={getKpi('active_users_now').toLocaleString('it-IT')} hint="30 min"       tone="info" href="/users" />
+          <KpiTile label="Attivi 24h"   icon={<Users     className="w-[14px] h-[14px]" />} value={getKpi('active_users_24h').toLocaleString('it-IT')} hint="Giornaliero"  tone="info" href="/users" />
+          <KpiTile label="Sync OK 24h"  icon={<Zap       className="w-[14px] h-[14px]" />} value={(macStatus?.queue.success24h ?? 0).toLocaleString('it-IT')} hint="Daemon"        tone="ok" href="/jobs" />
+          <KpiTile label="Pending"      icon={<Hourglass className="w-[14px] h-[14px]" />} value={(macStatus?.queue.pending ?? 0).toLocaleString('it-IT')} hint={pendingStuck > 0 ? `${pendingStuck} bloccati` : 'In coda'} tone={pendingStuck > 0 ? 'err' : 'info'} href="/jobs" />
+          <KpiTile label="Asset R2"     icon={<HardDrive className="w-[14px] h-[14px]" />} value={(r2Summary?.totals.allAssets ?? 0).toLocaleString('it-IT')} hint={r2Summary?.totals.sizeHuman ?? '-'} tone="ok" href="/media" />
+          <KpiTile label="Revenue tot." icon={<Coins     className="w-[14px] h-[14px]" />} value={`€ ${getKpi('users_revenue_total').toLocaleString('it-IT')}`} hint="LTV totale" tone="ok" />
+        </div>
+      </section>
+
+      {/* ============ Recent runs + sources ============ */}
+      <section className="grid grid-cols-1 xl:grid-cols-[1.3fr_1fr] gap-4">
+        {/* Ultime run */}
+        <div className="card">
+          <div className="card-head">
+            <div>
+              <div className="typ-micro">Ultime esecuzioni</div>
+              <h3 className="typ-h2 mt-1">Daemon</h3>
+            </div>
+            <Link href="/jobs" className="typ-caption hover:text-[color:var(--text-hi)]">Tutte →</Link>
+          </div>
+          {runs.length === 0 ? (
+            <div className="card-body typ-caption">Nessuna esecuzione recente</div>
+          ) : (
+            runs.map(run => (
+              <div key={run.id} className="row">
+                <div className="min-w-0">
+                  <div className="typ-label truncate">{run.jobName}</div>
+                  <div className="typ-caption truncate">{fmtTime(run.startedAt)} · {run.triggeredBy}</div>
+                </div>
+                <span className={
+                  run.status === 'success'    ? 'pill pill-ok'
+                  : run.status === 'failed'   ? 'pill pill-err'
+                  : run.status === 'cancelled'? 'pill pill-warn'
+                  : 'pill pill-info'
+                }>{run.status}</span>
+              </div>
+            ))
           )}
         </div>
-      </div>
 
-      {/* Ultimi run queue (generic) */}
-      <div className="bg-card border border-border rounded-xl p-4">
-        <h3 className="font-semibold text-foreground mb-3">Ultime Esecuzioni</h3>
-        <div className="space-y-2">
-          {runs.map(run => (
-            <div key={run.id} className="flex items-center justify-between gap-2 py-2 border-b border-border/50 last:border-0">
-              <div className="min-w-0">
-                <div className="text-sm text-foreground truncate">{run.jobName}</div>
-                <div className="text-[11px] text-muted-foreground flex items-center gap-1">
-                  <Clock className="w-3 h-3" />{new Date(run.startedAt).toLocaleString('it-IT')} · {run.triggeredBy}
-                </div>
-              </div>
-              <div className={`text-[11px] uppercase px-2 py-1 rounded shrink-0 ${
-                run.status === 'success'
-                  ? 'bg-green-500/10 text-green-600'
-                  : run.status === 'failed'
-                  ? 'bg-red-500/10 text-red-600'
-                  : run.status === 'cancelled'
-                  ? 'bg-yellow-500/10 text-yellow-600'
-                  : 'bg-blue-500/10 text-blue-600'
-              }`}>
-                {run.status}
-              </div>
+        {/* Sync per source */}
+        <div className="card">
+          <div className="card-head">
+            <div>
+              <div className="typ-micro">Sorgenti</div>
+              <h3 className="typ-h2 mt-1">Ultimi sync</h3>
             </div>
-          ))}
-          {runs.length === 0 && <div className="text-sm text-muted-foreground">Nessuna esecuzione recente</div>}
+            {macStatus?.daemon.hostname && <span className="typ-micro">{macStatus.daemon.hostname}</span>}
+          </div>
+          {(macStatus?.sources ?? []).length === 0 ? (
+            <div className="card-body typ-caption">Nessun sync recente</div>
+          ) : (
+            (macStatus?.sources ?? []).map(s => (
+              <div key={s.source} className="row">
+                <div className="min-w-0">
+                  <div className="typ-label truncate">{s.source}</div>
+                  <div className="typ-caption truncate">{s.lastSuccessAt ? fmtTime(s.lastSuccessAt) : 'mai'}</div>
+                </div>
+                <span className={
+                  s.lastStatus === 'success'   ? 'pill pill-ok'
+                  : s.lastStatus === 'failed'  ? 'pill pill-err'
+                  : s.lastStatus === 'running' ? 'pill pill-info'
+                  : 'pill pill-warn'
+                }>{s.lastStatus ?? '-'}</span>
+              </div>
+            ))
+          )}
         </div>
-      </div>
+      </section>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <Link href="/users" className="flex items-center justify-between p-3 rounded-lg border border-border hover:border-primary/30 transition-colors">
-          <span className="text-sm text-foreground">Gestione Utenti</span>
-          <ArrowRight className="w-4 h-4 text-muted-foreground" />
-        </Link>
-        <Link href="/analytics" className="flex items-center justify-between p-3 rounded-lg border border-border hover:border-primary/30 transition-colors">
-          <span className="text-sm text-foreground">Analisi Contenuti</span>
-          <ArrowRight className="w-4 h-4 text-muted-foreground" />
-        </Link>
-      </div>
+      {/* ============ Quick jumps ============ */}
+      <section>
+        <div className="typ-micro mb-2" style={{ paddingLeft: 2 }}>Vai a</div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[
+            { href: '/pills',           label: 'Pills',       sub: 'Review editoriale',      icon: PillIcon },
+            { href: '/palinsesto-home', label: 'Palinsesto',  sub: 'Comporre homepage app',  icon: CalendarClock },
+            { href: '/media',           label: 'Media',       sub: 'Cover + players',        icon: ImageIcon },
+            { href: '/analytics',       label: 'Analytics',   sub: 'Metriche complete',      icon: Zap },
+          ].map(q => {
+            const Ic = q.icon;
+            return (
+              <Link key={q.href} href={q.href} className="card card-hover p-4 flex flex-col gap-1.5">
+                <Ic className="w-5 h-5 text-[color:var(--accent-raw)]" strokeWidth={1.75} />
+                <div className="typ-label">{q.label}</div>
+                <div className="typ-caption truncate">{q.sub}</div>
+              </Link>
+            );
+          })}
+        </div>
+      </section>
     </div>
   );
+}
+
+/* ==================================================================
+   KPI tile (compact, touch-friendly)
+   ================================================================== */
+function KpiTile({
+  label, value, hint, icon, tone, href,
+}: {
+  label: string; value: string; hint: string;
+  icon: React.ReactNode;
+  tone: 'ok' | 'warn' | 'err' | 'info';
+  href?: string;
+}) {
+  const pillClass =
+    tone === 'ok' ? 'pill pill-ok'
+    : tone === 'warn' ? 'pill pill-warn'
+    : tone === 'err'  ? 'pill pill-err'
+    : 'pill pill-info';
+
+  const body = (
+    <>
+      <div className="flex items-center justify-between gap-2">
+        <span className="typ-micro truncate">{label}</span>
+        <span className={pillClass} style={{ padding: '2px 6px', minWidth: 20 }}>{icon}</span>
+      </div>
+      <div className="typ-metric truncate mt-1">{value}</div>
+      <div className="typ-caption truncate">{hint}</div>
+    </>
+  );
+  const cls = 'card card-body flex flex-col gap-0.5';
+  if (href) return <Link href={href} className={`${cls} card-hover`}>{body}</Link>;
+  return <div className={cls}>{body}</div>;
 }

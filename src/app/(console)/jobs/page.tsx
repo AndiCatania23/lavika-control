@@ -5,10 +5,9 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { getJobs, Job } from '@/lib/data';
 import { saveRunSourceMapping } from '@/lib/jobRunSourceRegistry';
-import { SectionHeader } from '@/components/SectionHeader';
 import { StatusPill } from '@/components/StatusPill';
 import { useToast } from '@/lib/toast';
-import { Play, Clock, Calendar, ChevronRight } from 'lucide-react';
+import { Play, Clock, Calendar, ChevronRight, Workflow, Video, RefreshCw } from 'lucide-react';
 
 // Map from quickSource.id → Supabase content_formats.id
 const SOURCE_FORMAT_MAP: Record<string, string> = {
@@ -19,6 +18,18 @@ const SOURCE_FORMAT_MAP: Record<string, string> = {
   'match-reaction-2025-2026':    'match-reaction',
 };
 
+const QUICK_SOURCES = [
+  { id: 'catanista-live',              title: 'CATANISTA LIVE'    },
+  { id: 'serie-c-2025-2026',           title: 'HIGHLIGHTS'        },
+  { id: 'catania-press-conference',    title: 'PRESS CONFERENCE'  },
+  { id: 'unica-sport-live',            title: 'UNICA SPORT'       },
+  { id: 'match-reaction-2025-2026',    title: 'MATCH REACTION'    },
+];
+
+function formatDate(date: string | null) {
+  if (!date) return 'Mai';
+  return new Date(date).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
 
 export default function JobsPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -27,52 +38,31 @@ export default function JobsPage() {
   const [runningSourceId, setRunningSourceId] = useState<string | null>(null);
   const [hasRunningJob, setHasRunningJob] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
-  // formatId → cover_horizontal_url from Supabase/R2
   const [formatCovers, setFormatCovers] = useState<Record<string, string>>({});
   const router = useRouter();
   const { showToast } = useToast();
 
   const refreshQueueState = async () => {
     const [running, pending] = await Promise.all([
-      fetch('/api/jobs/runs?status=running', { cache: 'no-store' })
-        .then(r => r.ok ? r.json() as Promise<Array<{ id: string }>> : [])
-        .catch(() => []),
-      fetch('/api/jobs/runs?status=pending', { cache: 'no-store' })
-        .then(r => r.ok ? r.json() as Promise<Array<{ id: string }>> : [])
-        .catch(() => []),
+      fetch('/api/jobs/runs?status=running', { cache: 'no-store' }).then(r => r.ok ? r.json() as Promise<Array<{ id: string }>> : []).catch(() => []),
+      fetch('/api/jobs/runs?status=pending', { cache: 'no-store' }).then(r => r.ok ? r.json() as Promise<Array<{ id: string }>> : []).catch(() => []),
     ]);
     setHasRunningJob(running.length > 0);
     setPendingCount(pending.length);
   };
 
-  const quickSources = [
-    { id: 'catanista-live',              title: 'CATANISTA LIVE'    },
-    { id: 'serie-c-2025-2026',           title: 'HIGHLIGHTS'        },
-    { id: 'catania-press-conference',    title: 'PRESS CONFERENCE'  },
-    { id: 'unica-sport-live',            title: 'UNICA SPORT'       },
-    { id: 'match-reaction-2025-2026',    title: 'MATCH REACTION'    },
-  ];
-
   useEffect(() => {
     Promise.all([
       getJobs(),
-      fetch('/api/jobs/runs?status=running', { cache: 'no-store' })
-        .then(response => response.ok ? response.json() as Promise<Array<{ id: string }>> : [])
-        .catch(() => []),
-      fetch('/api/jobs/runs?status=pending', { cache: 'no-store' })
-        .then(response => response.ok ? response.json() as Promise<Array<{ id: string }>> : [])
-        .catch(() => []),
-      fetch('/api/media/formats')
-        .then(r => r.ok ? r.json() as Promise<Array<{ id: string; cover_horizontal_url: string | null }>> : [])
-        .catch(() => []),
+      fetch('/api/jobs/runs?status=running', { cache: 'no-store' }).then(r => r.ok ? r.json() as Promise<Array<{ id: string }>> : []).catch(() => []),
+      fetch('/api/jobs/runs?status=pending', { cache: 'no-store' }).then(r => r.ok ? r.json() as Promise<Array<{ id: string }>> : []).catch(() => []),
+      fetch('/api/media/formats').then(r => r.ok ? r.json() as Promise<Array<{ id: string; cover_horizontal_url: string | null }>> : []).catch(() => []),
     ]).then(([jobsData, runningRuns, pendingRuns, formatsData]) => {
       setJobs(jobsData);
       setHasRunningJob(runningRuns.length > 0);
       setPendingCount(pendingRuns.length);
       const covers: Record<string, string> = {};
-      for (const fmt of formatsData) {
-        if (fmt.cover_horizontal_url) covers[fmt.id] = fmt.cover_horizontal_url;
-      }
+      for (const fmt of formatsData) if (fmt.cover_horizontal_url) covers[fmt.id] = fmt.cover_horizontal_url;
       setFormatCovers(covers);
       setLoading(false);
     });
@@ -81,30 +71,16 @@ export default function JobsPage() {
   const handleRunJob = async (e: React.MouseEvent, job: Job) => {
     e.stopPropagation();
     setRunningJobId(job.id);
-
     try {
-      const response = await fetch('/api/jobs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobId: job.id, triggeredBy: 'manual' }),
-      });
-
+      const response = await fetch('/api/jobs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jobId: job.id, triggeredBy: 'manual' }) });
       if (!response.ok) {
-        if (response.status === 409) {
-          showToast('warning', 'Un sync è già in corso — riprova tra poco');
-          setHasRunningJob(true);
-        } else {
+        if (response.status === 409) { showToast('warning', 'Un sync è già in corso — riprova tra poco'); setHasRunningJob(true); }
+        else {
           const body = await response.json().catch(() => null) as { error?: string } | null;
           showToast('error', `Trigger fallito: ${body?.error || response.status}`);
         }
-      } else {
-        showToast('success', 'Job accodato');
-        setPendingCount(c => c + 1);
-      }
-    } catch (error) {
-      showToast('error', `Errore rete: ${error instanceof Error ? error.message : 'unknown'}`);
-    }
-
+      } else { showToast('success', 'Job accodato'); setPendingCount(c => c + 1); }
+    } catch (error) { showToast('error', `Errore rete: ${error instanceof Error ? error.message : 'unknown'}`); }
     setTimeout(async () => {
       const { getJobs: reloadJobs } = await import('@/lib/data');
       reloadJobs().then(data => setJobs(data));
@@ -115,23 +91,11 @@ export default function JobsPage() {
 
   const handleRunSource = async (sourceId: string) => {
     setRunningSourceId(sourceId);
-
     try {
-      const response = await fetch('/api/jobs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jobId: 'job_sync_video',
-          triggeredBy: 'manual',
-          source: sourceId,
-        }),
-      });
-
+      const response = await fetch('/api/jobs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jobId: 'job_sync_video', triggeredBy: 'manual', source: sourceId }) });
       if (!response.ok) {
-        if (response.status === 409) {
-          showToast('warning', 'Un sync è già in corso — riprova tra poco');
-          setHasRunningJob(true);
-        } else {
+        if (response.status === 409) { showToast('warning', 'Un sync è già in corso — riprova tra poco'); setHasRunningJob(true); }
+        else {
           const body = await response.json().catch(() => null) as { error?: string } | null;
           showToast('error', `Trigger fallito: ${body?.error || response.status}`);
         }
@@ -142,10 +106,7 @@ export default function JobsPage() {
         showToast('success', `Accodato: ${sourceId}`);
         setPendingCount(c => c + 1);
       }
-    } catch (error) {
-      showToast('error', `Errore rete: ${error instanceof Error ? error.message : 'unknown'}`);
-    }
-
+    } catch (error) { showToast('error', `Errore rete: ${error instanceof Error ? error.message : 'unknown'}`); }
     setTimeout(async () => {
       const { getJobs: reloadJobs } = await import('@/lib/data');
       reloadJobs().then(data => setJobs(data));
@@ -154,142 +115,165 @@ export default function JobsPage() {
     }, 6000);
   };
 
-  const formatDate = (date: string | null) => {
-    if (!date) return 'Mai';
-    return new Date(date).toLocaleString('it-IT', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+        <div className="w-7 h-7 border-2 border-[color:var(--accent-raw)] border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      <SectionHeader 
-        title="Job" 
-        description="Lista job dalla piattaforma"
-      />
+    <div className="vstack" style={{ gap: 'var(--s5)' }}>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-        {quickSources.map(source => (
-          <div
-            key={source.id}
-            className="bg-card border border-border rounded-lg p-4 w-full"
-          >
-            <div className="mb-3 overflow-hidden rounded-md border border-border bg-muted/20 aspect-video">
-              {formatCovers[SOURCE_FORMAT_MAP[source.id]] ? (
-                <Image
-                  src={formatCovers[SOURCE_FORMAT_MAP[source.id]]}
-                  alt={`${source.title} card`}
-                  width={640}
-                  height={360}
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <div className="h-full w-full flex items-center justify-center text-muted-foreground text-xs">
-                  {source.title}
-                </div>
-              )}
-            </div>
-            <h3 className="font-semibold text-foreground text-base">{source.title}</h3>
-            <div className="text-xs text-muted-foreground mt-1">Sync Video</div>
-            <div className="flex items-center gap-2 pt-3 mt-3 border-t border-border">
-              <button
-                onClick={() => handleRunSource(source.id)}
-                disabled={runningSourceId === source.id || hasRunningJob}
-                className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50"
-              >
-                <Play className="w-3 h-3" />
-                {runningSourceId === source.id
-                  ? 'Accodamento...'
-                  : hasRunningJob
-                    ? 'Job attivo'
-                    : pendingCount > 0
-                      ? `ESEGUI (${pendingCount} in coda)`
-                      : 'ESEGUI'}
-              </button>
-              <button
-                onClick={() => router.push(`/jobs/job_sync_video?source=${encodeURIComponent(source.id)}`)}
-                className="flex items-center gap-1 px-3 py-2 border border-border rounded-lg text-sm text-muted-foreground hover:bg-muted/50"
-              >
-                Dettagli
-                <ChevronRight className="w-3 h-3" />
-              </button>
-            </div>
-
-          </div>
-        ))}
+      {/* Queue state banner */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {hasRunningJob ? (
+          <span className="pill pill-info">
+            <span className="dot dot-info dot-pulse" />
+            Sync in corso
+          </span>
+        ) : pendingCount > 0 ? (
+          <span className="pill pill-warn">
+            <Clock className="w-3 h-3" />
+            {pendingCount} in coda
+          </span>
+        ) : (
+          <span className="pill pill-ok">
+            <span className="dot dot-ok" />
+            Queue libera
+          </span>
+        )}
+        <div className="grow" />
+        <button onClick={() => { refreshQueueState(); getJobs().then(setJobs); }} className="btn btn-ghost btn-sm">
+          <RefreshCw className="w-4 h-4" />
+          <span className="hidden md:inline">Aggiorna</span>
+        </button>
+        <button onClick={() => router.push('/jobs/runs')} className="btn btn-ghost btn-sm">
+          <Clock className="w-4 h-4" />
+          <span className="hidden md:inline">Esecuzioni</span>
+        </button>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {jobs.map(job => (
-          <div
-            key={job.id}
-            onClick={() => router.push(`/jobs/${job.id}`)}
-            className="bg-card border border-border rounded-lg p-4 hover:border-primary/50 cursor-pointer transition-all active:scale-[0.99]"
-          >
-            <div className="flex items-start justify-between mb-2">
-              <h3 className="font-semibold text-foreground text-base">{job.name}</h3>
-              <StatusPill status={job.status} size="sm" />
-            </div>
-            
-            <p className="text-sm text-muted-foreground mb-3 line-clamp-2">{job.description}</p>
-            
-            <div className="flex items-center gap-3 text-xs text-muted-foreground mb-3">
-              {job.schedule ? (
-                <div className="flex items-center gap-1">
-                  <Clock className="w-3 h-3" />
-                  <span>{job.schedule}</span>
+      {/* Quick sync sources — compact row with thumb + title + action */}
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <Video className="w-4 h-4 text-[color:var(--accent-raw)]" strokeWidth={1.75} />
+          <h2 className="typ-h2 grow">Sync rapido</h2>
+          <span className="typ-micro">{QUICK_SOURCES.length} source</span>
+        </div>
+        <div className="vstack-tight">
+          {QUICK_SOURCES.map(source => {
+            const coverUrl = formatCovers[SOURCE_FORMAT_MAP[source.id]];
+            const running = runningSourceId === source.id;
+            return (
+              <div key={source.id} className="card" style={{ padding: 10, display: 'flex', alignItems: 'center', gap: 12 }}>
+                {/* Thumb 16:9 (72×41) */}
+                <div className="shrink-0 rounded-[var(--r-sm)] overflow-hidden" style={{ width: 72, height: 41, background: 'var(--card-muted)' }}>
+                  {coverUrl ? (
+                    <Image src={coverUrl} alt={source.title} width={288} height={162} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <Video className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
+                    </div>
+                  )}
                 </div>
-              ) : (
-                <div className="flex items-center gap-1">
-                  <Calendar className="w-3 h-3" />
-                  <span>Manuale</span>
-                </div>
-              )}
-            </div>
 
-            <div className="text-xs text-muted-foreground mb-3">
-              Ultima esecuzione: {formatDate(job.lastRun)}
-            </div>
-            
-            <div className="flex items-center gap-2 pt-3 border-t border-border">
-              {job.schedule === null && job.status !== 'paused' && (
+                {/* Title + subtitle */}
+                <div className="grow min-w-0">
+                  <div className="typ-label truncate">{source.title}</div>
+                  <div className="typ-micro truncate">Sync Video</div>
+                </div>
+
+                {/* Actions */}
                 <button
-                  onClick={(e) => handleRunJob(e, job)}
-                  disabled={runningJobId === job.id || hasRunningJob}
-                  className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50"
+                  onClick={() => handleRunSource(source.id)}
+                  disabled={running || hasRunningJob}
+                  className="btn btn-primary btn-sm shrink-0"
                 >
-                  <Play className="w-3 h-3" />
-                  {runningJobId === job.id
-                    ? 'Accodamento...'
-                    : hasRunningJob
-                      ? 'Job attivo'
-                      : pendingCount > 0
-                        ? `ESEGUI (${pendingCount} in coda)`
-                        : 'ESEGUI'}
+                  <Play className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">
+                    {running ? 'Accodo…' : hasRunningJob ? 'Attivo' : 'Esegui'}
+                  </span>
                 </button>
-              )}
-              <button
-                onClick={(e) => { e.stopPropagation(); router.push(`/jobs/${job.id}`); }}
-                className="flex items-center gap-1 px-3 py-2 border border-border rounded-lg text-sm text-muted-foreground hover:bg-muted/50"
+                <button
+                  onClick={() => router.push(`/jobs/job_sync_video?source=${encodeURIComponent(source.id)}`)}
+                  className="btn btn-ghost btn-sm shrink-0"
+                  aria-label="Dettagli"
+                >
+                  <span className="hidden sm:inline">Dettagli</span>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Other jobs — compact row with status dot + info + action */}
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <Workflow className="w-4 h-4 text-[color:var(--accent-raw)]" strokeWidth={1.75} />
+          <h2 className="typ-h2 grow">Altri job</h2>
+          <span className="typ-micro">{jobs.length}</span>
+        </div>
+        <div className="vstack-tight">
+          {jobs.map(job => {
+            const running = runningJobId === job.id;
+            const canRun = job.schedule === null && job.status !== 'paused';
+            return (
+              <div
+                key={job.id}
+                onClick={() => router.push(`/jobs/${job.id}`)}
+                className="card card-hover"
+                style={{ cursor: 'pointer', padding: 12, display: 'flex', alignItems: 'center', gap: 12 }}
               >
-                Dettagli
-                <ChevronRight className="w-3 h-3" />
-              </button>
-            </div>
-          </div>
-        ))}
+                {/* Status icon block */}
+                <div className="shrink-0 inline-grid place-items-center" style={{ width: 36, height: 36, borderRadius: 'var(--r-sm)', background: 'var(--card-muted)' }}>
+                  <Workflow className="w-4 h-4" style={{ color: 'var(--text-muted)' }} strokeWidth={1.75} />
+                </div>
+
+                {/* Info */}
+                <div className="grow min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="typ-label truncate">{job.name}</div>
+                    <StatusPill status={job.status} size="sm" />
+                  </div>
+                  <div className="typ-caption truncate mt-0.5">
+                    {job.schedule ? (
+                      <span className="inline-flex items-center gap-1"><Clock className="w-3 h-3" />{job.schedule}</span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1"><Calendar className="w-3 h-3" />Manuale</span>
+                    )}
+                    <span className="mx-1.5">·</span>
+                    Ultima: {formatDate(job.lastRun)}
+                  </div>
+                </div>
+
+                {/* Actions */}
+                {canRun && (
+                  <button
+                    onClick={(e) => handleRunJob(e, job)}
+                    disabled={running || hasRunningJob}
+                    className="btn btn-primary btn-sm shrink-0"
+                    style={{ minWidth: 96 }}
+                  >
+                    <Play className="w-3.5 h-3.5" />
+                    {running ? 'Accodo…' : hasRunningJob ? 'Attivo' : 'Esegui'}
+                  </button>
+                )}
+                <button
+                  onClick={(e) => { e.stopPropagation(); router.push(`/jobs/${job.id}`); }}
+                  className="btn btn-ghost btn-sm shrink-0"
+                  aria-label="Dettagli"
+                >
+                  <span className="hidden sm:inline">Dettagli</span>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
