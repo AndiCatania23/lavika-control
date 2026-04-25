@@ -61,10 +61,20 @@ Take from Image 1:
 Recreate this brand identity faithfully in the output, but the center and right-context areas must be NEWLY COMPOSED with the assets below — this is generative editorial design, not flat overlay.
 
 📥 CONTENT ASSETS TO INTEGRATE (${assetCount} attached: ${assetList}):
-Use ALL of them and decide intelligently where each belongs:
-- A **PHOTO of a person/scene** → becomes the central HERO, slightly right-of-center, 3/4 cinematic framing. Cut out and re-lit to fit the deep blue gradient atmosphere. CRITICAL FRAMING: the subject must NOT touch the top border of the cover — leave clear breathing room (~10-15% padding) above the head. Crop the subject from chest/waist up; do NOT extend full-body floor-to-ceiling. Add a soft "ghost echo" of the same image behind (monochrome blue, ~25% opacity, offset upper-left), but the ghost echo MUST stay entirely INSIDE the deep blue central area — it MUST NOT bleed into or overlap the white left panel.
-- A **LOGO/CREST** (transparent square) → becomes a smaller branded accent: applied on a player's kit, floating subtly in the corner, or as small decorative element. Never inflated to fill the canvas.
-- **Mixed**: hero photo dominates, logos are integrated as small editorial accents around or on the hero.
+Use ALL of them and decide intelligently where each belongs based on the OVERALL set:
+
+CASE A — Only ONE asset and it's a LOGO/CREST (single logo, no photo):
+- The LOGO ITSELF is the central hero. Place it large in the deep blue center area with cinematic 3D treatment: floating, soft inner glow, drop shadow, subtle volumetric lighting rays behind it.
+- DO NOT invent a fake player or person to host the logo. NO human figure of any kind.
+- Add a soft "ghost echo" of the same logo behind it (monochrome, low opacity ~25%, offset).
+
+CASE B — At least one PHOTO of a person/scene (with or without logos):
+- The photo becomes the central HERO, slightly right-of-center, 3/4 cinematic framing. Cut out and re-lit to fit the deep blue gradient atmosphere. CRITICAL FRAMING: the subject must NOT touch the top border of the cover — leave clear breathing room (~10-15% padding) above the head. Crop the subject from chest/waist up; do NOT extend full-body floor-to-ceiling.
+- Add a soft "ghost echo" of the photo behind (monochrome blue, ~25% opacity, offset upper-left), staying INSIDE the deep blue central area — MUST NOT bleed into the white left panel.
+- Any LOGOS in this case → smaller branded accents around the hero (e.g. corner badge, small floating element). NEVER inflated to compete with the hero.
+
+CASE C — Multiple LOGOS only (2+ logos, no photo):
+- Compose them as a constellation in the deep blue center: main logo larger and central with glow, others smaller orbiting around it on glowing pedestals or connected by thin light beams. NO invented people.
 
 🌆 RIGHT-SIDE CONTEXT AREA (under the red stripe):
 Newly composed contextual scene that fits the pill mood — desaturated, atmospheric, never competing with the hero (e.g. ultras crowd, stadium lights, smoke from flares, training ground, press conference). The diagonal RED stripe stays bold on top.
