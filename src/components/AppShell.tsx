@@ -239,7 +239,9 @@ function NotificationsDropdown({ items, onClose }: { items: AppNotification[]; o
   const fmt = (iso: string) => new Date(iso).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 
   return (
-    <div className="absolute right-0 top-full mt-2 w-[min(92vw,22rem)] card shadow-[var(--shadow-card-hi)] overflow-hidden z-40">
+    <div
+      className="card shadow-[var(--shadow-card-hi)] overflow-hidden z-40 fixed sm:absolute left-1/2 sm:left-auto right-auto sm:right-0 -translate-x-1/2 sm:translate-x-0 top-[calc(var(--topbar-h)+8px)] sm:top-full mt-0 sm:mt-2 w-[min(92vw,22rem)]"
+    >
       <div className="card-head">
         <span className="typ-micro">Ultime notifiche</span>
       </div>
