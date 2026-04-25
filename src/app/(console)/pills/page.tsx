@@ -313,6 +313,16 @@ function PillDetail({
             <Undo2 className="w-4 h-4" /> Depubblica
           </button>
         )}
+        {pill.status === 'rejected' && (
+          <>
+            <button className="btn btn-primary" disabled={saving} onClick={() => onAction('approve')}>
+              <Check className="w-4 h-4" /> Approva
+            </button>
+            <button className="btn btn-ghost" disabled={saving} onClick={() => onAction('cancel')}>
+              <Undo2 className="w-4 h-4" /> Riapri (in draft)
+            </button>
+          </>
+        )}
         <button className="btn btn-ghost" disabled={saving} onClick={() => onAction('edit')}>
           <Pencil className="w-4 h-4" /> Modifica
         </button>

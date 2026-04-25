@@ -42,7 +42,7 @@ type PickerTarget =
 const FORMAT_SLOTS = [
   { key: 'cover_vertical_url'   as FormatImageColumn, label: 'Cover Verticale',   note: 'Con titolo · 2:3',  aspect: 'aspect-[2/3]',  minDim: '400×600',  uploadType: 'format-cover-vertical' },
   { key: 'cover_horizontal_url' as FormatImageColumn, label: 'Cover Orizzontale', note: 'Con titolo · 16:9', aspect: 'aspect-video',  minDim: '640×360',  uploadType: 'format-cover-horizontal' },
-  { key: 'hero_url'             as FormatImageColumn, label: 'Hero',              note: 'Senza titolo · 3:4', aspect: 'aspect-[3/4]',  minDim: '750×1000', uploadType: 'format-hero' },
+  { key: 'hero_url'             as FormatImageColumn, label: 'Hero',              note: 'Senza titolo · 16:9', aspect: 'aspect-video',  minDim: '640×360',  uploadType: 'format-hero' },
 ] as const;
 
 /* ==================================================================
