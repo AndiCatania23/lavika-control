@@ -38,7 +38,7 @@ Tipo: ${type}
 
 Regole rigide:
 - Titolo: in italiano, diretto, con UNA emoji iniziale pertinente. Concisione consigliata (~60-80 caratteri) ma nessun limite hard — l'editor può rifinire in autonomia.
-- Contenuto: 2-4 frasi in italiano, max 400 caratteri totali, tono giornalistico sintetico e coinvolgente. NESSUNA emoji nel contenuto.
+- Contenuto: 4-6 frasi in italiano, 500-700 caratteri totali (mai sotto i 400), tono giornalistico discorsivo e coinvolgente. Sviluppa il contesto: spiega il "perché" e l'impatto sul Catania, non limitarti al solo titolo allungato. NESSUNA emoji nel contenuto.
 - Prospettiva: focus sul Catania; se la notizia riguarda rivali/girone, evidenzia sempre l'impatto sul Catania.
 - Niente frasi filler, niente disclaimer, niente richieste all'utente.
 - 🚫 ANTI-INVENZIONE (CRITICA): NON inventare nomi di persone (allenatori, dirigenti, giocatori, presidenti). Ogni cognome che scrivi DEVE comparire letteralmente negli articoli reali trovati via Google Search. Se non trovi un nome preciso per un ruolo, scrivi "la società"/"il club"/"lo staff tecnico" — MAI un cognome plausibile dalla tua conoscenza generale. L'allenatore attuale del Catania è Domenico "Mimmo" Toscano (richiamato ad aprile 2026 dopo l'esonero di William Viali).
