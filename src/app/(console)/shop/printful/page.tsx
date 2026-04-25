@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { SectionHeader } from '@/components/SectionHeader';
 import { useToast } from '@/lib/toast';
 import { getShopProducts, type ShopProduct } from '@/lib/data/shop';
-import { ChevronLeft, ExternalLink, Link as LinkIcon, Unlink, RefreshCw, AlertCircle, CheckCircle2, Package } from 'lucide-react';
+import { ChevronLeft, ExternalLink, Link as LinkIcon, Unlink, RefreshCw, AlertCircle, CheckCircle2, Package, Archive } from 'lucide-react';
 
 type PrintfulSyncProduct = {
   id: number;
@@ -28,6 +28,7 @@ export default function ShopPrintfulPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [linking, setLinking] = useState<string | null>(null);
+  const [archiving, setArchiving] = useState<string | null>(null);
   const { showToast } = useToast();
 
   const load = async () => {
@@ -91,6 +92,30 @@ export default function ShopPrintfulPage() {
     }
   };
 
+  const handleArchive = async (shopProductId: string, shopName: string) => {
+    if (!window.confirm(
+      `Archiviare "${shopName}"?\nIl prodotto Printful collegato non esiste più.\nVerrà nascosto dallo shop pubblico ma resterà nelle tabelle ordini.`
+    )) return;
+    setArchiving(shopProductId);
+    try {
+      const res = await fetch('/api/dev/shop/products', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: shopProductId, status: 'archived' }),
+      });
+      if (!res.ok) {
+        const payload = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(payload?.error ?? 'Errore archiviazione');
+      }
+      showToast('success', `Archiviato: ${shopName}`);
+      await load();
+    } catch (err) {
+      showToast('error', err instanceof Error ? err.message : 'Errore');
+    } finally {
+      setArchiving(null);
+    }
+  };
+
   const handleUnlink = async (shopProductId: string, shopName: string) => {
     if (!window.confirm(`Scollegare "${shopName}" da Printful?\nLe varianti tornano self-managed e torneranno a richiedere stock.`)) return;
     try {
@@ -106,6 +131,17 @@ export default function ShopPrintfulPage() {
   // Auto-match suggestion per external_id (se Printful sync product ha external_id = shop slug)
   const pfBySlug = new Map<string, PrintfulSyncProduct>();
   pfProducts.forEach((p) => { if (p.external_id) pfBySlug.set(p.external_id.toLowerCase(), p); });
+
+  // Orfani: shop_products linkati a Printful con pod_product_id non più esistente nella lista appena scaricata.
+  // Esclude già-archiviati (no point flaggarli ancora).
+  const pfIds = new Set(pfProducts.map((p) => String(p.id)));
+  const orphans = shopProducts.filter(
+    (sp) =>
+      sp.pod_provider === 'printful' &&
+      sp.pod_product_id &&
+      !pfIds.has(sp.pod_product_id) &&
+      sp.status !== 'archived',
+  );
 
   return (
     <div className="space-y-6">
@@ -143,6 +179,46 @@ export default function ShopPrintfulPage() {
           <div>
             <p className="text-sm font-semibold text-red-400">Errore Printful</p>
             <p className="text-xs text-muted-foreground">{error}</p>
+          </div>
+        </div>
+      ) : null}
+
+      {!loading && !error && orphans.length > 0 ? (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/[0.04] p-4">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-amber-400">
+                {orphans.length} prodott{orphans.length === 1 ? 'o orfano' : 'i orfani'} su Printful
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Erano collegati a Printful ma il sync product non esiste più. Archiviali per nasconderli dallo shop pubblico (gli ordini storici restano intatti).
+              </p>
+            </div>
+          </div>
+          <div className="mt-3 space-y-2">
+            {orphans.map((sp) => (
+              <div
+                key={sp.id}
+                className="flex items-center gap-3 rounded-lg border border-amber-500/20 bg-background/40 p-2.5"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-foreground">{sp.name}</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {sp.slug} · status: {sp.status} · pod_id: {sp.pod_product_id}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={archiving === sp.id}
+                  onClick={() => void handleArchive(sp.id, sp.name)}
+                  className="inline-flex h-8 items-center gap-1 rounded-md border border-amber-500/40 bg-amber-500/10 px-2.5 text-[10px] font-semibold uppercase tracking-wider text-amber-400 transition-colors hover:bg-amber-500/20 disabled:opacity-40"
+                >
+                  <Archive className="h-3 w-3" />
+                  {archiving === sp.id ? 'Archivio…' : 'Archivia'}
+                </button>
+              </div>
+            ))}
           </div>
         </div>
       ) : null}
