@@ -30,7 +30,6 @@ export async function POST(request: Request) {
   const pillId = formData.get('pill_id') as string | null;
   const assetFiles = formData.getAll('asset').filter((v): v is File => v instanceof File);
   if (!pillId) return NextResponse.json({ error: 'pill_id mancante' }, { status: 400 });
-  if (assetFiles.length === 0) return NextResponse.json({ error: 'serve almeno un asset' }, { status: 400 });
 
   const { data: pill, error: pillErr } = await supabaseServer
     .from('pills')

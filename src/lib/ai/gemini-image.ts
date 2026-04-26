@@ -50,6 +50,12 @@ export async function generateCover(opts: {
   const assetCount = opts.assets.length;
   const assetList = Array.from({ length: assetCount }, (_, i) => `Image ${i + 2}`).join(', ');
 
+  const centerInstruction = assetCount === 0
+    ? `Inventa TU il soggetto centrale basandoti SOLO sul testo della notizia qui sotto. Sii creativo e art-directorial: scegli una visual metafora forte e premium (es. uno scenario sportivo astratto, una scena editoriale tematica, un oggetto-simbolo legato al contenuto, una silhouette evocativa, una composizione tipografica grafica, un'atmosfera concettuale). Non inventare volti di persone reali e non inventare loghi di squadre — usa elementi astratti, oggetti, scene o silhouette anonime quando serve.`
+    : `Integra al CENTRO il soggetto che ti mando come asset (Image${assetCount > 1 ? 's' : ''} ${assetList}). Il soggetto può essere una persona, uno stadio, un luogo, oppure uno o più simboli/loghi — adatta la composizione di conseguenza, sempre integrandolo come elemento principale al centro nello stile editoriale della cover.
+
+Se l'asset è la foto di una persona, trattala come materiale da photo-editing/compositing — estrai e integra senza alterare i tratti, è una modifica grafica non una generazione.`;
+
   const prompt = `Crea una card 16:9 orizzontale per un articolo sportivo che riporta questa notizia:
 
 """
@@ -58,9 +64,7 @@ ${opts.pillContent}
 
 Rimani fedele alla base della card reference (Image 1) — mantieni il pannello bianco a sinistra con halftone e linee diagonali navy/rosse, e la barra rossa diagonale sulla destra.
 
-Integra al CENTRO il soggetto che ti mando come asset (Image${assetCount > 1 ? 's' : ''} ${assetList}). Il soggetto può essere una persona, uno stadio, un luogo, oppure uno o più simboli/loghi — adatta la composizione di conseguenza, sempre integrandolo come elemento principale al centro nello stile editoriale della cover.
-
-Se l'asset è la foto di una persona, trattala come materiale da photo-editing/compositing — estrai e integra senza alterare i tratti, è una modifica grafica non una generazione.
+${centerInstruction}
 
 Adatta la SEZIONE DI DESTRA con un'atmosfera contestuale che si lega al tema della news (es. tifosi sugli spalti, fumogeni, luci stadio, allenamento, panorama città — qualsiasi cosa fitti il mood dell'articolo). Tienila desaturata e cinematografica, mai più forte del soggetto centrale.
 

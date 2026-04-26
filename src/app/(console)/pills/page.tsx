@@ -187,7 +187,7 @@ function PillDetail({
 }: {
   pill: Pill;
   onClose: () => void;
-  onAction: (action: 'approve' | 'reject' | 'cancel' | 'edit' | 'delete' | 'publish' | 'generate-cover') => void;
+  onAction: (action: 'approve' | 'reject' | 'cancel' | 'edit' | 'delete' | 'publish' | 'generate-cover' | 'generate-cover-auto') => void;
   saving: boolean;
 }) {
   const st = statusPill(pill.status);
@@ -283,17 +283,28 @@ function PillDetail({
         </div>
       </div>
 
-      {/* Cover AI — solo per draft. Apre file picker → upload foto soggetto → Nano Banana */}
+      {/* Cover AI — solo per draft. Due varianti: con asset (file picker) o auto (no upload) */}
       {pill.status === 'draft' && (
-        <button
-          className="btn btn-ghost"
-          disabled={saving}
-          onClick={() => onAction('generate-cover')}
-          title="Scegli una foto del soggetto e genera la cover con Nano Banana"
-        >
-          {pill.image_url ? <RefreshCw className="w-4 h-4" /> : <ImagePlus className="w-4 h-4" />}
-          {pill.image_url ? 'Rigenera cover (scegli foto/loghi)' : 'Genera cover (scegli foto/loghi)'}
-        </button>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            className="btn btn-ghost"
+            disabled={saving}
+            onClick={() => onAction('generate-cover')}
+            title="Scegli una o più immagini (foto soggetto, loghi) e genera la cover"
+          >
+            {pill.image_url ? <RefreshCw className="w-4 h-4" /> : <ImagePlus className="w-4 h-4" />}
+            {pill.image_url ? 'Rigenera (con foto)' : 'Cover con foto'}
+          </button>
+          <button
+            className="btn btn-ghost"
+            disabled={saving}
+            onClick={() => onAction('generate-cover-auto')}
+            title="Lascia che Nano Banana inventi la visual basandosi solo sul testo della pill"
+          >
+            <Sparkles className="w-4 h-4" />
+            Cover auto (no foto)
+          </button>
+        </div>
       )}
 
       {/* Actions */}
@@ -805,7 +816,7 @@ export default function PillsPage() {
     void doGenerateCover(pill, files);
   };
 
-  const handleAction = (pill: Pill, action: 'approve' | 'reject' | 'cancel' | 'edit' | 'delete' | 'publish' | 'generate-cover') => {
+  const handleAction = (pill: Pill, action: 'approve' | 'reject' | 'cancel' | 'edit' | 'delete' | 'publish' | 'generate-cover' | 'generate-cover-auto') => {
     if (action === 'edit') { setSelectedPill(pill); setView('edit'); return; }
     if (action === 'approve') return setConfirmModal({ open: true, title: 'Approva', message: `Approvare "${pill.title}"? Verrà programmata.`, variant: 'default', onConfirm: () => { setConfirmModal(m => ({ ...m, open: false })); doUpdate(pill.id, { status: 'scheduled' }, 'Approvata'); } });
     if (action === 'reject')  return setConfirmModal({ open: true, title: 'Rifiuta', message: `Rifiutare "${pill.title}"?`, variant: 'danger', onConfirm: () => { setConfirmModal(m => ({ ...m, open: false })); doUpdate(pill.id, { status: 'rejected' }, 'Rifiutata'); } });
@@ -815,6 +826,10 @@ export default function PillsPage() {
     if (action === 'generate-cover') {
       coverPillRef.current = pill;
       coverFileInputRef.current?.click();
+      return;
+    }
+    if (action === 'generate-cover-auto') {
+      void doGenerateCover(pill, []);
       return;
     }
   };
