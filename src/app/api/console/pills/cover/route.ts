@@ -66,11 +66,29 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: message }, { status: 502 });
   }
 
-  // Convert e upload con stable key (overwrite garantito)
-  const webp = await sharp(pngBuffer)
-    .resize({ width: 2048, withoutEnlargement: true })
-    .webp({ quality: 85 })
-    .toBuffer();
+  // Force 16:9 horizontal: Nano Banana spesso eredita aspect ratio dall'asset
+  // (es. logo quadrato → output quadrato). Sharp.resize fit:'cover' fa center-crop
+  // a 1920x1080 indipendentemente da cosa arriva.
+  const meta = await sharp(pngBuffer).metadata();
+  const w = meta.width ?? 0;
+  const h = meta.height ?? 0;
+  const targetRatio = 16 / 9;
+  const actualRatio = h > 0 ? w / h : targetRatio;
+  console.log('[pills/cover] Nano Banana output: %dx%d (ratio %f)', w, h, actualRatio);
+
+  let normalized: Buffer;
+  if (Math.abs(actualRatio - targetRatio) < 0.05) {
+    // Già 16:9 (tolleranza 5%): scala solo a 2048 di larghezza max
+    normalized = await sharp(pngBuffer)
+      .resize({ width: 2048, withoutEnlargement: true })
+      .toBuffer();
+  } else {
+    // Non 16:9: center-crop forzato a 1920x1080
+    normalized = await sharp(pngBuffer)
+      .resize(1920, 1080, { fit: 'cover', position: 'center' })
+      .toBuffer();
+  }
+  const webp = await sharp(normalized).webp({ quality: 85 }).toBuffer();
 
   const key = `${GENERATED_PREFIX}${pillId}.webp`;
   const ts = Date.now();
