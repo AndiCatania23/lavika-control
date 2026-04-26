@@ -85,9 +85,9 @@ ${opts.pillContent}
 """
 
 OUTPUT:
+- 🔒 ASPECT RATIO: the output image MUST BE STRICTLY 16:9 HORIZONTAL — wider than tall, landscape orientation, exactly matching the proportions of Image 1 (~1920×1080 or similar 16:9 dimensions). NEVER produce a square, vertical, 4:3, or any non-16:9 image. If unsure, take Image 1's exact aspect ratio.
 - A finished, premium-looking sports magazine cover where the brand identity of Image 1 is unmistakable AND the assets are beautifully integrated
 - Cinematic lighting, deep shadows, controlled highlights
-- 16:9
 - NO text, NO words, NO numbers, NO captions, NO emoji rendered anywhere`;
 
   const parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = [
