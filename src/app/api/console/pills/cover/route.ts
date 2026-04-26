@@ -46,11 +46,21 @@ export async function POST(request: Request) {
   if (!baseImage) {
     return NextResponse.json({ error: 'Impossibile scaricare base template' }, { status: 502 });
   }
+  // Padding 16:9 transparent prima di Nano Banana: se l'asset è quadrato/verticale,
+  // viene contenuto in un canvas 1920x1080 con sfondo trasparente. Cosi' tutti
+  // gli input (base + asset) hanno stesso aspect ratio → output 16:9.
   const assets = await Promise.all(
-    assetFiles.map(async (f) => ({
-      data: Buffer.from(await f.arrayBuffer()),
-      mimeType: f.type || 'image/jpeg',
-    })),
+    assetFiles.map(async (f) => {
+      const raw = Buffer.from(await f.arrayBuffer());
+      const padded = await sharp(raw)
+        .resize(1920, 1080, {
+          fit: 'contain',
+          background: { r: 0, g: 0, b: 0, alpha: 0 },
+        })
+        .png()
+        .toBuffer();
+      return { data: padded, mimeType: 'image/png' };
+    }),
   );
 
   let pngBuffer: Buffer;
@@ -66,29 +76,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: message }, { status: 502 });
   }
 
-  // Force 16:9 horizontal: Nano Banana spesso eredita aspect ratio dall'asset
-  // (es. logo quadrato → output quadrato). Sharp.resize fit:'cover' fa center-crop
-  // a 1920x1080 indipendentemente da cosa arriva.
+  // Logga aspect ratio output per debug; nessun crop forzato (rovinava la composizione).
   const meta = await sharp(pngBuffer).metadata();
-  const w = meta.width ?? 0;
-  const h = meta.height ?? 0;
-  const targetRatio = 16 / 9;
-  const actualRatio = h > 0 ? w / h : targetRatio;
-  console.log('[pills/cover] Nano Banana output: %dx%d (ratio %f)', w, h, actualRatio);
+  console.log('[pills/cover] Nano Banana output: %dx%d (ratio %f)',
+    meta.width ?? 0, meta.height ?? 0, meta.height ? (meta.width ?? 0) / meta.height : 0);
 
-  let normalized: Buffer;
-  if (Math.abs(actualRatio - targetRatio) < 0.05) {
-    // Già 16:9 (tolleranza 5%): scala solo a 2048 di larghezza max
-    normalized = await sharp(pngBuffer)
-      .resize({ width: 2048, withoutEnlargement: true })
-      .toBuffer();
-  } else {
-    // Non 16:9: center-crop forzato a 1920x1080
-    normalized = await sharp(pngBuffer)
-      .resize(1920, 1080, { fit: 'cover', position: 'center' })
-      .toBuffer();
-  }
-  const webp = await sharp(normalized).webp({ quality: 85 }).toBuffer();
+  const webp = await sharp(pngBuffer)
+    .resize({ width: 2048, withoutEnlargement: true })
+    .webp({ quality: 85 })
+    .toBuffer();
 
   const key = `${GENERATED_PREFIX}${pillId}.webp`;
   const ts = Date.now();
