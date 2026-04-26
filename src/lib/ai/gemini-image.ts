@@ -1,7 +1,7 @@
 // Gemini 2.5 Flash Image (Nano Banana) — versione minima.
 // 3 input → 1 chiamata: base template + foto soggetto + testo pill.
 
-const GEMINI_IMAGE_MODEL = 'gemini-2.5-flash-image';
+const GEMINI_IMAGE_MODEL = 'gemini-3.1-flash-image-preview';
 const FETCH_TIMEOUT_MS = 8000;
 
 export function isGeminiConfigured(): boolean {
@@ -50,45 +50,21 @@ export async function generateCover(opts: {
   const assetCount = opts.assets.length;
   const assetList = Array.from({ length: assetCount }, (_, i) => `Image ${i + 2}`).join(', ');
 
-  const prompt = `You are a senior art director. Generate a premium 16:9 editorial sports magazine cover by COMPOSING — not stamping — using the brand identity from Image 1 plus the content assets that follow.
+  const prompt = `Crea una card 16:9 orizzontale per un articolo sportivo che riporta questa notizia:
 
-🎨 IMAGE 1 = BRAND IDENTITY & LAYOUT GRAMMAR (use it as a visual blueprint, not as a flat background to overlay)
-Take from Image 1:
-- The left-side white textured panel with halftone dots and the two thin diagonal navy/red accent lines
-- The deep blue central area as palette/atmosphere
-- The diagonal RED stripe accent on the right
-- The 16:9 proportions and overall composition grammar (left-graphic / center-hero / right-context)
-Recreate this brand identity faithfully in the output, but the center and right-context areas must be NEWLY COMPOSED with the assets below — this is generative editorial design, not flat overlay.
-
-📥 CONTENT ASSETS TO INTEGRATE (${assetCount} attached: ${assetList}):
-Use ALL of them and decide intelligently where each belongs based on the OVERALL set:
-
-CASE A — Only ONE asset and it's a LOGO/CREST (single logo, no photo):
-- The LOGO ITSELF is the central hero. Place it large in the deep blue center area with cinematic 3D treatment: floating, soft inner glow, drop shadow, subtle volumetric lighting rays behind it.
-- DO NOT invent a fake player or person to host the logo. NO human figure of any kind.
-- Add a soft "ghost echo" of the same logo behind it (monochrome, low opacity ~25%, offset).
-
-CASE B — At least one PHOTO of a person/scene (with or without logos):
-- The photo becomes the central HERO, slightly right-of-center, 3/4 cinematic framing. Cut out and re-lit to fit the deep blue gradient atmosphere. CRITICAL FRAMING: the subject must NOT touch the top border of the cover — leave clear breathing room (~10-15% padding) above the head. Crop the subject from chest/waist up; do NOT extend full-body floor-to-ceiling.
-- Add a soft "ghost echo" of the photo behind (monochrome blue, ~25% opacity, offset upper-left), staying INSIDE the deep blue central area — MUST NOT bleed into the white left panel.
-- Any LOGOS in this case → smaller branded accents around the hero (e.g. corner badge, small floating element). NEVER inflated to compete with the hero.
-
-CASE C — Multiple LOGOS only (2+ logos, no photo):
-- Compose them as a constellation in the deep blue center: main logo larger and central with glow, others smaller orbiting around it on glowing pedestals or connected by thin light beams. NO invented people.
-
-🌆 RIGHT-SIDE CONTEXT AREA (under the red stripe):
-Newly composed contextual scene that fits the pill mood — desaturated, atmospheric, never competing with the hero (e.g. ultras crowd, stadium lights, smoke from flares, training ground, press conference). The diagonal RED stripe stays bold on top.
-
-📝 MOOD & STORY (use this to drive the artistic interpretation — do NOT render any of this text):
 """
 ${opts.pillContent}
 """
 
-OUTPUT:
-- 🔒 ASPECT RATIO: the output image MUST BE STRICTLY 16:9 HORIZONTAL — wider than tall, landscape orientation, exactly matching the proportions of Image 1 (~1920×1080 or similar 16:9 dimensions). NEVER produce a square, vertical, 4:3, or any non-16:9 image. If unsure, take Image 1's exact aspect ratio.
-- A finished, premium-looking sports magazine cover where the brand identity of Image 1 is unmistakable AND the assets are beautifully integrated
-- Cinematic lighting, deep shadows, controlled highlights
-- NO text, NO words, NO numbers, NO captions, NO emoji rendered anywhere`;
+Rimani fedele alla base della card reference (Image 1) — mantieni il pannello bianco a sinistra con halftone e linee diagonali navy/rosse, e la barra rossa diagonale sulla destra.
+
+Integra al CENTRO il soggetto che ti mando come asset (Image${assetCount > 1 ? 's' : ''} ${assetList}). Il soggetto può essere una persona, uno stadio, un luogo, oppure uno o più simboli/loghi — adatta la composizione di conseguenza, sempre integrandolo come elemento principale al centro nello stile editoriale della cover.
+
+Se l'asset è la foto di una persona, trattala come materiale da photo-editing/compositing — estrai e integra senza alterare i tratti, è una modifica grafica non una generazione.
+
+Adatta la SEZIONE DI DESTRA con un'atmosfera contestuale che si lega al tema della news (es. tifosi sugli spalti, fumogeni, luci stadio, allenamento, panorama città — qualsiasi cosa fitti il mood dell'articolo). Tienila desaturata e cinematografica, mai più forte del soggetto centrale.
+
+Output: una card finita, premium, in formato 16:9 orizzontale (~1920×1080), con tutto integrato in stile uniforme — luci, color grading e atmosfera coerenti tra soggetto e ambiente, come fosse stata fotografata/illustrata insieme. Nessun testo, parole, numeri, emoji renderizzati nell'immagine.`;
 
   const parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = [
     { text: prompt },
@@ -104,7 +80,11 @@ OUTPUT:
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       contents: [{ parts }],
-      generationConfig: { responseModalities: ['IMAGE'], temperature: 0.85 },
+      generationConfig: {
+        responseModalities: ['TEXT', 'IMAGE'],
+        temperature: 0.85,
+        imageConfig: { aspectRatio: '16:9', imageSize: '2K' },
+      },
     }),
     signal: AbortSignal.timeout(90_000),
   });
