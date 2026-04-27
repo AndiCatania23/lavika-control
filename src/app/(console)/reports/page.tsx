@@ -1,7 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Flag, ShieldOff, ShieldCheck, AlertCircle, Mail, RefreshCw, Check } from 'lucide-react';
+import {
+  Flag, ShieldOff, ShieldCheck, AlertCircle, Mail, RefreshCw, Check,
+  ListFilter, Inbox, FileWarning, Ban, CheckCircle2,
+} from 'lucide-react';
 
 type Reason = 'offensive' | 'spam' | 'impersonation' | 'other';
 type Status = 'open' | 'reviewing' | 'resolved_warned' | 'resolved_banned' | 'resolved_cleared';
@@ -27,18 +30,18 @@ const REASON_LABEL: Record<Reason, string> = {
 const STATUS_LABEL: Record<Status, string> = {
   open: 'Aperta',
   reviewing: 'In revisione',
-  resolved_warned: 'Risolta · warning',
-  resolved_banned: 'Risolta · ban',
-  resolved_cleared: 'Risolta · infondata',
+  resolved_warned: 'Warning',
+  resolved_banned: 'Ban',
+  resolved_cleared: 'Infondata',
 };
 
-const STATUS_TONE: Record<Status, string> = {
-  open: 'text-[color:var(--accent)] bg-[color:var(--accent-soft)]',
-  reviewing: 'text-amber-500 bg-amber-500/10',
-  resolved_warned: 'text-amber-500 bg-amber-500/10',
-  resolved_banned: 'text-red-500 bg-red-500/10',
-  resolved_cleared: 'text-emerald-500 bg-emerald-500/10',
-};
+function statusPill(s: Status): string {
+  if (s === 'open') return 'pill pill-accent';
+  if (s === 'reviewing') return 'pill pill-info';
+  if (s === 'resolved_warned') return 'pill';
+  if (s === 'resolved_banned') return 'pill pill-err';
+  return 'pill pill-ok';
+}
 
 function formatDate(iso: string): string {
   const d = new Date(iso);
@@ -50,9 +53,20 @@ function formatDate(iso: string): string {
   return d.toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
+function Spinner() {
+  return (
+    <div className="flex items-center justify-center h-64">
+      <div className="w-7 h-7 border-2 border-[color:var(--accent-raw)] border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
+}
+
+type FilterKey = Status | 'all';
+
 export default function ReportsPage() {
-  const [statusFilter, setStatusFilter] = useState<Status | 'all'>('open');
+  const [statusFilter, setStatusFilter] = useState<FilterKey>('open');
   const [reports, setReports] = useState<ReportRow[]>([]);
+  const [allOpenCount, setAllOpenCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actingId, setActingId] = useState<string | null>(null);
@@ -68,6 +82,7 @@ export default function ReportsPage() {
         return;
       }
       setReports(data.reports ?? []);
+      setAllOpenCount(data.openCount ?? 0);
     } catch {
       setError('Errore di rete.');
     } finally {
@@ -107,89 +122,94 @@ export default function ReportsPage() {
     return byStatus;
   }, [reports]);
 
+  const kpis = [
+    { label: 'Aperte', value: allOpenCount, icon: Inbox, tone: 'accent' as const, hint: 'Da revisionare ora' },
+    { label: 'In revisione', value: counts.get('reviewing') ?? 0, icon: ListFilter, tone: 'info' as const, hint: 'In carico' },
+    { label: 'Ban emessi', value: counts.get('resolved_banned') ?? 0, icon: Ban, tone: 'err' as const, hint: 'Risolti con ban' },
+    { label: 'Risolte', value: (counts.get('resolved_warned') ?? 0) + (counts.get('resolved_cleared') ?? 0), icon: CheckCircle2, tone: 'ok' as const, hint: 'Warning + Infondate' },
+  ];
+
   return (
-    <div className="vstack" style={{ gap: 'var(--s5)' }}>
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="typ-display">Segnalazioni</h1>
-          <p className="typ-caption mt-1">
-            {reports.length} {reports.length === 1 ? 'risultato' : 'risultati'} · filtro: {statusFilter === 'all' ? 'Tutte' : STATUS_LABEL[statusFilter]}
-          </p>
+    <div className="vstack" style={{ gap: 'var(--s4)' }}>
+      {/* KPI strip */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        {kpis.map((k) => {
+          const Ic = k.icon;
+          const pillClass =
+            k.tone === 'ok' ? 'pill pill-ok'
+              : k.tone === 'info' ? 'pill pill-info'
+                : k.tone === 'accent' ? 'pill pill-accent'
+                  : k.tone === 'err' ? 'pill pill-err'
+                    : 'pill';
+          return (
+            <div key={k.label} className="card card-body" style={{ padding: 12 }}>
+              <div className="flex items-center justify-between gap-2">
+                <span className="typ-micro truncate">{k.label}</span>
+                <span className={pillClass} style={{ padding: '2px 6px' }}>
+                  <Ic className="w-3 h-3" />
+                </span>
+              </div>
+              <div className="typ-metric mt-1" style={{ fontSize: 24 }}>{k.value.toLocaleString('it-IT')}</div>
+              <div className="typ-caption truncate" style={{ fontSize: 11 }}>{k.hint}</div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Toolbar */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {/* Status segmented filter */}
+        <div className="p-1 rounded-[var(--r)]" style={{ background: 'var(--card-muted)', border: '1px solid var(--hairline-soft)', display: 'inline-flex', flexWrap: 'wrap' }}>
+          {(['open', 'all', 'resolved_warned', 'resolved_banned', 'resolved_cleared'] as FilterKey[]).map((f) => {
+            const active = statusFilter === f;
+            const label = f === 'all' ? 'Tutte' : STATUS_LABEL[f as Status];
+            return (
+              <button
+                key={f}
+                onClick={() => setStatusFilter(f)}
+                className="inline-flex items-center gap-1.5 h-9 px-3 rounded-[calc(var(--r)-2px)] typ-label transition-colors"
+                style={{
+                  background: active ? 'var(--card)' : 'transparent',
+                  color: active ? 'var(--text-hi)' : 'var(--text-muted)',
+                  boxShadow: active ? 'var(--shadow-card)' : 'none',
+                }}
+              >
+                {label}
+              </button>
+            );
+          })}
         </div>
-        <button onClick={loadReports} className="btn btn-ghost btn-sm">
+        <button onClick={loadReports} className="btn btn-ghost btn-sm ml-auto">
           <RefreshCw className="w-4 h-4" />
           <span className="hidden sm:inline">Aggiorna</span>
         </button>
       </div>
 
-      {/* Filtri status */}
-      <div className="flex flex-wrap gap-2">
-        {(['open', 'all', 'resolved_warned', 'resolved_banned', 'resolved_cleared'] as const).map((s) => (
-          <button
-            key={s}
-            onClick={() => setStatusFilter(s as Status | 'all')}
-            className={`px-3 py-1.5 rounded-full text-[12px] font-medium transition-colors ${
-              statusFilter === s
-                ? 'bg-[color:var(--accent)] text-white'
-                : 'bg-[color:var(--surface-soft)] text-[color:var(--text-muted)] hover:text-[color:var(--text)]'
-            }`}
-          >
-            {s === 'all' ? 'Tutte' : STATUS_LABEL[s as Status]}
-          </button>
-        ))}
-      </div>
-
       {/* Body */}
       {loading ? (
-        <div className="card">
-          <div className="card-body text-center py-12">
-            <p className="typ-caption">Caricamento…</p>
-          </div>
-        </div>
+        <Spinner />
       ) : error ? (
-        <div className="card">
-          <div className="card-body text-center py-12">
-            <AlertCircle className="w-6 h-6 text-red-500 mx-auto mb-2" />
-            <p className="typ-body text-red-500">{error}</p>
-          </div>
+        <div className="card card-body text-center">
+          <AlertCircle className="w-7 h-7 mx-auto mb-2" style={{ color: 'var(--err)' }} />
+          <p className="typ-body" style={{ color: 'var(--err)' }}>{error}</p>
         </div>
       ) : reports.length === 0 ? (
-        <div className="card">
-          <div className="card-body text-center py-12">
-            <Flag className="w-6 h-6 text-[color:var(--text-muted)] mx-auto mb-2" />
-            <p className="typ-body text-[color:var(--text-muted)]">
-              Nessuna segnalazione {statusFilter !== 'all' && `con stato "${STATUS_LABEL[statusFilter as Status]}"`}.
-            </p>
-          </div>
+        <div className="card card-body text-center" style={{ padding: 'var(--s5)' }}>
+          <Flag className="w-7 h-7 mx-auto mb-2" style={{ color: 'var(--text-muted)', opacity: 0.5 }} />
+          <p className="typ-caption">
+            Nessuna segnalazione{statusFilter !== 'all' && ` "${STATUS_LABEL[statusFilter as Status]}"`}.
+          </p>
         </div>
       ) : (
-        <div className="vstack" style={{ gap: 'var(--s3)' }}>
-          {reports.map((report) => (
+        <div className="vstack-tight">
+          {reports.map((r) => (
             <ReportCard
-              key={report.id}
-              report={report}
-              busy={actingId === report.id}
-              onAction={(action) => handleAction(report.id, action)}
+              key={r.id}
+              report={r}
+              busy={actingId === r.id}
+              onAction={(action) => handleAction(r.id, action)}
             />
           ))}
-        </div>
-      )}
-
-      {/* Mini-stats footer */}
-      {!loading && reports.length > 0 && (
-        <div className="card">
-          <div className="card-body">
-            <p className="typ-micro mb-2">Conteggio per stato (filtrato)</p>
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-              {(['open', 'reviewing', 'resolved_warned', 'resolved_banned', 'resolved_cleared'] as Status[]).map((s) => (
-                <div key={s} className="text-center">
-                  <div className="typ-h2">{counts.get(s) ?? 0}</div>
-                  <div className="typ-micro">{STATUS_LABEL[s]}</div>
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
       )}
     </div>
@@ -210,153 +230,134 @@ function ReportCard({
   const reporterName = report.reporter?.displayName ?? '(anonimo)';
 
   return (
-    <div className="card">
-      <div className="card-body">
-        {/* Top: reported user + status */}
-        <div className="flex items-start gap-3">
-          {/* Avatar — img plain (no next/image): admin panel, dimensione fissa, niente optimization. */}
-          <div className="shrink-0">
-            {report.reported.avatarUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={report.reported.avatarUrl}
-                alt={reportedName}
-                width={48}
-                height={48}
-                className="rounded-full object-cover"
-                style={{ width: 48, height: 48 }}
-              />
-            ) : (
-              <div className="rounded-full bg-[color:var(--surface-soft)] flex items-center justify-center text-[color:var(--text-muted)] font-bold" style={{ width: 48, height: 48 }}>
-                {reportedName.slice(0, 2).toUpperCase()}
-              </div>
-            )}
-          </div>
-
-          {/* Reported user info */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <p className="typ-h3 truncate">{reportedName}</p>
-              {report.reported.isBanned && (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-500/15 text-red-500 uppercase tracking-wide">
-                  Bannato
-                </span>
-              )}
+    <div className="card" style={{ padding: 12 }}>
+      {/* Header row: avatar + name + status pill */}
+      <div className="flex items-center gap-3">
+        <div className="shrink-0">
+          {report.reported.avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={report.reported.avatarUrl}
+              alt={reportedName}
+              className="w-11 h-11 rounded-full object-cover"
+              style={{ border: '1px solid var(--hairline-soft)' }}
+            />
+          ) : (
+            <div
+              className="w-11 h-11 rounded-full inline-grid place-items-center"
+              style={{ background: 'var(--accent-soft)', color: 'var(--accent-hi)', fontSize: 14, fontWeight: 600 }}
+            >
+              {reportedName.slice(0, 2).toUpperCase()}
             </div>
-            {report.reported.email && (
-              <p className="typ-caption truncate">{report.reported.email}</p>
-            )}
-          </div>
-
-          <span className={`shrink-0 px-2.5 py-1 rounded-full text-[11px] font-medium ${STATUS_TONE[report.status]}`}>
-            {STATUS_LABEL[report.status]}
-          </span>
-        </div>
-
-        {/* Reason + details */}
-        <div className="mt-4 p-3 rounded-lg bg-[color:var(--surface-soft)]">
-          <div className="flex items-center gap-2 mb-1">
-            <Flag className="w-3.5 h-3.5 text-[color:var(--accent)]" />
-            <span className="typ-micro font-semibold uppercase tracking-wide">{REASON_LABEL[report.reason]}</span>
-          </div>
-          {report.details && (
-            <p className="typ-body text-[color:var(--text-muted)]">{report.details}</p>
           )}
         </div>
 
-        {/* Reporter + dates */}
-        <div className="mt-3 flex items-center justify-between text-[12px] text-[color:var(--text-muted)]">
-          <span>
-            Segnalato da <strong className="text-[color:var(--text)]">{reporterName}</strong>
-          </span>
-          <span>{formatDate(report.createdAt)}</span>
+        <div className="grow min-w-0">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <div className="typ-label truncate">{reportedName}</div>
+            {report.reported.isBanned && (
+              <span className="pill pill-err" style={{ fontSize: 10, padding: '1px 6px' }}>
+                <Ban className="w-3 h-3" /> bannato
+              </span>
+            )}
+          </div>
+          {report.reported.email && (
+            <div className="typ-caption truncate">{report.reported.email}</div>
+          )}
         </div>
 
-        {/* Actions */}
-        {!isResolved && (
-          <div className="mt-4 flex flex-wrap gap-2">
-            <ActionButton
-              icon={<Mail className="w-3.5 h-3.5" />}
-              label="Warn"
-              tone="amber"
-              busy={busy}
-              onClick={() => onAction('warn')}
-              hint="Marca come avvertimento dato (manda email manualmente)"
-            />
-            <ActionButton
-              icon={<ShieldOff className="w-3.5 h-3.5" />}
-              label="Ban utente"
-              tone="red"
-              busy={busy}
-              onClick={() => {
-                if (confirm(`Confermare ban di "${reportedName}"? L'utente non potrà più creare contenuti UGC.`)) {
-                  onAction('ban');
-                }
-              }}
-            />
-            <ActionButton
-              icon={<Check className="w-3.5 h-3.5" />}
-              label="Chiudi (infondata)"
-              tone="muted"
-              busy={busy}
-              onClick={() => onAction('clear')}
-            />
-          </div>
-        )}
+        <span className={statusPill(report.status)} style={{ fontSize: 11, padding: '2px 8px' }}>
+          {STATUS_LABEL[report.status]}
+        </span>
+      </div>
 
-        {report.status === 'resolved_banned' && (
-          <div className="mt-4">
-            <ActionButton
-              icon={<ShieldCheck className="w-3.5 h-3.5" />}
-              label="Rimuovi ban"
-              tone="emerald"
-              busy={busy}
-              onClick={() => {
-                if (confirm(`Rimuovere ban di "${reportedName}"?`)) {
-                  onAction('unban');
-                }
-              }}
-            />
-          </div>
-        )}
-
-        {isResolved && report.resolvedAt && (
-          <p className="mt-3 typ-micro text-[color:var(--text-muted)]">
-            Risolta {formatDate(report.resolvedAt)}
-          </p>
+      {/* Reason + details */}
+      <div
+        className="mt-3 p-3 rounded-[calc(var(--r)-4px)]"
+        style={{ background: 'var(--card-muted)', border: '1px solid var(--hairline-soft)' }}
+      >
+        <div className="flex items-center gap-1.5 mb-1">
+          <Flag className="w-3.5 h-3.5" style={{ color: 'var(--accent)' }} />
+          <span className="typ-micro" style={{ fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+            {REASON_LABEL[report.reason]}
+          </span>
+        </div>
+        {report.details ? (
+          <p className="typ-body">{report.details}</p>
+        ) : (
+          <p className="typ-caption">Nessun dettaglio aggiuntivo</p>
         )}
       </div>
+
+      {/* Reporter + dates */}
+      <div className="flex items-center justify-between mt-2">
+        <span className="typ-caption truncate">
+          Da <span style={{ color: 'var(--text-hi)', fontWeight: 500 }}>{reporterName}</span>
+        </span>
+        <span className="typ-caption shrink-0">{formatDate(report.createdAt)}</span>
+      </div>
+
+      {/* Actions */}
+      {!isResolved && (
+        <div className="flex flex-wrap gap-2 mt-3">
+          <button
+            type="button"
+            onClick={() => onAction('warn')}
+            disabled={busy}
+            className="btn btn-sm"
+            title="Marca come avvertimento (manda email manualmente)"
+          >
+            <Mail className="w-3.5 h-3.5" /> Warn
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (confirm(`Confermare ban di "${reportedName}"?\nL'utente non potrà più creare contenuti UGC (display name, predizioni).`)) {
+                onAction('ban');
+              }
+            }}
+            disabled={busy}
+            className="btn btn-sm"
+            style={{ background: 'var(--err-soft)', color: 'var(--err-hi)', borderColor: 'var(--err-soft)' }}
+          >
+            <ShieldOff className="w-3.5 h-3.5" /> Ban
+          </button>
+          <button
+            type="button"
+            onClick={() => onAction('clear')}
+            disabled={busy}
+            className="btn btn-sm btn-ghost"
+            title="Chiudi senza azione"
+          >
+            <Check className="w-3.5 h-3.5" /> Infondata
+          </button>
+        </div>
+      )}
+
+      {report.status === 'resolved_banned' && (
+        <div className="flex flex-wrap gap-2 mt-3">
+          <button
+            type="button"
+            onClick={() => {
+              if (confirm(`Rimuovere ban di "${reportedName}"?`)) {
+                onAction('unban');
+              }
+            }}
+            disabled={busy}
+            className="btn btn-sm"
+            style={{ background: 'var(--ok-soft)', color: 'var(--ok-hi)', borderColor: 'var(--ok-soft)' }}
+          >
+            <ShieldCheck className="w-3.5 h-3.5" /> Rimuovi ban
+          </button>
+        </div>
+      )}
+
+      {isResolved && report.resolvedAt && (
+        <div className="typ-caption mt-2" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <FileWarning className="w-3 h-3" />
+          Risolta {formatDate(report.resolvedAt)}
+        </div>
+      )}
     </div>
-  );
-}
-
-function ActionButton({
-  icon, label, tone, busy, onClick, hint,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  tone: 'amber' | 'red' | 'emerald' | 'muted';
-  busy: boolean;
-  onClick: () => void;
-  hint?: string;
-}) {
-  const toneClasses = {
-    amber: 'bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 border-amber-500/30',
-    red: 'bg-red-500/10 text-red-600 hover:bg-red-500/20 border-red-500/30',
-    emerald: 'bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 border-emerald-500/30',
-    muted: 'bg-[color:var(--surface-soft)] text-[color:var(--text-muted)] hover:text-[color:var(--text)] border-[color:var(--border)]',
-  }[tone];
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={busy}
-      title={hint}
-      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[12px] font-medium transition-colors disabled:opacity-50 ${toneClasses}`}
-    >
-      {icon}
-      {label}
-    </button>
   );
 }
