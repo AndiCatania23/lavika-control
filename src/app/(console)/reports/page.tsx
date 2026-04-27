@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import Image from 'next/image';
 import { Flag, ShieldOff, ShieldCheck, AlertCircle, Mail, RefreshCw, Check } from 'lucide-react';
 
 type Reason = 'offensive' | 'spam' | 'impersonation' | 'other';
@@ -215,10 +214,11 @@ function ReportCard({
       <div className="card-body">
         {/* Top: reported user + status */}
         <div className="flex items-start gap-3">
-          {/* Avatar */}
+          {/* Avatar — img plain (no next/image): admin panel, dimensione fissa, niente optimization. */}
           <div className="shrink-0">
             {report.reported.avatarUrl ? (
-              <Image
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
                 src={report.reported.avatarUrl}
                 alt={reportedName}
                 width={48}

@@ -17,6 +17,10 @@ export type ReportRow = {
 /**
  * GET /api/dev/reports?status=open
  * Lista segnalazioni filtrate per status. Default: tutte.
+ *
+ * Le FK content_reports.reporter_id e reported_user_id puntano ad auth.users(id),
+ * non a user_profiles(id). Quindi il join Supabase con select() non risolve.
+ * Facciamo 2 query e join manuale in JS.
  */
 export async function GET(request: Request) {
   if (!supabaseServer) {
@@ -26,13 +30,10 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const statusFilter = searchParams.get('status');
 
+  // 1) Carica segnalazioni
   let query = supabaseServer
     .from('content_reports')
-    .select(`
-      id, reason, details, status, created_at, resolved_at,
-      reporter:user_profiles!content_reports_reporter_id_fkey(id, display_name, email),
-      reported:user_profiles!content_reports_reported_user_id_fkey(id, display_name, email, avatar_url, is_banned)
-    `)
+    .select('id, reporter_id, reported_user_id, reason, details, status, created_at, resolved_at')
     .order('created_at', { ascending: false })
     .limit(200);
 
@@ -40,44 +41,86 @@ export async function GET(request: Request) {
     query = query.eq('status', statusFilter);
   }
 
-  const { data, error } = await query;
+  const { data: reportsData, error: reportsError } = await query;
 
-  if (error) {
-    console.error('[dev/reports] list failed:', error.message);
-    return NextResponse.json({ ok: false, message: error.message }, { status: 500 });
+  if (reportsError) {
+    console.error('[dev/reports] list failed:', reportsError.message);
+    return NextResponse.json({ ok: false, message: reportsError.message }, { status: 500 });
   }
 
-  type DbRow = {
+  type ReportDbRow = {
     id: string;
+    reporter_id: string | null;
+    reported_user_id: string;
     reason: string;
     details: string | null;
     status: string;
     created_at: string;
     resolved_at: string | null;
-    reporter: { id: string; display_name: string | null; email: string | null } | null;
-    reported: { id: string; display_name: string | null; email: string | null; avatar_url: string | null; is_banned: boolean } | null;
   };
 
-  const rows: ReportRow[] = ((data ?? []) as unknown as DbRow[])
-    .filter((r) => r.reported !== null) // exclude orphan reports (reported user deleted)
-    .map((r) => ({
+  const reportsList = (reportsData ?? []) as ReportDbRow[];
+
+  // 2) Carica profili per tutti gli userId coinvolti (reporter + reported)
+  const userIds = new Set<string>();
+  for (const r of reportsList) {
+    if (r.reporter_id) userIds.add(r.reporter_id);
+    if (r.reported_user_id) userIds.add(r.reported_user_id);
+  }
+
+  type ProfileDbRow = {
+    id: string;
+    display_name: string | null;
+    email: string | null;
+    avatar_url: string | null;
+    is_banned: boolean;
+  };
+
+  const profilesMap = new Map<string, ProfileDbRow>();
+
+  if (userIds.size > 0) {
+    const { data: profilesData, error: profilesError } = await supabaseServer
+      .from('user_profiles')
+      .select('id, display_name, email, avatar_url, is_banned')
+      .in('id', Array.from(userIds));
+
+    if (profilesError) {
+      console.error('[dev/reports] profiles fetch failed:', profilesError.message);
+      return NextResponse.json({ ok: false, message: profilesError.message }, { status: 500 });
+    }
+
+    for (const p of (profilesData ?? []) as ProfileDbRow[]) {
+      profilesMap.set(p.id, p);
+    }
+  }
+
+  // 3) Mappa in ReportRow + filtra orphan (reported user cancellato → user_profiles row mancante)
+  const rows: ReportRow[] = [];
+  for (const r of reportsList) {
+    const reportedProfile = profilesMap.get(r.reported_user_id);
+    if (!reportedProfile) continue; // skip se reported user cancellato
+
+    const reporterProfile = r.reporter_id ? profilesMap.get(r.reporter_id) : null;
+
+    rows.push({
       id: r.id,
       reason: r.reason as ReportRow['reason'],
       details: r.details,
       status: r.status as ReportRow['status'],
       createdAt: r.created_at,
       resolvedAt: r.resolved_at,
-      reporter: r.reporter
-        ? { id: r.reporter.id, displayName: r.reporter.display_name, email: r.reporter.email }
+      reporter: reporterProfile
+        ? { id: reporterProfile.id, displayName: reporterProfile.display_name, email: reporterProfile.email }
         : null,
       reported: {
-        id: r.reported!.id,
-        displayName: r.reported!.display_name,
-        email: r.reported!.email,
-        avatarUrl: r.reported!.avatar_url,
-        isBanned: r.reported!.is_banned ?? false,
+        id: reportedProfile.id,
+        displayName: reportedProfile.display_name,
+        email: reportedProfile.email,
+        avatarUrl: reportedProfile.avatar_url,
+        isBanned: reportedProfile.is_banned ?? false,
       },
-    }));
+    });
+  }
 
   // Conteggio open per badge in dashboard
   const { count: openCount } = await supabaseServer
