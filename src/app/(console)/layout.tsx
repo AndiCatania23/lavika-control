@@ -19,6 +19,7 @@ function resolveTitle(pathname: string): { title: string; subtitle?: string } {
   if (pathname.startsWith('/errors'))          return { title: 'Errori',    subtitle: 'Log e triage' };
   if (pathname.startsWith('/notifications'))   return { title: 'Notifiche', subtitle: 'Storico' };
   if (pathname.startsWith('/users'))           return { title: 'Utenti',    subtitle: 'Moderazione' };
+  if (pathname.startsWith('/reports'))         return { title: 'Segnalazioni', subtitle: 'Moderazione UGC' };
   if (pathname.startsWith('/sessions'))        return { title: 'Sessioni',  subtitle: 'Token attivi' };
   if (pathname.startsWith('/shop'))            return { title: 'Shop',      subtitle: 'E-commerce' };
   if (pathname.startsWith('/settings'))        return { title: 'Impostazioni' };

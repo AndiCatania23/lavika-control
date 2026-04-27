@@ -20,6 +20,7 @@ import {
   XCircle,
   ImageIcon,
   Archive,
+  Flag,
 } from 'lucide-react';
 
 /* ==================================================================
@@ -92,6 +93,7 @@ export default function DashboardPage() {
   const [r2Summary, setR2Summary] = useState<R2Summary | null>(null);
   const [pills, setPills] = useState<Pill[]>([]);
   const [printfulOrphans, setPrintfulOrphans] = useState<number>(0);
+  const [openReports, setOpenReports] = useState<number>(0);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<string>('');
 
@@ -107,6 +109,7 @@ export default function DashboardPage() {
       fetch('/api/dev/r2/summary?fast=1', { cache: 'no-store' }).then(r => r.json() as Promise<R2Summary>).then(p => setR2Summary(p)).catch(() => {}),
       fetch('/api/dev/pills',             { cache: 'no-store' }).then(r => r.json() as Promise<Pill[]>).then(p => setPills(p ?? [])).catch(() => {}),
       fetch('/api/dev/pod/printful/orphans', { cache: 'no-store' }).then(r => r.json() as Promise<{ count?: number }>).then(p => setPrintfulOrphans(p?.count ?? 0)).catch(() => {}),
+      fetch('/api/dev/reports?status=open', { cache: 'no-store' }).then(r => r.json() as Promise<{ openCount?: number }>).then(p => setOpenReports(p?.openCount ?? 0)).catch(() => {}),
     ];
     Promise.allSettled(all).finally(() => {
       setRefreshing(false);
@@ -153,8 +156,12 @@ export default function DashboardPage() {
       key: 'printful-orphans', icon: <Archive className="w-5 h-5" strokeWidth={1.75} />, label: 'Prodotti Printful orfani', count: printfulOrphans,
       urgent: false, href: '/shop/printful', hint: 'Da archiviare',
     });
+    if (openReports > 0) items.push({
+      key: 'reports', icon: <Flag className="w-5 h-5" strokeWidth={1.75} />, label: 'Segnalazioni nuove', count: openReports,
+      urgent: true, href: '/reports', hint: 'Da revisionare entro 24h',
+    });
     return items;
-  }, [drafts.length, errors24h, pendingStuck, scheduledToday.length, flaggedDrafts.length, printfulOrphans]);
+  }, [drafts.length, errors24h, pendingStuck, scheduledToday.length, flaggedDrafts.length, printfulOrphans, openReports]);
 
   const loaded = diagnostics !== null && macStatus !== null && r2Summary !== null;
 

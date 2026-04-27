@@ -16,6 +16,7 @@ import {
   ImageIcon,
   AlertTriangle,
   Bell,
+  Flag,
 } from 'lucide-react';
 
 type NavItem = {
@@ -59,7 +60,11 @@ const NAV: NavItem[] = [
     href: '/users',
     label: 'Utenti',
     icon: Users,
-    match: ['/users'],
+    match: ['/users', '/reports'],
+    children: [
+      { href: '/users',   label: 'Lista',         icon: Users },
+      { href: '/reports', label: 'Segnalazioni',  icon: Flag },
+    ],
   },
   {
     href: '/shop',
