@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getErrorsData, ErrorLog } from '@/lib/data';
 import { StatusPill } from '@/components/StatusPill';
-import { Search, AlertTriangle, Clock, ChevronRight, X, Database } from 'lucide-react';
+import { Search, AlertTriangle, Clock, ChevronRight, X, Database, Trash2 } from 'lucide-react';
 
 function useIsWide() {
   const [w, setW] = useState<boolean>(typeof window !== 'undefined' ? window.innerWidth >= 1024 : true);
@@ -28,6 +28,8 @@ export default function ErrorsPage() {
   const [severityFilter, setSeverityFilter] = useState<string>('');
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [reloadTick, setReloadTick] = useState(0);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -36,7 +38,36 @@ export default function ErrorsPage() {
       setErrors(data);
       setLoading(false);
     });
-  }, [severityFilter]);
+  }, [severityFilter, reloadTick]);
+
+  async function dismissOne(id: string) {
+    setBusy(true);
+    try {
+      const r = await fetch(`/api/console/errors/${encodeURIComponent(id)}/dismiss`, { method: 'POST' });
+      if (!r.ok) throw new Error(await r.text());
+      if (selectedId === id) setSelectedId(null);
+      setReloadTick(t => t + 1);
+    } catch (e) {
+      alert(`Errore: ${e instanceof Error ? e.message : 'unknown'}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function dismissAll() {
+    if (!confirm(`Cancellare definitivamente tutti gli errori (${errors.length})? Operazione irreversibile.`)) return;
+    setBusy(true);
+    try {
+      const r = await fetch('/api/console/errors/dismiss-all', { method: 'POST' });
+      if (!r.ok) throw new Error(await r.text());
+      setSelectedId(null);
+      setReloadTick(t => t + 1);
+    } catch (e) {
+      alert(`Errore: ${e instanceof Error ? e.message : 'unknown'}`);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   const filtered = useMemo(() => {
     if (!search) return errors;
@@ -69,6 +100,17 @@ export default function ErrorsPage() {
           <option value="error">Errore</option>
           <option value="warning">Avviso</option>
         </select>
+        {errors.length > 0 && (
+          <button
+            type="button"
+            onClick={dismissAll}
+            disabled={busy}
+            className="btn btn-quiet btn-sm"
+            title="Cancella tutti gli errori storici dal job_queue"
+          >
+            <Trash2 className="w-4 h-4" /> Dismetti tutti
+          </button>
+        )}
       </div>
 
       {loading ? (
@@ -119,7 +161,7 @@ export default function ErrorsPage() {
           {/* Detail (wide only inline) */}
           {isWide && selected && (
             <div className="card card-body" style={{ position: 'sticky', top: 80, alignSelf: 'start', maxHeight: 'calc(100vh - 100px)', overflowY: 'auto' }}>
-              <ErrorDetail error={selected} onClose={() => setSelectedId(null)} onOpenRun={(runId) => router.push(`/jobs/runs/${runId}`)} />
+              <ErrorDetail error={selected} onClose={() => setSelectedId(null)} onOpenRun={(runId) => router.push(`/jobs/runs/${runId}`)} onDismiss={() => dismissOne(selected.id)} busy={busy} />
             </div>
           )}
         </div>
@@ -139,7 +181,7 @@ export default function ErrorsPage() {
   );
 }
 
-function ErrorDetail({ error, onClose, onOpenRun }: { error: ErrorLog; onClose: () => void; onOpenRun: (runId: string) => void }) {
+function ErrorDetail({ error, onClose, onOpenRun, onDismiss, busy }: { error: ErrorLog; onClose: () => void; onOpenRun: (runId: string) => void; onDismiss?: () => void; busy?: boolean }) {
   return (
     <div className="vstack" style={{ gap: 'var(--s5)' }}>
       <div className="flex items-start justify-between gap-2">
@@ -153,9 +195,21 @@ function ErrorDetail({ error, onClose, onOpenRun }: { error: ErrorLog; onClose: 
           </div>
           <p className="typ-mono mt-1" style={{ fontSize: 11, color: 'var(--text-muted)' }}>{error.id}</p>
         </div>
-        <button className="btn btn-quiet btn-icon btn-sm" onClick={onClose} aria-label="Chiudi">
-          <X className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-1">
+          {onDismiss && (
+            <button
+              className="btn btn-quiet btn-sm"
+              onClick={onDismiss}
+              disabled={busy}
+              title="Cancella questo errore dal job_queue"
+            >
+              <Trash2 className="w-4 h-4" /> Dismetti
+            </button>
+          )}
+          <button className="btn btn-quiet btn-icon btn-sm" onClick={onClose} aria-label="Chiudi">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       <div>
