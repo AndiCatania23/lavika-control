@@ -22,6 +22,7 @@ const quickSearchItems: Array<{ id: string; href: string; title: string; keyword
   { id: 'page_errors',      href: '/errors',          title: 'Errori',             keywords: ['error', 'warning', 'fail'] },
   { id: 'page_notifications', href: '/notifications', title: 'Notifiche',          keywords: ['alert', 'campanella'] },
   { id: 'page_users',       href: '/users',           title: 'Utenti',             keywords: ['users', 'profili'] },
+  { id: 'page_reports',     href: '/reports',         title: 'Segnalazioni',       keywords: ['report', 'segnalazioni', 'moderazione', 'ugc', 'ban', 'flag'] },
   { id: 'page_shop',        href: '/shop',            title: 'Shop',               keywords: ['shop', 'prodotti', 'ordini'] },
   { id: 'page_settings',    href: '/settings',        title: 'Impostazioni',       keywords: ['settings', 'config'] },
 ];

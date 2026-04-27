@@ -23,6 +23,7 @@ import {
   CalendarClock,
   ImageIcon,
   AlertTriangle,
+  Flag,
 } from 'lucide-react';
 import { useTheme } from '@/lib/theme';
 import { getNotificationsData, AppNotification, getGlobalSearchData, GlobalSearchResult } from '@/lib/data';
@@ -332,9 +333,10 @@ const QUICK_ITEMS: Array<{ id: string; href: string; title: string; icon: typeof
   { id: 'p6',  href: '/errors',          title: 'Errori',              icon: AlertTriangle },
   { id: 'p7',  href: '/notifications',   title: 'Notifiche',           icon: Bell },
   { id: 'p8',  href: '/users',           title: 'Utenti',              icon: Users },
-  { id: 'p9',  href: '/shop',            title: 'Shop',                icon: ShoppingBag },
-  { id: 'p10', href: '/analytics',       title: 'Analytics complete',  icon: LayoutDashboard },
-  { id: 'p11', href: '/settings',        title: 'Impostazioni',        icon: Settings },
+  { id: 'p9',  href: '/reports',         title: 'Segnalazioni',        icon: Flag },
+  { id: 'p10', href: '/shop',            title: 'Shop',                icon: ShoppingBag },
+  { id: 'p11', href: '/analytics',       title: 'Analytics complete',  icon: LayoutDashboard },
+  { id: 'p12', href: '/settings',        title: 'Impostazioni',        icon: Settings },
 ];
 
 function QuickJumpPages({ onPick }: { onPick: () => void }) {

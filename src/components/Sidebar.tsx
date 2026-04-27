@@ -60,11 +60,13 @@ const NAV: NavItem[] = [
     href: '/users',
     label: 'Utenti',
     icon: Users,
-    match: ['/users', '/reports'],
-    children: [
-      { href: '/users',   label: 'Lista',         icon: Users },
-      { href: '/reports', label: 'Segnalazioni',  icon: Flag },
-    ],
+    match: ['/users'],
+  },
+  {
+    href: '/reports',
+    label: 'Segnalazioni',
+    icon: Flag,
+    match: ['/reports'],
   },
   {
     href: '/shop',
