@@ -177,9 +177,9 @@ function ComposerInner() {
         <h2 className="typ-label" style={{ marginBottom: 8 }}>1. Sorgente</h2>
         <div className="grid grid-cols-3 gap-2">
           {([
-            { id: 'pill',    label: 'Pill',     Icon: PillIcon },
-            { id: 'episode', label: 'Episodio', Icon: Film },
-            { id: 'manual',  label: 'Da zero',  Icon: Sparkles },
+            { id: 'pill',    label: 'Pill',      sub: 'da pill esistente',   Icon: PillIcon },
+            { id: 'episode', label: 'Episodio',  sub: 'da video pubblicato', Icon: Film },
+            { id: 'manual',  label: 'Da zero',   sub: 'contenuto custom',    Icon: Sparkles },
           ] as const).map(opt => {
             const active = sourceKind === opt.id;
             const Icon = opt.Icon;
@@ -189,15 +189,22 @@ function ComposerInner() {
                 onClick={() => { setSourceKind(opt.id); setSourceId(''); }}
                 className="card card-hover"
                 style={{
-                  padding: 12,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  padding: '14px 8px',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6,
                   borderColor: active ? 'var(--accent-raw)' : 'var(--hairline-soft)',
                   background: active ? 'var(--accent-soft)' : 'var(--card)',
-                  fontWeight: active ? 600 : 500, cursor: 'pointer',
+                  cursor: 'pointer',
+                  textAlign: 'center',
+                  minHeight: 84,
                 }}
               >
-                <Icon className="w-4 h-4" />
-                {opt.label}
+                <Icon className="w-5 h-5 shrink-0" style={{ color: active ? 'var(--accent-raw)' : 'var(--text-muted)' }} />
+                <span style={{ fontSize: 14, fontWeight: active ? 600 : 500, lineHeight: 1.2, whiteSpace: 'nowrap' }}>
+                  {opt.label}
+                </span>
+                <span className="hidden sm:inline" style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.2 }}>
+                  {opt.sub}
+                </span>
               </button>
             );
           })}
