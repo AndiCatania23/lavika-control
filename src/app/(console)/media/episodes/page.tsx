@@ -129,11 +129,18 @@ function MatchPicker({
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return items;
+    // Tokenize on whitespace, dash, en-dash, underscore, comma — each token
+    // must match anywhere in the haystack (full + short team names + matchday).
+    const tokens = q.split(/[\s\-–_,]+/).filter(Boolean);
+    if (tokens.length === 0) return items;
     return items.filter(m => {
-      const h = m.home_team?.normalized_name?.toLowerCase() ?? '';
-      const a = m.away_team?.normalized_name?.toLowerCase() ?? '';
-      const md = m.matchday ? `g${m.matchday}` : '';
-      return h.includes(q) || a.includes(q) || md.includes(q);
+      const homeFull  = m.home_team?.normalized_name?.toLowerCase() ?? '';
+      const awayFull  = m.away_team?.normalized_name?.toLowerCase() ?? '';
+      const homeShort = m.home_team?.short_name?.toLowerCase() ?? '';
+      const awayShort = m.away_team?.short_name?.toLowerCase() ?? '';
+      const md        = m.matchday ? `g${m.matchday} giornata${m.matchday} giornata ${m.matchday}` : '';
+      const haystack  = `${homeFull} ${awayFull} ${homeShort} ${awayShort} ${md}`;
+      return tokens.every(t => haystack.includes(t));
     });
   }, [items, search]);
 
@@ -153,7 +160,7 @@ function MatchPicker({
         <div className="flex items-center gap-2 mb-3 flex-wrap">
           <div className="relative grow">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none" style={{ color: 'var(--text-muted)' }} />
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cerca squadra o giornata (es. catania, g12)..." className="input pl-10 w-full" autoFocus />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Es. catania potenza · cat pot · g12 · catania" className="input pl-10 w-full" autoFocus />
           </div>
           {currentMatchId && (
             <button onClick={() => { onSelect(null); onClose(); }} className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }}>
