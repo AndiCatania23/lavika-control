@@ -28,6 +28,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { buildSocialAsset } from '../../src/lib/social/assetBuilder';
+import { renderRemotionComposition } from '../../src/lib/social/remotionRenderer';
 
 /* ────────────────────────────── Config ────────────────────────────── */
 
@@ -94,8 +95,16 @@ async function runRecipe(recipe, params) {
       });
       return asset;
     }
-    case 'remotion_render':
-      throw new Error('remotion_render: NOT YET IMPLEMENTED (Step 1.7)');
+    case 'remotion_render': {
+      // params: { compositionId, inputProps?, width?, height? }
+      const video = await renderRemotionComposition({
+        compositionId: params.compositionId,
+        inputProps:    params.inputProps ?? {},
+        width:         params.width,
+        height:        params.height,
+      });
+      return video;
+    }
     case 'ffmpeg_resize':
       throw new Error('ffmpeg_resize: NOT YET IMPLEMENTED');
     default:
