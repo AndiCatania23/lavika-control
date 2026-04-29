@@ -64,13 +64,13 @@ export default function SocialHubPage() {
       live: false,
     },
     {
-      href: '/social/analytics',
+      href: '/social/insights',
       icon: BarChart3,
-      title: 'Analytics',
-      desc: 'Cosa funziona, cosa no. Reach, engagement, app installs da social.',
-      stat: stats ? `${stats.publishedToday} post oggi` : '…',
+      title: 'Insights',
+      desc: 'Crescita follower, reach, engagement. Top post settimana, cosa funziona, cosa no.',
+      stat: stats ? `${stats.publishedToday} post oggi` : 'Vedi tutto',
       accent: 'var(--warn)',
-      live: false,
+      live: true,
     },
   ];
 
@@ -153,7 +153,7 @@ export default function SocialHubPage() {
       {/* Footer note */}
       <div className="card card-body" style={{ background: 'var(--card-muted)', borderColor: 'var(--hairline-soft)' }}>
         <p className="typ-caption">
-          ✓ <strong>Composer + Bozze attivi.</strong> Calendar, Inbox e Analytics arriveranno presto.
+          ✓ <strong>Composer + Bozze + Insights attivi.</strong> Calendar e Inbox arriveranno presto.
           Per pubblicare apri una bozza e premi &ldquo;Pubblica subito&rdquo;.
         </p>
       </div>
