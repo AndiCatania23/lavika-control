@@ -160,7 +160,14 @@ function MatchPicker({
         <div className="flex items-center gap-2 mb-3 flex-wrap">
           <div className="relative grow">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none" style={{ color: 'var(--text-muted)' }} />
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Es. catania potenza · cat pot · g12 · catania" className="input pl-10 w-full" autoFocus />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Es. catania potenza · cat pot · g12 · catania"
+              className="input w-full"
+              style={{ paddingLeft: 40 }}
+              autoFocus
+            />
           </div>
           {currentMatchId && (
             <button onClick={() => { onSelect(null); onClose(); }} className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }}>
@@ -702,33 +709,22 @@ export default function EpisodesPage() {
         <p className="typ-caption mt-1">Modifica titolo, match collegato, visibilità in app, badge di accesso e thumbnail per ogni episodio.</p>
       </div>
 
-      {/* Format chips */}
-      <div className="vstack-tight">
-        <label className="typ-micro">Format</label>
-        <div className="flex gap-1.5 flex-wrap">
-          {formats.map(f => {
-            const active = f.id === selectedFormat;
-            return (
-              <button
-                key={f.id}
-                onClick={() => setSelectedFormat(f.id)}
-                className="btn btn-sm"
-                style={{
-                  background: active ? 'var(--accent-raw)' : 'var(--card)',
-                  color: active ? '#fff' : 'var(--text-hi)',
-                  border: `1px solid ${active ? 'var(--accent-raw)' : 'var(--hairline)'}`,
-                  fontWeight: active ? 600 : 500,
-                }}
-              >
-                {f.title ?? f.id}
-              </button>
-            );
-          })}
+      {/* Filters: Format · Stagione · Visibilità · Cerca */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div>
+          <label className="typ-micro block mb-1.5">Format</label>
+          <select
+            value={selectedFormat}
+            onChange={e => setSelectedFormat(e.target.value)}
+            disabled={formats.length === 0}
+            className="input w-full"
+          >
+            {formats.length === 0 && <option value="">Carico…</option>}
+            {formats.map(f => (
+              <option key={f.id} value={f.id}>{f.title ?? f.id}</option>
+            ))}
+          </select>
         </div>
-      </div>
-
-      {/* Season + active filter + search */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         <div>
           <label className="typ-micro block mb-1.5">Stagione</label>
           <select
@@ -737,7 +733,6 @@ export default function EpisodesPage() {
             disabled={seasons.length === 0}
             className="input w-full"
           >
-            {seasons.length === 0 && <option value="">Tutte</option>}
             <option value="">Tutte</option>
             {seasons.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
@@ -773,7 +768,13 @@ export default function EpisodesPage() {
           <label className="typ-micro block mb-1.5">Cerca titolo</label>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none" style={{ color: 'var(--text-muted)' }} />
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Filtra per titolo..." className="input pl-10 w-full" />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Filtra per titolo..."
+              className="input w-full"
+              style={{ paddingLeft: 40 }}
+            />
           </div>
         </div>
       </div>
