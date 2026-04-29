@@ -17,6 +17,7 @@ import {
   AlertTriangle,
   Bell,
   Flag,
+  Megaphone,
 } from 'lucide-react';
 
 type NavItem = {
@@ -44,6 +45,12 @@ const NAV: NavItem[] = [
       { href: '/palinsesto-home',  label: 'Palinsesto',icon: CalendarClock },
       { href: '/media',            label: 'Media',     icon: ImageIcon },
     ],
+  },
+  {
+    href: '/social',
+    label: 'Social',
+    icon: Megaphone,
+    match: ['/social'],
   },
   {
     href: '/jobs',

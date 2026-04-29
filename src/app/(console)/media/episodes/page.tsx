@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft, RefreshCw, Search, Film, Eye, EyeOff, ChevronLeft, ChevronRight,
-  X, Save, Upload, ImageIcon, Calendar, Trophy, User, Award,
+  X, Save, Upload, ImageIcon, Calendar, Trophy, User, Award, Megaphone,
 } from 'lucide-react';
 import { MediaPicker } from '@/components/media/MediaPicker';
 import { uploadFile } from '@/lib/mediaUpload';
@@ -355,6 +355,13 @@ function EpisodeDrawer({
             <h2 className="typ-h1 truncate">Modifica Episodio</h2>
             <p className="typ-micro typ-mono truncate" style={{ color: 'var(--text-muted)' }}>{episode.video_id ?? episode.id}</p>
           </div>
+          <a
+            href={`/social/composer?episode_id=${encodeURIComponent(episode.id)}`}
+            className="btn btn-ghost btn-sm shrink-0"
+            title="Genera pacchetto social per questo episodio"
+          >
+            <Megaphone className="w-3.5 h-3.5" /> Social
+          </a>
           <button onClick={onClose} className="btn btn-quiet btn-icon btn-sm" aria-label="Chiudi"><X className="w-4 h-4" /></button>
         </div>
 

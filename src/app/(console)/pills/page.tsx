@@ -9,6 +9,7 @@ import {
   Plus, X, Check, Ban, Undo2, Pencil, Trash2, Zap, Sparkles, Upload,
   AlertTriangle, Rss, ExternalLink, Search, Eye, BookOpen, Clock, BellRing,
   MousePointerClick, BarChart3, ChevronLeft, Filter, ImagePlus, RefreshCw,
+  Megaphone,
 } from 'lucide-react';
 
 /* ==================================================================
@@ -305,6 +306,18 @@ function PillDetail({
             Cover auto (no foto)
           </button>
         </div>
+      )}
+
+      {/* Social package CTA — visible quando pill è published o scheduled */}
+      {(pill.status === 'published' || pill.status === 'scheduled') && (
+        <a
+          href={`/social/composer?pill_id=${encodeURIComponent(pill.id)}`}
+          className="btn btn-ghost"
+          style={{ borderColor: 'var(--accent-raw)', color: 'var(--accent-raw)' }}
+          title="Crea un pacchetto social per questa pill (Composer)"
+        >
+          <Megaphone className="w-4 h-4" /> Crea pacchetto social
+        </a>
       )}
 
       {/* Actions */}
