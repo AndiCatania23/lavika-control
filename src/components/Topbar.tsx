@@ -17,6 +17,8 @@ const quickSearchItems: Array<{ id: string; href: string; title: string; keyword
   { id: 'page_pills',       href: '/pills',           title: 'Pillole',            keywords: ['pills', 'editoriale'] },
   { id: 'page_palinsesto',  href: '/palinsesto-home', title: 'Palinsesto Home',    keywords: ['schedule', 'editoriale', 'card', 'serie'] },
   { id: 'page_media',       href: '/media',           title: 'Media — Copertine',  keywords: ['cover', 'format', 'episodi', 'player', 'cutout'] },
+  { id: 'page_social',          href: '/social',          title: 'Social',             keywords: ['social', 'composer', 'instagram', 'facebook', 'tiktok', 'pacchetto'] },
+  { id: 'page_social_composer', href: '/social/composer', title: 'Social — Composer',  keywords: ['composer', 'social', 'genera', 'pacchetto', 'instagram', 'facebook'] },
   { id: 'page_jobs',        href: '/jobs',            title: 'Job & Runs',         keywords: ['run', 'workflow', 'sync', 'daemon'] },
   { id: 'page_runs',        href: '/jobs/runs',       title: 'Esecuzioni Job',     keywords: ['runs', 'esecuzioni'] },
   { id: 'page_errors',      href: '/errors',          title: 'Errori',             keywords: ['error', 'warning', 'fail'] },

@@ -26,6 +26,7 @@ type NavItem = {
   icon: typeof LayoutDashboard;
   children?: Array<{ href: string; label: string; icon: typeof LayoutDashboard; match?: string[] }>;
   match?: string[];
+  mobileVisible?: boolean;   // default true; false = nasconde dal mobile tabbar (raggiungibile via search)
 };
 
 const NAV: NavItem[] = [
@@ -74,12 +75,14 @@ const NAV: NavItem[] = [
     label: 'Segnalazioni',
     icon: Flag,
     match: ['/reports'],
+    mobileVisible: false,   // accessibile via search topbar
   },
   {
     href: '/shop',
     label: 'Shop',
     icon: ShoppingBag,
     match: ['/shop'],
+    mobileVisible: false,   // accessibile via search topbar
   },
 ];
 
@@ -182,9 +185,9 @@ export function Sidebar() {
         </div>
       </aside>
 
-      {/* Mobile bottom tab bar (5 tab) */}
+      {/* Mobile bottom tab bar (5 tab — items con mobileVisible:false sono in topbar search) */}
       <nav className="m-tabbar lg:hidden">
-        {NAV.map(item => {
+        {NAV.filter(item => item.mobileVisible !== false).map(item => {
           const active = isItemActive(pathname, item);
           const Icon = item.icon;
           return (

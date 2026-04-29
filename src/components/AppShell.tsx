@@ -24,16 +24,18 @@ import {
   ImageIcon,
   AlertTriangle,
   Flag,
+  Megaphone,
 } from 'lucide-react';
 import { useTheme } from '@/lib/theme';
 import { getNotificationsData, AppNotification, getGlobalSearchData, GlobalSearchResult } from '@/lib/data';
 
 /* ==================================================================
    NAVIGATION model
-   5 aree: Oggi · Editoriale · Sync & Jobs · Utenti · Shop
+   5 aree: Oggi · Editoriale · Sync & Jobs · Utenti · Social
+   (Shop e Segnalazioni rimangono raggiungibili dal Search palette)
    ================================================================== */
 
-type NavAreaKey = 'oggi' | 'editoriale' | 'sync' | 'utenti' | 'shop';
+type NavAreaKey = 'oggi' | 'editoriale' | 'sync' | 'utenti' | 'social';
 
 interface NavArea {
   key: NavAreaKey;
@@ -46,9 +48,9 @@ interface NavArea {
 const AREAS: NavArea[] = [
   { key: 'oggi',       href: '/dashboard',      label: 'Oggi',       icon: LayoutDashboard, matchPrefixes: ['/dashboard', '/analytics'] },
   { key: 'editoriale', href: '/pills',          label: 'Editoriale', icon: FileEdit,        matchPrefixes: ['/pills', '/palinsesto-home', '/media', '/home-schedule'] },
+  { key: 'social',     href: '/social',         label: 'Social',     icon: Megaphone,       matchPrefixes: ['/social'] },
   { key: 'sync',       href: '/jobs',           label: 'Sync & Jobs',icon: Workflow,        matchPrefixes: ['/jobs', '/errors', '/notifications'] },
   { key: 'utenti',     href: '/users',          label: 'Utenti',     icon: Users,           matchPrefixes: ['/users', '/sessions'] },
-  { key: 'shop',       href: '/shop',           label: 'Shop',       icon: ShoppingBag,     matchPrefixes: ['/shop'] },
 ];
 
 function matchActive(pathname: string, area: NavArea): boolean {
@@ -329,14 +331,15 @@ const QUICK_ITEMS: Array<{ id: string; href: string; title: string; icon: typeof
   { id: 'p2',  href: '/pills',           title: 'Pillole',             icon: Pill },
   { id: 'p3',  href: '/palinsesto-home', title: 'Palinsesto Home',     icon: CalendarClock },
   { id: 'p4',  href: '/media',           title: 'Media — Copertine',   icon: ImageIcon },
-  { id: 'p5',  href: '/jobs',            title: 'Job & Runs',          icon: Workflow },
-  { id: 'p6',  href: '/errors',          title: 'Errori',              icon: AlertTriangle },
-  { id: 'p7',  href: '/notifications',   title: 'Notifiche',           icon: Bell },
-  { id: 'p8',  href: '/users',           title: 'Utenti',              icon: Users },
-  { id: 'p9',  href: '/reports',         title: 'Segnalazioni',        icon: Flag },
-  { id: 'p10', href: '/shop',            title: 'Shop',                icon: ShoppingBag },
-  { id: 'p11', href: '/analytics',       title: 'Analytics complete',  icon: LayoutDashboard },
-  { id: 'p12', href: '/settings',        title: 'Impostazioni',        icon: Settings },
+  { id: 'p5',  href: '/social',          title: 'Social — Composer',   icon: Megaphone },
+  { id: 'p6',  href: '/jobs',            title: 'Job & Runs',          icon: Workflow },
+  { id: 'p7',  href: '/errors',          title: 'Errori',              icon: AlertTriangle },
+  { id: 'p8',  href: '/notifications',   title: 'Notifiche',           icon: Bell },
+  { id: 'p9',  href: '/users',           title: 'Utenti',              icon: Users },
+  { id: 'p10', href: '/reports',         title: 'Segnalazioni',        icon: Flag },
+  { id: 'p11', href: '/shop',            title: 'Shop',                icon: ShoppingBag },
+  { id: 'p12', href: '/analytics',       title: 'Analytics complete',  icon: LayoutDashboard },
+  { id: 'p13', href: '/settings',        title: 'Impostazioni',        icon: Settings },
 ];
 
 function QuickJumpPages({ onPick }: { onPick: () => void }) {
