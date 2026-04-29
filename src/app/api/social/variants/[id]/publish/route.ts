@@ -17,7 +17,26 @@ import { MetaApiError } from '@/lib/meta/client';
  *  5. Update status='published' + external_post_id + external_post_url + published_at
  *  6. On error: status='failed' + error message
  */
-export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+/**
+ * Build a publicly fetchable asset URL that Meta will accept.
+ *
+ * Cloudflare R2 `pub-*.r2.dev` domains are blacklisted by Instagram
+ * (error 9004 "Only photo or video can be accepted as media type" /
+ * "Non è stato possibile recuperare il contenuto multimediale da
+ * questo URI"). We proxy through our Vercel domain which Meta trusts.
+ *
+ * Long-term: configurare custom domain Cloudflare R2 (es.
+ * media.lavikasport.app) e tornare a usare asset_url diretto.
+ */
+function getPublicAssetUrl(req: Request, variantId: string): string {
+  const baseUrl =
+    process.env.NEXT_PUBLIC_SITE_URL
+    ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null)
+    ?? `https://${new URL(req.url).host}`;
+  return `${baseUrl}/api/social/asset-proxy/${variantId}`;
+}
+
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   if (!supabaseServer) return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
   const { id } = await params;
 
@@ -45,11 +64,15 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   try {
     let result: { id: string; permalink?: string; external_post_url?: string };
 
+    // IG rejects pub-*.r2.dev; proxy via our Vercel domain.
+    // FB accepts both, but we proxy too for consistency + future custom-domain swap.
+    const publicAssetUrl = getPublicAssetUrl(req, id);
+
     if (variant.platform === 'facebook') {
-      const r = await publishFbPhotoPost({ imageUrl: variant.asset_url, caption: variant.caption ?? '' });
+      const r = await publishFbPhotoPost({ imageUrl: publicAssetUrl, caption: variant.caption ?? '' });
       result = { id: r.post_id ?? r.id, permalink: r.permalink_url };
     } else if (variant.platform === 'instagram') {
-      const r = await publishIgPhotoPost({ imageUrl: variant.asset_url, caption: variant.caption ?? '' });
+      const r = await publishIgPhotoPost({ imageUrl: publicAssetUrl, caption: variant.caption ?? '' });
       result = { id: r.id, permalink: r.permalink };
     } else {
       throw new Error(`Platform '${variant.platform}' non supportata in questa versione`);
