@@ -38,7 +38,9 @@ export async function GET(request: Request) {
     away_team: { normalized_name: string; short_name: string | null; logo_url: string | null } | null;
   };
 
-  const rows = (data ?? []) as Row[];
+  // Supabase typegen reports joined relations as arrays; for FK-by-id joins
+  // we get a single related row, so cast via unknown.
+  const rows = (data ?? []) as unknown as Row[];
   const filtered = q
     ? rows.filter(r => {
         const h = r.home_team?.normalized_name?.toLowerCase() ?? '';
