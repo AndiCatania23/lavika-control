@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import {
   ArrowLeft, RefreshCw, CheckCircle2, AlertTriangle, XCircle,
-  Instagram, Facebook, Key, Users as UsersIcon, Hash,
+  Instagram, Facebook, Key, Send, ExternalLink,
 } from 'lucide-react';
 
 interface TestResponse {
@@ -213,8 +213,206 @@ META_IG_BUSINESS_ID=${data.config!.igBusinessId}`}
               </pre>
             </div>
           </section>
+
+          {/* Test publish */}
+          <TestPublish />
         </>
       )}
     </div>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────────────
+   Test publish — pubblica una foto + caption a FB/IG per validare
+   che il publisher Meta funzioni davvero.
+   ────────────────────────────────────────────────────────────────── */
+
+interface PublishResult {
+  platform: 'fb' | 'ig';
+  ok: boolean;
+  postId?: string;
+  permalink?: string;
+  error?: string;
+}
+
+const DEFAULT_TEST_IMAGE = 'https://pub-caae50e77b854437b46967f95fd48914.r2.dev/pills/pill-stat-h.webp';
+
+function TestPublish() {
+  const [imageUrl, setImageUrl] = useState(DEFAULT_TEST_IMAGE);
+  const [caption, setCaption] = useState('Test post LAVIKA Social Manager — feel free to delete.');
+  const [platforms, setPlatforms] = useState<{ fb: boolean; ig: boolean }>({ fb: true, ig: false });
+  const [publishing, setPublishing] = useState(false);
+  const [results, setResults] = useState<PublishResult[] | null>(null);
+
+  const isWebp = imageUrl.toLowerCase().endsWith('.webp');
+  const igEnabled = platforms.ig;
+  const igWillFail = isWebp && igEnabled;
+
+  const handlePublish = async () => {
+    const selected = (['fb', 'ig'] as const).filter(p => platforms[p]);
+    if (selected.length === 0) return;
+    setPublishing(true);
+    setResults(null);
+    try {
+      const res = await fetch('/api/social/meta/test-publish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageUrl, caption, platforms: selected }),
+      });
+      const data = await res.json() as { results: PublishResult[] };
+      setResults(data.results);
+    } catch (err) {
+      setResults([{ platform: 'fb', ok: false, error: err instanceof Error ? err.message : 'Errore' }]);
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  return (
+    <section>
+      <h2 className="typ-label" style={{ marginBottom: 8 }}>Test pubblicazione</h2>
+      <div
+        className="card card-body vstack-tight"
+        style={{
+          borderColor: 'color-mix(in oklab, var(--warn) 28%, transparent)',
+          background: 'color-mix(in oklab, var(--warn) 5%, var(--card))',
+        }}
+      >
+        <p className="typ-caption" style={{ color: 'var(--text-muted)' }}>
+          Pubblica una foto di prova per verificare che il publisher funzioni end-to-end.
+          Niente brand check, niente persistenza in DB. Cancella manualmente il post dopo il test.
+        </p>
+
+        {/* URL image */}
+        <div className="vstack-tight">
+          <label className="typ-micro">URL immagine pubblica (HTTPS)</label>
+          <input
+            value={imageUrl}
+            onChange={e => setImageUrl(e.target.value)}
+            placeholder="https://..."
+            className="input w-full"
+            style={{ fontFamily: 'monospace', fontSize: 12 }}
+          />
+          {isWebp && (
+            <p className="typ-micro" style={{ color: 'var(--warn)' }}>
+              ⚠️ WebP funziona su Facebook ma NON su Instagram. Per IG serve JPEG/PNG.
+            </p>
+          )}
+        </div>
+
+        {/* Caption */}
+        <div className="vstack-tight">
+          <label className="typ-micro">Caption</label>
+          <textarea
+            value={caption}
+            onChange={e => setCaption(e.target.value)}
+            rows={3}
+            className="input"
+            style={{ resize: 'vertical', minHeight: 60 }}
+          />
+        </div>
+
+        {/* Platform toggles */}
+        <div className="vstack-tight">
+          <label className="typ-micro">Pubblica su</label>
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={() => setPlatforms(p => ({ ...p, fb: !p.fb }))}
+              className="btn btn-sm"
+              style={{
+                background: platforms.fb ? '#1877F2' : 'var(--card)',
+                color: platforms.fb ? '#fff' : 'var(--text-hi)',
+                border: `1px solid ${platforms.fb ? '#1877F2' : 'var(--hairline)'}`,
+                fontWeight: platforms.fb ? 600 : 500,
+              }}
+            >
+              <Facebook className="w-3.5 h-3.5" /> Facebook Page
+            </button>
+            <button
+              onClick={() => setPlatforms(p => ({ ...p, ig: !p.ig }))}
+              className="btn btn-sm"
+              style={{
+                background: platforms.ig ? '#E1306C' : 'var(--card)',
+                color: platforms.ig ? '#fff' : 'var(--text-hi)',
+                border: `1px solid ${platforms.ig ? '#E1306C' : 'var(--hairline)'}`,
+                fontWeight: platforms.ig ? 600 : 500,
+              }}
+            >
+              <Instagram className="w-3.5 h-3.5" /> Instagram
+            </button>
+          </div>
+          {igWillFail && (
+            <p className="typ-micro" style={{ color: 'var(--warn)' }}>
+              ⚠️ IG fallirà con WebP. Cambia URL a un JPEG/PNG, oppure pubblica solo su FB.
+            </p>
+          )}
+        </div>
+
+        {/* Publish button */}
+        <button
+          onClick={handlePublish}
+          disabled={publishing || (!platforms.fb && !platforms.ig)}
+          className="btn btn-primary"
+        >
+          {publishing
+            ? <><RefreshCw className="w-4 h-4 animate-spin" /> Pubblicazione…</>
+            : <><Send className="w-4 h-4" /> Test pubblica</>}
+        </button>
+
+        {/* Results */}
+        {results && (
+          <div className="vstack-tight" style={{ paddingTop: 8, borderTop: '1px solid var(--hairline-soft)', marginTop: 4 }}>
+            <p className="typ-micro" style={{ color: 'var(--text-muted)' }}>Risultato:</p>
+            {results.map((r, i) => (
+              <div
+                key={i}
+                className="card card-body"
+                style={{
+                  borderColor: r.ok
+                    ? 'color-mix(in oklab, var(--ok) 30%, transparent)'
+                    : 'color-mix(in oklab, var(--danger) 30%, transparent)',
+                  background: r.ok
+                    ? 'color-mix(in oklab, var(--ok) 8%, var(--card))'
+                    : 'color-mix(in oklab, var(--danger) 8%, var(--card))',
+                }}
+              >
+                <div className="flex items-center gap-2">
+                  {r.platform === 'fb'
+                    ? <Facebook className="w-4 h-4" style={{ color: '#1877F2' }} />
+                    : <Instagram className="w-4 h-4" style={{ color: '#E1306C' }} />}
+                  <span className="typ-label">
+                    {r.platform === 'fb' ? 'Facebook' : 'Instagram'}
+                  </span>
+                  <span className="grow" />
+                  {r.ok
+                    ? <CheckCircle2 className="w-4 h-4" style={{ color: 'var(--ok)' }} />
+                    : <XCircle className="w-4 h-4" style={{ color: 'var(--danger)' }} />}
+                </div>
+                {r.ok ? (
+                  <div className="typ-caption mt-2" style={{ color: 'var(--text-muted)' }}>
+                    Post ID: <code style={{ fontFamily: 'monospace' }}>{r.postId}</code>
+                    {r.permalink && (
+                      <a
+                        href={r.permalink}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 ml-2"
+                        style={{ color: 'var(--accent-raw)' }}
+                      >
+                        Apri post <ExternalLink className="w-3 h-3" />
+                      </a>
+                    )}
+                  </div>
+                ) : (
+                  <p className="typ-micro mt-2" style={{ color: 'var(--danger)', fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
+                    {r.error}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
