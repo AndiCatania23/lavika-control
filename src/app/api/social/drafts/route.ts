@@ -68,12 +68,17 @@ export async function GET(request: Request) {
     for (const e of data ?? []) sourceImages.set(e.id, e.thumbnail_url);
   }
 
-  return NextResponse.json({
-    items: (drafts ?? []).map(d => ({
+  // Filter out drafts with 0 variants (orphans — UI doesn't need them)
+  const enriched = (drafts ?? [])
+    .map(d => ({
       ...d,
       variantsSummary: variantsByDraft.get(d.id) ?? { total: 0, ready: 0, published: 0, failed: 0, pending: 0 },
       sourceImage: d.source_id ? sourceImages.get(d.source_id) ?? null : null,
-    })),
-    total: count ?? 0,
+    }))
+    .filter(d => d.variantsSummary.total > 0);
+
+  return NextResponse.json({
+    items: enriched,
+    total: enriched.length,
   });
 }

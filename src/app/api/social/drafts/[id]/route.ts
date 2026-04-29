@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabaseServer';
+import { deleteAssetsFromUrls } from '@/lib/social/r2Cleanup';
 
 /**
  * GET /api/social/drafts/[id]
@@ -78,5 +79,38 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       latestJob: jobByVariant.get(v.id) ?? null,
     })),
     source,
+  });
+}
+
+/**
+ * DELETE /api/social/drafts/[id]
+ *
+ * - Raccoglie tutti gli asset_url delle variants
+ * - Cancella asset R2 in batch
+ * - Cancella draft (cascade su variants + asset_jobs)
+ */
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  if (!supabaseServer) return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
+  const { id } = await params;
+
+  // Collect asset URLs to cleanup
+  const { data: vs } = await supabaseServer
+    .from('social_variants')
+    .select('asset_url')
+    .eq('draft_id', id);
+
+  const urls = (vs ?? []).map(v => v.asset_url).filter(Boolean) as string[];
+  const r2Results = urls.length > 0 ? await deleteAssetsFromUrls(urls) : [];
+
+  // Delete draft (cascade su variants + jobs)
+  const { error } = await supabaseServer
+    .from('social_drafts')
+    .delete()
+    .eq('id', id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  return NextResponse.json({
+    ok: true,
+    r2Cleanup: { total: urls.length, ok: r2Results.filter(r => r.ok).length },
   });
 }

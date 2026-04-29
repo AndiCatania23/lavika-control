@@ -3,9 +3,10 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, RefreshCw, Send, CheckCircle2, AlertTriangle, ImageIcon,
-  Instagram, Facebook, ExternalLink, Trash2, Save, Clock,
+  Instagram, Facebook, ExternalLink, Trash2, Save, Clock, X,
 } from 'lucide-react';
 
 interface Variant {
@@ -67,12 +68,27 @@ const STATUS_LABEL: Record<Variant['status'], { label: string; color: string }> 
 };
 
 export default function DraftPreviewPage() {
+  const router = useRouter();
   const params = useParams<{ id: string }>();
   const draftId = params.id;
 
   const [data, setData] = useState<DraftResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deletingDraft, setDeletingDraft] = useState(false);
+
+  const deleteDraft = async () => {
+    if (!confirm(`Eliminare l'intero pacchetto "${data?.draft.title}" e tutti gli asset R2?`)) return;
+    setDeletingDraft(true);
+    try {
+      const r = await fetch(`/api/social/drafts/${draftId}`, { method: 'DELETE' });
+      if (!r.ok) throw new Error((await r.json()).error || `HTTP ${r.status}`);
+      router.push('/social/drafts');
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Errore eliminazione');
+      setDeletingDraft(false);
+    }
+  };
 
   const load = useCallback(async () => {
     try {
@@ -131,12 +147,22 @@ export default function DraftPreviewPage() {
   return (
     <div className="vstack" style={{ gap: 'var(--s5)' }}>
       <div className="flex items-center gap-2 flex-wrap">
-        <Link href="/social/composer" className="btn btn-ghost btn-sm">
-          <ArrowLeft className="w-4 h-4" /> Composer
+        <Link href="/social/drafts" className="btn btn-ghost btn-sm">
+          <ArrowLeft className="w-4 h-4" /> Bozze
         </Link>
         <div className="grow" />
         <button onClick={load} className="btn btn-ghost btn-sm">
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Ricarica
+        </button>
+        <button
+          onClick={deleteDraft}
+          disabled={deletingDraft}
+          className="btn btn-ghost btn-sm"
+          style={{ color: 'var(--danger)' }}
+        >
+          {deletingDraft
+            ? <><RefreshCw className="w-4 h-4 animate-spin" /> Eliminazione…</>
+            : <><X className="w-4 h-4" /> Elimina pacchetto</>}
         </button>
       </div>
 

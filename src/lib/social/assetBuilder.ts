@@ -353,9 +353,14 @@ export async function buildSocialAsset(opts: BuildAssetOpts): Promise<BuiltAsset
     }
   }
 
-  // 4. Output JPEG (mandatory for IG, lighter for all platforms)
+  // 4. Output JPEG (mandatory for IG, lighter for all platforms).
+  //
+  // CRITICAL: BASELINE JPEG, no progressive. Instagram Content Publish API
+  // rifiuta progressive JPEG con error 9004 ("Only photo or video can be
+  // accepted as media type"). Quindi NIENTE mozjpeg (forza progressive
+  // hardcoded), usiamo libjpeg-turbo standard con baseline esplicito.
   const finalBuffer = await sharp(composed)
-    .jpeg({ quality: 92, mozjpeg: true })
+    .jpeg({ quality: 92, progressive: false, chromaSubsampling: '4:2:0' })
     .toBuffer();
 
   return {
