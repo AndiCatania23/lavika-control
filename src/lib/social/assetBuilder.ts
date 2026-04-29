@@ -252,15 +252,22 @@ export async function buildSocialAsset(opts: BuildAssetOpts): Promise<BuiltAsset
   }
 
   // Step 2a: resize source to cover target ratio.
-  // We use Sharp's "entropy" strategy: picks the region with the most
-  // detail (highest variance), which works much better than "attention"
-  // for our pill covers — those have decorative patterns + photo, and
-  // attention often gets distracted by high-contrast graphic areas.
-  // Entropy picks the photo zone (rich in texture) over patterns.
+  //
+  // History of attempts:
+  //  - 'attention' strategy: distratta dai pattern grafici asimmetrici
+  //    delle cover Lavika (linee/puntini decorativi a sinistra) → crop
+  //    finiva a sinistra perdendo il soggetto.
+  //  - 'entropy' strategy: preferisce zone ad alta texture (stadio,
+  //    folla) → crop tendeva a centrarsi sullo sfondo perdendo il
+  //    soggetto principale che ha entropia media (pelle uniforme).
+  //
+  // Le pill cover Lavika hanno il soggetto SEMPRE centrato per design.
+  // Quindi crop geometrico CENTRATO è la scelta corretta. Più predictable
+  // di qualsiasi smart crop su questo dataset specifico.
   const resized = await sharp(sourceBuffer)
     .resize(spec.width, spec.height, {
       fit: 'cover',
-      position: sharp.strategy.entropy,
+      position: 'centre',
     })
     .toBuffer();
 
