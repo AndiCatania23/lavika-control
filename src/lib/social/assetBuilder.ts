@@ -17,8 +17,8 @@
  */
 
 import sharp from 'sharp';
-import { readFile } from 'fs/promises';
 import path from 'path';
+import { createCanvas, GlobalFonts } from '@napi-rs/canvas';
 
 /* ──────────────────────────────────────────────────────────────────
    Format catalog
@@ -100,17 +100,18 @@ const FORMAT_SPECS: Record<SocialFormat, FormatSpec> = {
 };
 
 /* ──────────────────────────────────────────────────────────────────
-   Font loading (Inter Black via base64 in SVG @font-face)
+   Font registration via @napi-rs/canvas (Skia-based, reliable)
+   Registered once at module load time.
    ────────────────────────────────────────────────────────────────── */
 
-let cachedFontDataUri: string | null = null;
+const TITLE_FONT_PATH = path.join(process.cwd(), 'public', 'fonts', 'ArchivoBlack-Regular.ttf');
+const TITLE_FONT_FAMILY = 'ArchivoBlack';
 
-async function getInterBlackDataUri(): Promise<string> {
-  if (cachedFontDataUri) return cachedFontDataUri;
-  const fontPath = path.join(process.cwd(), 'public', 'fonts', 'Inter-Black.ttf');
-  const fontBuffer = await readFile(fontPath);
-  cachedFontDataUri = `data:font/ttf;base64,${fontBuffer.toString('base64')}`;
-  return cachedFontDataUri;
+let fontRegistered = false;
+function ensureFontRegistered() {
+  if (fontRegistered) return;
+  GlobalFonts.registerFromPath(TITLE_FONT_PATH, TITLE_FONT_FAMILY);
+  fontRegistered = true;
 }
 
 /* ──────────────────────────────────────────────────────────────────
@@ -162,73 +163,51 @@ function wrapTitle(text: string, maxCharsPerLine: number, maxLines = 3): string[
 }
 
 /* ──────────────────────────────────────────────────────────────────
-   SVG text overlay generator (highlight white-on-black, MLS style)
+   Text overlay rendering — Sharp native text input (uses Pango + FontConfig)
+   Builds: array of {textPng, width, height, leftPadding} per line
    ────────────────────────────────────────────────────────────────── */
 
-interface OverlaySvgOpts {
-  width: number;
-  height: number;
-  lines: string[];
-  fontSize: number;
-  paddingX: number;
-  paddingY: number;
-  bottomMargin: number;
-  lineGap: number;
-  fontDataUri: string;
+interface RenderedTextLine {
+  textPng: Buffer;
+  textWidth: number;
+  textHeight: number;
 }
 
-function buildOverlaySvg(opts: OverlaySvgOpts): string {
-  const { width, height, lines, fontSize, paddingX, paddingY, bottomMargin, lineGap, fontDataUri } = opts;
+/**
+ * Render single-line text via @napi-rs/canvas (Skia, full TTF support via
+ * GlobalFonts.registerFromPath). Returns RGBA PNG with WHITE text on
+ * transparent background, sized to the text bounding box.
+ */
+function renderTextLine(text: string, fontSize: number): RenderedTextLine {
+  ensureFontRegistered();
 
-  // Approx character width for Inter Black (very bold) ≈ 0.55 * fontSize.
-  // Accept some imprecision — SVG text auto-renders at exact pixels regardless.
-  const charWidthRatio = 0.55;
-  const lineHeight = fontSize + paddingY * 2;
+  // First pass: measure text with a temp canvas
+  const measureCanvas = createCanvas(10, 10);
+  const measureCtx = measureCanvas.getContext('2d');
+  measureCtx.font = `${fontSize}px "${TITLE_FONT_FAMILY}"`;
+  const metrics = measureCtx.measureText(text);
 
-  // Compute total height of text block
-  const totalBlockH = lines.length * lineHeight + (lines.length - 1) * lineGap;
-  const blockTopY = height - bottomMargin - totalBlockH;
+  const textWidth = Math.ceil(metrics.width);
+  // Use actual ascent + descent for vertical sizing (more reliable than
+  // estimating from fontSize alone, especially for Archivo Black's
+  // generous metrics).
+  const ascent  = metrics.actualBoundingBoxAscent  || fontSize * 0.85;
+  const descent = metrics.actualBoundingBoxDescent || fontSize * 0.25;
+  const textHeight = Math.ceil(ascent + descent);
 
-  // Build per-line rect + text
-  const rects: string[] = [];
-  const texts: string[] = [];
+  // Second pass: actual canvas with exact dimensions, draw white text
+  const canvas = createCanvas(textWidth, textHeight);
+  const ctx = canvas.getContext('2d');
+  ctx.font = `${fontSize}px "${TITLE_FONT_FAMILY}"`;
+  ctx.fillStyle = '#FFFFFF';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText(text, 0, ascent);
 
-  lines.forEach((line, i) => {
-    const lineWidth = Math.ceil(line.length * fontSize * charWidthRatio) + paddingX * 2;
-    const y = blockTopY + i * (lineHeight + lineGap);
-    rects.push(
-      `<rect x="0" y="${y}" width="${lineWidth}" height="${lineHeight}" fill="black"/>`
-    );
-    // Text baseline = y + paddingY + fontSize * 0.85 (approx for Inter)
-    const textBaseline = y + paddingY + fontSize * 0.82;
-    texts.push(
-      `<text x="${paddingX}" y="${textBaseline}" font-family="Inter, sans-serif" font-weight="900" font-size="${fontSize}" fill="white" letter-spacing="-0.02em">${escapeXml(line)}</text>`
-    );
-  });
-
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
-  <defs>
-    <style>
-      @font-face {
-        font-family: 'Inter';
-        src: url('${fontDataUri}') format('truetype');
-        font-weight: 900;
-        font-style: normal;
-      }
-    </style>
-  </defs>
-  ${rects.join('\n  ')}
-  ${texts.join('\n  ')}
-</svg>`;
-}
-
-function escapeXml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
+  return {
+    textPng: canvas.toBuffer('image/png'),
+    textWidth,
+    textHeight,
+  };
 }
 
 /* ──────────────────────────────────────────────────────────────────
@@ -327,22 +306,43 @@ export async function buildSocialAsset(opts: BuildAssetOpts): Promise<BuiltAsset
     renderedLines = wrapTitle(title, spec.titleMaxCharsPerLine);
 
     if (renderedLines.length > 0) {
-      const fontDataUri = await getInterBlackDataUri();
-      const svg = buildOverlaySvg({
-        width: spec.width,
-        height: spec.height,
-        lines: renderedLines,
-        fontSize: spec.titleFontSize,
-        paddingX: spec.textPaddingX,
-        paddingY: spec.textPaddingY,
-        bottomMargin: spec.textBottomMargin,
-        lineGap: spec.lineGap,
-        fontDataUri,
-      });
+      // Render each line via @napi-rs/canvas (Skia, true Archivo Black)
+      const lineRenders = renderedLines.map(line => renderTextLine(line, spec.titleFontSize));
 
-      composed = await sharp(cropped)
-        .composite([{ input: Buffer.from(svg), top: 0, left: 0 }])
-        .toBuffer();
+      // Compute total block height and starting Y
+      const lineHeights = lineRenders.map(r => r.textHeight + spec.textPaddingY * 2);
+      const totalBlockH = lineHeights.reduce((sum, h) => sum + h, 0)
+        + (lineRenders.length - 1) * spec.lineGap;
+      const blockTopY = spec.height - spec.textBottomMargin - totalBlockH;
+
+      // Build composite layers: for each line, a black rect + white text
+      const composites: sharp.OverlayOptions[] = [];
+      let currentY = blockTopY;
+
+      for (let i = 0; i < lineRenders.length; i++) {
+        const { textPng, textWidth, textHeight } = lineRenders[i];
+        const rectWidth = textWidth + spec.textPaddingX * 2;
+        const rectHeight = textHeight + spec.textPaddingY * 2;
+
+        // Black rect (full opaque)
+        const rectSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${rectWidth}" height="${rectHeight}"><rect width="${rectWidth}" height="${rectHeight}" fill="black"/></svg>`;
+        composites.push({
+          input: Buffer.from(rectSvg),
+          top: currentY,
+          left: 0,
+        });
+
+        // White text on top of rect, centered vertically inside it
+        composites.push({
+          input: textPng,
+          top: currentY + spec.textPaddingY,
+          left: spec.textPaddingX,
+        });
+
+        currentY += rectHeight + spec.lineGap;
+      }
+
+      composed = await sharp(cropped).composite(composites).toBuffer();
     }
   }
 
