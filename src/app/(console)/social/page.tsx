@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import {
   Wand2, CalendarDays, Inbox, BarChart3, ArrowRight, Megaphone,
-  Instagram, Facebook,
+  Instagram, Facebook, CheckCircle2,
 } from 'lucide-react';
 
 interface HubStats {
@@ -72,9 +72,14 @@ export default function SocialHubPage() {
           <h1 className="typ-h1">Social</h1>
           <p className="typ-caption mt-1">Crea, schedula e monitora i contenuti dei canali LAVIKA.</p>
         </div>
-        <Link href="/social/composer" className="btn btn-primary btn-sm">
-          <Wand2 className="w-4 h-4" /> Nuovo pacchetto
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href="/social/connection" className="btn btn-ghost btn-sm" title="Stato connessione Meta">
+            <CheckCircle2 className="w-4 h-4" style={{ color: 'var(--ok)' }} /> Connesso
+          </Link>
+          <Link href="/social/composer" className="btn btn-primary btn-sm">
+            <Wand2 className="w-4 h-4" /> Nuovo pacchetto
+          </Link>
+        </div>
       </div>
 
       <div className="flex items-center gap-2 flex-wrap">
