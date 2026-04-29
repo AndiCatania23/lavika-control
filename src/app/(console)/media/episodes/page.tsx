@@ -796,18 +796,33 @@ export default function EpisodesPage() {
           <div className="vstack-tight">
             {items.map(ep => {
               const matchLabel = formatMatchLabel(ep.match);
+              const dateLabel = ep.published_at
+                ? new Date(ep.published_at).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: '2-digit' })
+                : null;
               return (
                 <div
                   key={ep.id}
-                  className="card"
+                  onClick={() => setDrawerEpisode(ep)}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDrawerEpisode(ep); } }}
+                  role="button"
+                  tabIndex={0}
+                  className="card card-hover"
                   style={{
-                    padding: 10, display: 'flex', alignItems: 'center', gap: 12,
+                    padding: 10,
+                    display: 'grid',
+                    gridTemplateColumns: 'auto minmax(0, 1fr) auto',
+                    alignItems: 'center',
+                    gap: 12,
                     borderColor: ep.is_active ? 'var(--hairline-soft)' : 'var(--hairline)',
                     opacity: ep.is_active ? 1 : 0.65,
+                    cursor: 'pointer',
                   }}
                 >
                   {/* Thumbnail */}
-                  <div className="shrink-0 rounded-[var(--r-sm)] overflow-hidden" style={{ width: 96, aspectRatio: '16/9', background: 'var(--card-muted)' }}>
+                  <div
+                    className="rounded-[var(--r-sm)] overflow-hidden"
+                    style={{ width: 80, aspectRatio: '16/9', background: 'var(--card-muted)' }}
+                  >
                     {ep.thumbnail_url ? (
                       /* eslint-disable-next-line @next/next/no-img-element */
                       <img src={ep.thumbnail_url} alt="" className="w-full h-full object-cover" loading="lazy" />
@@ -818,58 +833,72 @@ export default function EpisodesPage() {
                     )}
                   </div>
 
-                  {/* Info */}
-                  <div className="grow min-w-0">
-                    <div className="typ-label truncate">{ep.title || ep.video_id || ep.id}</div>
-                    <div className="flex items-center gap-2 mt-1 flex-wrap typ-micro" style={{ color: 'var(--text-muted)' }}>
-                      {matchLabel && (
-                        <span className="inline-flex items-center gap-1">
-                          <Trophy className="w-3 h-3" /> {matchLabel}
-                        </span>
-                      )}
-                      {ep.speaker?.full_name && (
-                        <span className="inline-flex items-center gap-1">
-                          <User className="w-3 h-3" /> {ep.speaker.full_name}
-                        </span>
-                      )}
-                      {ep.min_badge && (
-                        <span className="pill" style={{ fontSize: 10, padding: '1px 6px', color: BADGES.find(b => b.value === ep.min_badge)?.color }}>
-                          {ep.min_badge}
-                        </span>
-                      )}
-                      {ep.published_at && (
-                        <span>{new Date(ep.published_at).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: '2-digit' })}</span>
-                      )}
+                  {/* Info — title 2-lines, meta single-line truncated */}
+                  <div className="min-w-0">
+                    <div
+                      className="typ-label"
+                      style={{
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden',
+                        lineHeight: 1.3,
+                        fontSize: 14,
+                      }}
+                    >
+                      {ep.title || ep.video_id || ep.id}
                     </div>
+                    {(matchLabel || ep.speaker?.full_name || dateLabel || ep.min_badge) && (
+                      <div
+                        className="flex items-center gap-2 typ-micro"
+                        style={{ color: 'var(--text-muted)', marginTop: 4, minWidth: 0 }}
+                      >
+                        {matchLabel && (
+                          <span className="inline-flex items-center gap-1 truncate" style={{ minWidth: 0 }}>
+                            <Trophy className="w-3 h-3 shrink-0" />
+                            <span className="truncate">{matchLabel}</span>
+                          </span>
+                        )}
+                        {!matchLabel && ep.speaker?.full_name && (
+                          <span className="inline-flex items-center gap-1 truncate" style={{ minWidth: 0 }}>
+                            <User className="w-3 h-3 shrink-0" />
+                            <span className="truncate">{ep.speaker.full_name}</span>
+                          </span>
+                        )}
+                        {!matchLabel && !ep.speaker?.full_name && dateLabel && (
+                          <span className="truncate">{dateLabel}</span>
+                        )}
+                        {ep.min_badge && (
+                          <span
+                            className="pill shrink-0"
+                            style={{ fontSize: 9, padding: '1px 6px', color: BADGES.find(b => b.value === ep.min_badge)?.color }}
+                          >
+                            {ep.min_badge}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
 
-                  {/* Toggle active */}
+                  {/* Toggle active — own button, stops bubble */}
                   <button
-                    onClick={() => handleToggleActive(ep)}
+                    onClick={e => { e.stopPropagation(); handleToggleActive(ep); }}
+                    onKeyDown={e => e.stopPropagation()}
                     role="switch"
                     aria-checked={ep.is_active}
                     aria-label={ep.is_active ? 'Nascondi in app' : 'Mostra in app'}
                     title={ep.is_active ? 'Visibile in app' : 'Nascosto in app'}
-                    className="shrink-0"
                     style={{
-                      width: 38, height: 22, borderRadius: 11, position: 'relative', cursor: 'pointer',
+                      width: 42, height: 24, borderRadius: 12, position: 'relative', cursor: 'pointer',
                       background: ep.is_active ? 'var(--ok)' : 'var(--hairline)',
-                      border: 'none', transition: 'background 150ms',
+                      border: 'none', transition: 'background 150ms', flexShrink: 0,
                     }}
                   >
                     <span style={{
-                      position: 'absolute', top: 2, left: ep.is_active ? 18 : 2,
-                      width: 18, height: 18, borderRadius: '50%', background: '#fff',
+                      position: 'absolute', top: 2, left: ep.is_active ? 20 : 2,
+                      width: 20, height: 20, borderRadius: '50%', background: '#fff',
                       transition: 'left 150ms', boxShadow: '0 1px 2px rgba(0,0,0,0.2)',
                     }} />
-                  </button>
-
-                  {/* Open drawer */}
-                  <button
-                    onClick={() => setDrawerEpisode(ep)}
-                    className="btn btn-ghost btn-sm shrink-0"
-                  >
-                    Modifica <ChevronRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
               );
