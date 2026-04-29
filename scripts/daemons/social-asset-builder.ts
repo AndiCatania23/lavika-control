@@ -66,12 +66,12 @@ const r2 = new S3Client({
 
 /* ────────────────────────────── Logging ────────────────────────────── */
 
-const log    = (msg, extra) => console.log(`[${new Date().toISOString()}] [${WORKER_ID}] ${msg}`, extra ? JSON.stringify(extra) : '');
-const logErr = (msg, extra) => console.error(`[${new Date().toISOString()}] [${WORKER_ID}] ERROR ${msg}`, extra ? JSON.stringify(extra) : '');
+const log    = (msg: string, extra?: Record<string, unknown>) => console.log(`[${new Date().toISOString()}] [${WORKER_ID}] ${msg}`, extra ? JSON.stringify(extra) : '');
+const logErr = (msg: string, extra?: Record<string, unknown>) => console.error(`[${new Date().toISOString()}] [${WORKER_ID}] ERROR ${msg}`, extra ? JSON.stringify(extra) : '');
 
 /* ────────────────────────────── R2 upload ────────────────────────────── */
 
-async function uploadToR2(key, buffer, mime) {
+async function uploadToR2(key: string, buffer: Buffer, mime: string): Promise<string> {
   await r2.send(new PutObjectCommand({
     Bucket: R2_BUCKET,
     Key: key,
@@ -84,26 +84,36 @@ async function uploadToR2(key, buffer, mime) {
 
 /* ────────────────────────────── Recipe runner ────────────────────────────── */
 
-async function runRecipe(recipe, params) {
+interface RecipeResult {
+  buffer: Buffer;
+  mime: string;
+  width: number;
+  height: number;
+  format: string;
+  renderedTitle: string | null;
+  renderedLines: string[];
+}
+
+async function runRecipe(recipe: string, params: Record<string, unknown>): Promise<RecipeResult> {
   switch (recipe) {
     case 'sharp_text_overlay': {
-      // params: { sourceUrl, format, title }
+      const p = params as { sourceUrl: string; format: import('../../src/lib/social/assetBuilder').SocialFormat; title?: string };
       const asset = await buildSocialAsset({
-        sourceUrl: params.sourceUrl,
-        format: params.format,
-        title: params.title,
+        sourceUrl: p.sourceUrl,
+        format: p.format,
+        title: p.title,
       });
-      return asset;
+      return asset as RecipeResult;
     }
     case 'remotion_render': {
-      // params: { compositionId, inputProps?, width?, height? }
+      const p = params as { compositionId: string; inputProps?: Record<string, unknown>; width?: number; height?: number };
       const video = await renderRemotionComposition({
-        compositionId: params.compositionId,
-        inputProps:    params.inputProps ?? {},
-        width:         params.width,
-        height:        params.height,
+        compositionId: p.compositionId,
+        inputProps:    p.inputProps ?? {},
+        width:         p.width,
+        height:        p.height,
       });
-      return video;
+      return video as RecipeResult;
     }
     case 'ffmpeg_resize':
       throw new Error('ffmpeg_resize: NOT YET IMPLEMENTED');
@@ -114,7 +124,15 @@ async function runRecipe(recipe, params) {
 
 /* ────────────────────────────── Job processing ────────────────────────────── */
 
-async function processJob(job) {
+interface QueueJob {
+  id: string;
+  variant_id: string;
+  recipe: string;
+  recipe_params: Record<string, unknown>;
+  attempts: number;
+}
+
+async function processJob(job: QueueJob): Promise<void> {
   const t0 = Date.now();
   log('processing job', { id: job.id, recipe: job.recipe, variant_id: job.variant_id, attempt: job.attempts });
 

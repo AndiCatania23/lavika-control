@@ -2,10 +2,10 @@
 
 import Link from 'next/link';
 import { Suspense, useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft, Wand2, Pill as PillIcon, Film, Sparkles,
-  Instagram, Facebook, Music2, AlertTriangle,
+  Instagram, Facebook, Music2, RefreshCw,
 } from 'lucide-react';
 
 /* ────────────────────────────────────────────────────────────────────
@@ -37,9 +37,9 @@ const PLATFORMS: PlatformDef[] = [
     label: 'Instagram',
     Icon: Instagram,
     color: '#E1306C',
-    enabled: false,  // attivo dopo Meta App Review
+    enabled: true,
     formats: [
-      { id: 'feed_post', label: 'Feed Post',  aspect: '1:1',  type: 'image' },
+      { id: 'feed_post', label: 'Feed Post',  aspect: '4:5',  type: 'image' },
       { id: 'carousel',  label: 'Carousel',   aspect: '1:1',  type: 'album' },
       { id: 'story',     label: 'Story',      aspect: '9:16', type: 'image' },
       { id: 'reel',      label: 'Reel',       aspect: '9:16', type: 'video' },
@@ -50,7 +50,7 @@ const PLATFORMS: PlatformDef[] = [
     label: 'Facebook',
     Icon: Facebook,
     color: '#1877F2',
-    enabled: false,  // attivo dopo Meta App Review
+    enabled: true,
     formats: [
       { id: 'feed_post', label: 'Feed Post',  aspect: '4:5',  type: 'image' },
       { id: 'reel',      label: 'Reel',       aspect: '9:16', type: 'video' },
@@ -62,7 +62,7 @@ const PLATFORMS: PlatformDef[] = [
     label: 'TikTok',
     Icon: Music2,
     color: '#000',
-    enabled: false,
+    enabled: false,    // TODO: TikTok Content API audit
     formats: [
       { id: 'reel',       label: 'Video',      aspect: '9:16', type: 'video' },
       { id: 'photo_mode', label: 'Photo Mode', aspect: '9:16', type: 'album' },
@@ -79,6 +79,7 @@ interface SourceEp   { id: string; title: string | null; format_id: string; thum
 
 function ComposerInner() {
   const params = useSearchParams();
+  const router = useRouter();
   const initialPillId    = params.get('pill_id');
   const initialEpisodeId = params.get('episode_id');
 
@@ -92,6 +93,9 @@ function ComposerInner() {
   const [episodes, setEpisodes] = useState<SourceEp[]>([]);
   const [loadingSources, setLoadingSources] = useState(false);
 
+  const [generating, setGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState<string | null>(null);
+
   // Selection: which (platform, format) couples are active
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const cellKey = (p: Platform, f: Format) => `${p}:${f}`;
@@ -102,9 +106,16 @@ function ComposerInner() {
   useEffect(() => {
     if (sourceKind === 'pill' && pills.length === 0) {
       setLoadingSources(true);
-      fetch('/api/console/pills?limit=20&status=published')
-        .then(r => r.ok ? r.json() : { items: [] })
-        .then((d: { items: SourcePill[] }) => setPills(Array.isArray(d.items) ? d.items : []))
+      // Lazy import to keep the bundle slim
+      import('@/lib/data').then(({ getPills }) => getPills())
+        .then(allPills => {
+          // Show only published or scheduled pills with an image (publishable)
+          const filtered = allPills
+            .filter(p => (p.status === 'published' || p.status === 'scheduled') && p.image_url)
+            .slice(0, 30)
+            .map(p => ({ id: p.id, title: p.title, type: p.type, image_url: p.image_url ?? null }));
+          setPills(filtered);
+        })
         .catch(() => setPills([]))
         .finally(() => setLoadingSources(false));
     }
@@ -142,7 +153,40 @@ function ComposerInner() {
     setSelected(next);
   };
 
-  const canGenerate = selectedCount > 0 && (sourceKind === 'manual' || sourceId);
+  const canGenerate = selectedCount > 0 && sourceKind !== 'manual' && !!sourceId;
+
+  const handleGenerate = async () => {
+    if (!canGenerate || generating) return;
+    setGenerating(true);
+    setGenerateError(null);
+
+    // Build variants array from selected matrix
+    const variants: Array<{ platform: Platform; format: Format }> = [];
+    for (const [key, on] of Object.entries(selected)) {
+      if (!on) continue;
+      const [platform, format] = key.split(':') as [Platform, Format];
+      variants.push({ platform, format });
+    }
+
+    const endpoint = sourceKind === 'pill'
+      ? '/api/social/drafts/from-pill'
+      : '/api/social/drafts/from-episode';
+    const idKey = sourceKind === 'pill' ? 'pillId' : 'episodeId';
+
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [idKey]: sourceId, variants }),
+      });
+      const data = await res.json() as { ok: boolean; redirectTo?: string; error?: string };
+      if (!res.ok || !data.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+      router.push(data.redirectTo ?? '/social');
+    } catch (err) {
+      setGenerateError(err instanceof Error ? err.message : 'Errore sconosciuto');
+      setGenerating(false);
+    }
+  };
 
   return (
     <div className="vstack" style={{ gap: 'var(--s5)' }}>
@@ -160,17 +204,6 @@ function ComposerInner() {
         </p>
       </div>
 
-      {/* App Review notice */}
-      <div className="card card-body flex items-start gap-3" style={{ borderColor: 'color-mix(in oklab, var(--warn) 28%, transparent)', background: 'color-mix(in oklab, var(--warn) 8%, var(--card))' }}>
-        <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" style={{ color: 'var(--warn)' }} />
-        <div>
-          <p className="typ-label" style={{ color: 'var(--warn)' }}>App Meta in attesa di review</p>
-          <p className="typ-caption mt-1">
-            Pubblicazione disabilitata finché Meta non approva l&apos;app per Instagram + Facebook.
-            Puoi creare bozze e configurare pacchetti — saranno pronti al go-live.
-          </p>
-        </div>
-      </div>
 
       {/* Step 1: Source */}
       <div>
@@ -296,7 +329,7 @@ function ComposerInner() {
         </div>
       </div>
 
-      {/* Step 3: Generate (placeholder) */}
+      {/* Step 3: Generate */}
       <div>
         <h2 className="typ-label" style={{ marginBottom: 8 }}>3. Genera</h2>
         <div className="card card-body text-center" style={{ padding: 'var(--s5)' }}>
@@ -306,15 +339,26 @@ function ComposerInner() {
                 Pronti a generare <strong>{selectedCount}</strong> variant{selectedCount === 1 ? 'e' : 'i'}.
                 <br />
                 <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>
-                  (Generazione asset disabilitata in Step 0 — verrà abilitata col Mac asset-builder daemon.)
+                  Il Mac processa gli asset in background, poi vai alla pagina anteprima per approvare e pubblicare.
                 </span>
               </p>
-              <button disabled className="btn btn-primary">
-                <Wand2 className="w-4 h-4" /> Genera pacchetto
+              <button onClick={handleGenerate} disabled={generating} className="btn btn-primary">
+                {generating
+                  ? <><RefreshCw className="w-4 h-4 animate-spin" /> Creazione bozza…</>
+                  : <><Wand2 className="w-4 h-4" /> Genera pacchetto</>}
               </button>
+              {generateError && (
+                <p className="typ-caption mt-3" style={{ color: 'var(--danger)' }}>{generateError}</p>
+              )}
             </>
           ) : (
-            <p className="typ-caption">Seleziona sorgente e almeno una variant per generare.</p>
+            <p className="typ-caption">
+              {!sourceId && sourceKind !== 'manual'
+                ? 'Seleziona prima una pill o un episodio.'
+                : sourceKind === 'manual'
+                  ? 'La modalità "Da zero" è in arrivo. Per ora seleziona pill o episodio.'
+                  : 'Spunta almeno una variant nella matrice qui sopra.'}
+            </p>
           )}
         </div>
       </div>

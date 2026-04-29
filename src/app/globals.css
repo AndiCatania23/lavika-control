@@ -640,3 +640,28 @@ body {
 /* Legacy compat (so old pages don't completely break before migration) */
 .lk-page { padding: var(--s5); max-width: 1440px; margin: 0 auto; }
 @media (max-width: 767.98px) { .lk-page { padding: var(--s4); } }
+
+/* ────────── Social Composer — Variant Card responsive layout ────────── */
+.variant-card-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.variant-card-grid > .variant-asset {
+  width: 100%;
+  max-width: 360px;       /* su mobile non occupare più di 360px di larghezza */
+  margin: 0 auto;          /* centrata su mobile */
+  max-height: 60vh;        /* mai più alta di 60vh per non scrollare troppo */
+}
+@media (min-width: 768px) {
+  .variant-card-grid {
+    display: grid;
+    grid-template-columns: minmax(220px, 320px) 1fr;
+    align-items: start;
+  }
+  .variant-card-grid > .variant-asset {
+    max-width: none;
+    margin: 0;
+    max-height: none;
+  }
+}
