@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import {
   Wand2, CalendarDays, Inbox, BarChart3, ArrowRight, Megaphone,
-  Instagram, Facebook, CheckCircle2,
+  Instagram, Facebook, CheckCircle2, FolderOpen,
 } from 'lucide-react';
 
 interface HubStats {
@@ -31,9 +31,18 @@ export default function SocialHubPage() {
       href: '/social/composer',
       icon: Wand2,
       title: 'Composer',
-      desc: 'Crea pacchetti social da pill, episodi o da zero. Multi-platform, multi-formato.',
-      stat: stats ? `${stats.drafts} bozze · ${stats.awaitingApproval} in attesa` : '…',
+      desc: 'Crea un nuovo pacchetto social da una pill, episodio o da zero.',
+      stat: 'Crea nuovo',
       accent: 'var(--accent-raw)',
+      live: true,
+    },
+    {
+      href: '/social/drafts',
+      icon: FolderOpen,
+      title: 'Bozze',
+      desc: 'Tutti i pacchetti creati. Apri per editare caption, vedere asset e pubblicare.',
+      stat: stats ? `${stats.drafts} bozze · ${stats.awaitingApproval} in review` : '…',
+      accent: '#7c4dff',
       live: true,
     },
     {
@@ -144,8 +153,8 @@ export default function SocialHubPage() {
       {/* Footer note */}
       <div className="card card-body" style={{ background: 'var(--card-muted)', borderColor: 'var(--hairline-soft)' }}>
         <p className="typ-caption">
-          🚧 <strong>Step 0 in corso.</strong> Modulo in costruzione. App Meta in attesa di review (necessaria per posting Instagram + Facebook).
-          Le altre sezioni (Calendar, Inbox, Analytics) verranno abilitate progressivamente.
+          ✓ <strong>Composer + Bozze attivi.</strong> Calendar, Inbox e Analytics arriveranno presto.
+          Per pubblicare apri una bozza e premi &ldquo;Pubblica subito&rdquo;.
         </p>
       </div>
     </div>
