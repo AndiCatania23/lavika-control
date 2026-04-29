@@ -307,36 +307,49 @@ export default function SocialHubPage() {
 
   return (
     <div className="vstack" style={{ gap: 'var(--s5)' }}>
-      {/* Header */}
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="typ-h1">Social</h1>
-          <p className="typ-caption mt-1">Crea, schedula e monitora i contenuti dei canali LAVIKA.</p>
+      {/* Header — mobile: stack verticale, tablet+: row */}
+      <div className="hub-header">
+        <div className="hub-header-title">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h1 className="typ-h1" style={{ margin: 0 }}>Social</h1>
+            <Link
+              href="/social/connection"
+              className="pill"
+              title="Stato connessione Meta"
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                padding: '3px 9px', fontSize: 11, textDecoration: 'none', color: 'var(--text)',
+                background: 'color-mix(in oklab, var(--ok) 10%, var(--card))',
+                borderColor: 'color-mix(in oklab, var(--ok) 30%, var(--hairline-soft))',
+              }}
+            >
+              <CheckCircle2 className="w-3 h-3" style={{ color: 'var(--ok)' }} />
+              Connesso
+            </Link>
+            {/* Platform mini-pills inline */}
+            <div className="hub-platform-inline flex items-center gap-1.5">
+              <span className="pill" style={{ padding: '3px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <Instagram className="w-3 h-3" style={{ color: IG_COLOR }} />
+                <span className="hub-pill-label" style={{ fontSize: 11 }}>Instagram</span>
+              </span>
+              <span className="pill" style={{ padding: '3px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <Facebook className="w-3 h-3" style={{ color: FB_COLOR }} />
+                <span className="hub-pill-label" style={{ fontSize: 11 }}>Facebook</span>
+              </span>
+              <span className="pill" style={{ padding: '3px 8px', opacity: 0.55, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <Megaphone className="w-3 h-3" />
+                <span className="hub-pill-label" style={{ fontSize: 11 }}>TikTok</span>
+                <span className="hub-pill-label-mobile-hide" style={{ fontSize: 11 }}>presto</span>
+              </span>
+            </div>
+          </div>
+          <p className="typ-caption mt-1" style={{ margin: '4px 0 0 0' }}>
+            Crea, schedula e monitora i contenuti dei canali LAVIKA.
+          </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Link href="/social/connection" className="btn btn-ghost btn-sm" title="Stato connessione Meta">
-            <CheckCircle2 className="w-4 h-4" style={{ color: 'var(--ok)' }} /> Connesso
-          </Link>
-          <Link href="/social/composer" className="btn btn-primary btn-sm">
-            <Wand2 className="w-4 h-4" /> Nuovo pacchetto
-          </Link>
-        </div>
-      </div>
-
-      {/* Platform pills */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <div className="flex items-center gap-1.5 pill" style={{ padding: '4px 10px' }}>
-          <Instagram className="w-3.5 h-3.5" style={{ color: IG_COLOR }} />
-          <span className="typ-caption">Instagram</span>
-        </div>
-        <div className="flex items-center gap-1.5 pill" style={{ padding: '4px 10px' }}>
-          <Facebook className="w-3.5 h-3.5" style={{ color: FB_COLOR }} />
-          <span className="typ-caption">Facebook</span>
-        </div>
-        <div className="flex items-center gap-1.5 pill" style={{ padding: '4px 10px', opacity: 0.5 }}>
-          <Megaphone className="w-3.5 h-3.5" />
-          <span className="typ-caption">+ TikTok prossimamente</span>
-        </div>
+        <Link href="/social/composer" className="btn btn-primary hub-cta">
+          <Wand2 className="w-4 h-4" /> Nuovo pacchetto
+        </Link>
       </div>
 
       {/* HERO INSIGHTS WIDGET */}
@@ -355,10 +368,34 @@ export default function SocialHubPage() {
         </p>
       </div>
 
-      {/* Helper styles per stats nascosti su mobile */}
+      {/* Responsive helpers */}
       <style jsx>{`
+        .hub-header {
+          display: flex;
+          flex-direction: column;
+          gap: var(--s3);
+          align-items: stretch;
+        }
+        .hub-header-title { min-width: 0; }
+        .hub-cta {
+          width: 100%;
+          justify-content: center;
+        }
+        @media (min-width: 768px) {
+          .hub-header {
+            flex-direction: row;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: var(--s4);
+          }
+          .hub-cta {
+            width: auto;
+            flex-shrink: 0;
+          }
+        }
         @media (max-width: 480px) {
           :global(.hide-on-mobile) { display: none !important; }
+          .hub-pill-label-mobile-hide { display: none !important; }
         }
       `}</style>
     </div>
