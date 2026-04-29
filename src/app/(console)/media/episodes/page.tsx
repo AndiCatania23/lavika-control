@@ -172,31 +172,51 @@ function MatchPicker({
             <p className="typ-caption">Nessun match.</p>
           </div>
         ) : (
-          <div className="vstack-tight" style={{ maxHeight: '55vh', overflowY: 'auto' }}>
+          <div className="vstack-tight" style={{ maxHeight: '55vh', overflowY: 'auto', paddingBottom: 8 }}>
             {filtered.map(m => {
               const isCurrent = m.id === currentMatchId;
+              const home = m.home_team?.short_name ?? m.home_team?.normalized_name ?? 'HOM';
+              const away = m.away_team?.short_name ?? m.away_team?.normalized_name ?? 'AWA';
+              const date = m.kickoff_at ? new Date(m.kickoff_at) : null;
               return (
                 <button
                   key={m.id}
                   onClick={() => { onSelect(m); onClose(); }}
-                  className="card card-hover text-left w-full"
+                  className="card-hover text-left w-full"
                   style={{
-                    padding: 12, display: 'flex', alignItems: 'center', gap: 12,
-                    borderColor: isCurrent ? 'var(--accent-raw)' : 'var(--hairline-soft)',
-                    background: isCurrent ? 'var(--accent-soft)' : undefined,
+                    padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 14,
+                    border: `1px solid ${isCurrent ? 'var(--accent-raw)' : 'var(--hairline-soft)'}`,
+                    borderRadius: 'var(--r-lg)',
+                    background: isCurrent ? 'var(--accent-soft)' : 'var(--card)',
+                    boxShadow: 'var(--shadow-card)',
+                    cursor: 'pointer',
                   }}
                 >
-                  <div className="shrink-0" style={{ width: 32, textAlign: 'center' }}>
-                    <div className="typ-micro" style={{ color: 'var(--text-muted)' }}>G{m.matchday ?? '—'}</div>
+                  <div
+                    className="shrink-0 inline-grid place-items-center rounded-[var(--r-sm)]"
+                    style={{
+                      width: 44, height: 44,
+                      background: isCurrent ? 'rgba(255,255,255,0.6)' : 'var(--card-muted)',
+                      color: 'var(--text-muted)',
+                    }}
+                  >
+                    <span className="typ-micro" style={{ fontWeight: 600, fontSize: 11 }}>G{m.matchday ?? '—'}</span>
                   </div>
                   <div className="grow min-w-0">
-                    <div className="typ-label truncate">{formatMatchLabel(m)}</div>
-                    {m.kickoff_at && (
-                      <div className="typ-micro mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                        {new Date(m.kickoff_at).toLocaleDateString('it-IT', { weekday: 'short', day: '2-digit', month: 'long', year: 'numeric' })}
+                    <div className="typ-label" style={{ fontSize: 15, lineHeight: 1.25 }}>
+                      {home} – {away}
+                    </div>
+                    {date && (
+                      <div className="typ-caption" style={{ marginTop: 2, color: 'var(--text-muted)' }}>
+                        {date.toLocaleDateString('it-IT', { weekday: 'short', day: '2-digit', month: 'short' })}
+                        {' · '}
+                        {date.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
                       </div>
                     )}
                   </div>
+                  {isCurrent && (
+                    <span className="pill pill-ok shrink-0" style={{ fontSize: 10, padding: '2px 8px' }}>Collegato</span>
+                  )}
                 </button>
               );
             })}
@@ -423,13 +443,31 @@ function EpisodeDrawer({
         </div>
 
         {/* Visibility */}
-        <div className="card card-body" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div
+          style={{
+            padding: '20px 20px',
+            border: '1px solid var(--hairline-soft)',
+            borderRadius: 'var(--r-lg)',
+            background: 'var(--card)',
+            boxShadow: 'var(--shadow-card)',
+            display: 'flex', alignItems: 'center', gap: 16,
+          }}
+        >
           <div className="grow min-w-0">
-            <div className="typ-label inline-flex items-center gap-2">
-              {draft.is_active ? <Eye className="w-4 h-4" style={{ color: 'var(--ok)' }} /> : <EyeOff className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />}
+            <div
+              className="inline-flex items-center gap-2"
+              style={{ fontSize: 16, fontWeight: 600, lineHeight: 1.3 }}
+            >
+              {draft.is_active
+                ? <Eye className="w-4 h-4 shrink-0" style={{ color: 'var(--ok)' }} />
+                : <EyeOff className="w-4 h-4 shrink-0" style={{ color: 'var(--text-muted)' }} />}
               Visibile in app
             </div>
-            <p className="typ-caption mt-1">{draft.is_active ? 'Mostrato in catalogo, home e ricerche.' : 'Nascosto da tutte le viste pubbliche.'}</p>
+            <div style={{ marginTop: 6, fontSize: 13, lineHeight: 1.45, color: 'var(--text-muted)' }}>
+              {draft.is_active
+                ? 'Visibile in catalogo, home e ricerche.'
+                : 'Nascosto da tutte le viste pubbliche.'}
+            </div>
           </div>
           <button
             onClick={() => set('is_active', !draft.is_active)}
@@ -437,14 +475,14 @@ function EpisodeDrawer({
             aria-checked={draft.is_active}
             className="shrink-0"
             style={{
-              width: 44, height: 24, borderRadius: 12, position: 'relative', cursor: 'pointer',
+              width: 52, height: 30, borderRadius: 15, position: 'relative', cursor: 'pointer',
               background: draft.is_active ? 'var(--ok)' : 'var(--hairline)',
               border: 'none', transition: 'background 150ms',
             }}
           >
             <span style={{
-              position: 'absolute', top: 2, left: draft.is_active ? 22 : 2,
-              width: 20, height: 20, borderRadius: '50%', background: '#fff',
+              position: 'absolute', top: 3, left: draft.is_active ? 25 : 3,
+              width: 24, height: 24, borderRadius: '50%', background: '#fff',
               transition: 'left 150ms', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
             }} />
           </button>
