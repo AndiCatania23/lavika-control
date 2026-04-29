@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.lavika.social-asset-builder</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/andreafailla/LAVIKA-SPORT/scripts/social-asset-builder.sh</string>
+  </array>
+
+  <!-- Long-running daemon: sempre acceso -->
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+
+  <!-- Throttle restart se crasha (no busy-loop) -->
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+
+  <key>StandardOutPath</key>
+  <string>/Users/andreafailla/LAVIKA-SPORT/logs/social-asset-builder.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/andreafailla/LAVIKA-SPORT/logs/social-asset-builder-error.log</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+  </dict>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/andreafailla/LAVIKA-SPORT/repos/control</string>
+
+  <!-- Soft resource caps a difesa di leak -->
+  <key>SoftResourceLimits</key>
+  <dict>
+    <key>NumberOfFiles</key>
+    <integer>4096</integer>
+  </dict>
+</dict>
+</plist>
