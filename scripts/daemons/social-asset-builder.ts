@@ -43,7 +43,7 @@ const POLL_INTERVAL_MS  = parseInt(process.env.POLL_INTERVAL_MS  || '2000', 10);
 const CLAIM_BATCH_SIZE  = parseInt(process.env.CLAIM_BATCH_SIZE  || '3',    10);
 const MAX_ATTEMPTS      = parseInt(process.env.MAX_ATTEMPTS      || '3',    10);
 const R2_BUCKET         = 'lavika-media';
-const R2_PUBLIC_BASE    = 'https://pub-caae50e77b854437b46967f95fd48914.r2.dev';
+const R2_PUBLIC_BASE    = (process.env.MEDIA_PUBLIC_BASE_URL ?? 'https://pub-caae50e77b854437b46967f95fd48914.r2.dev').replace(/\/$/, '');
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
   console.error('FATAL: SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY required');

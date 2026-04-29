@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { publishFbPhotoPost, publishIgPhotoPost } from '@/lib/meta/publisher';
 import { MetaApiError } from '@/lib/meta/client';
+import { rewriteToPublicBase, MEDIA_PUBLIC_BASE_URL } from '@/lib/r2MediaClient';
 
 /**
  * POST /api/social/variants/[id]/publish
@@ -20,15 +21,26 @@ import { MetaApiError } from '@/lib/meta/client';
 /**
  * Build a publicly fetchable asset URL that Meta will accept.
  *
- * Cloudflare R2 `pub-*.r2.dev` domains are blacklisted by Instagram
- * (error 9004 "Only photo or video can be accepted as media type" /
- * "Non è stato possibile recuperare il contenuto multimediale da
- * questo URI"). We proxy through our Vercel domain which Meta trusts.
+ * Strategia:
+ *  A) Se MEDIA_PUBLIC_BASE_URL è settato a custom domain (es.
+ *     media.lavikasport.app), riscrivo asset_url legacy `pub-*.r2.dev`
+ *     → custom domain. Direct pass, niente hop Vercel. PREFERITO.
+ *  B) Fallback al proxy Vercel `/api/social/asset-proxy/[variantId]`
+ *     se per qualche motivo non riusciamo a riscrivere (custom domain
+ *     non configurato).
  *
- * Long-term: configurare custom domain Cloudflare R2 (es.
- * media.lavikasport.app) e tornare a usare asset_url diretto.
+ * Cloudflare R2 `pub-*.r2.dev` raw è blacklistato da Instagram
+ * (error 9004), quindi MAI passare quel dominio direttamente a Meta.
  */
-function getPublicAssetUrl(req: Request, variantId: string): string {
+function getPublicAssetUrl(req: Request, variantId: string, assetUrl: string): string {
+  const isCustomDomain = !MEDIA_PUBLIC_BASE_URL.includes('pub-') || !MEDIA_PUBLIC_BASE_URL.includes('.r2.dev');
+  if (isCustomDomain) {
+    const rewritten = rewriteToPublicBase(assetUrl);
+    if (rewritten && !rewritten.includes('pub-') && !rewritten.includes('.r2.dev')) {
+      return rewritten;
+    }
+  }
+  // Fallback: Vercel proxy
   const baseUrl =
     process.env.NEXT_PUBLIC_SITE_URL
     ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null)
@@ -64,9 +76,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   try {
     let result: { id: string; permalink?: string; external_post_url?: string };
 
-    // IG rejects pub-*.r2.dev; proxy via our Vercel domain.
-    // FB accepts both, but we proxy too for consistency + future custom-domain swap.
-    const publicAssetUrl = getPublicAssetUrl(req, id);
+    // Costruisci URL trusted per Meta: custom domain R2 (preferito) o proxy Vercel (fallback)
+    const publicAssetUrl = getPublicAssetUrl(req, id, variant.asset_url);
 
     if (variant.platform === 'facebook') {
       const r = await publishFbPhotoPost({ imageUrl: publicAssetUrl, caption: variant.caption ?? '' });
