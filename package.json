@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.999.0",
+    "@fontsource/anton": "^5.2.7",
     "@napi-rs/canvas": "^0.1.100",
     "@remotion/bundler": "^4.0.454",
     "@remotion/cli": "^4.0.454",

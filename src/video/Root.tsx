@@ -15,7 +15,17 @@ export const Root = () => {
         durationInFrames={240}        // 8s @ 30fps
         fps={30}
         width={1080}
-        height={1350}                  // 4:5 IG Feed
+        height={1350}                  // 4:5 IG/FB Feed
+        schema={matchScorecardSchema}
+        defaultProps={defaultMatchScorecardProps}
+      />
+      <Composition
+        id="MatchScorecardStory"
+        component={MatchScorecard}
+        durationInFrames={240}        // 8s @ 30fps
+        fps={30}
+        width={1080}
+        height={1920}                  // 9:16 IG/FB Story
         schema={matchScorecardSchema}
         defaultProps={defaultMatchScorecardProps}
       />

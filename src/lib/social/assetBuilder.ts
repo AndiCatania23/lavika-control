@@ -18,6 +18,7 @@
 
 import sharp from 'sharp';
 import path from 'path';
+import fs from 'fs';
 import { createCanvas, GlobalFonts } from '@napi-rs/canvas';
 
 /* ──────────────────────────────────────────────────────────────────
@@ -102,16 +103,114 @@ const FORMAT_SPECS: Record<SocialFormat, FormatSpec> = {
 /* ──────────────────────────────────────────────────────────────────
    Font registration via @napi-rs/canvas (Skia-based, reliable)
    Registered once at module load time.
+
+   Anton: Google Fonts free, condensed bold display. Sostituisce
+   Archivo Black come font display ufficiale LAVIKA per mega-title
+   sportivi. Vedi `social-brand-book.md` § 11 (Visual Direction).
    ────────────────────────────────────────────────────────────────── */
 
-const TITLE_FONT_PATH = path.join(process.cwd(), 'public', 'fonts', 'ArchivoBlack-Regular.ttf');
-const TITLE_FONT_FAMILY = 'ArchivoBlack';
+const TITLE_FONT_PATH = path.join(process.cwd(), 'public', 'fonts', 'Anton-Regular.ttf');
+const TITLE_FONT_FAMILY = 'Anton';
 
 let fontRegistered = false;
 function ensureFontRegistered() {
   if (fontRegistered) return;
   GlobalFonts.registerFromPath(TITLE_FONT_PATH, TITLE_FONT_FAMILY);
   fontRegistered = true;
+}
+
+/* ──────────────────────────────────────────────────────────────────
+   Logo watermark (PNG) — caricato una volta, riusato per ogni asset
+
+   Default: lavika-wordmark-white.png (47KB).
+   Posizione: angolo basso destro post 4:5/1:1, angolo basso centro
+   nelle Story 9:16 (per evitare safe-area UI Story).
+   ────────────────────────────────────────────────────────────────── */
+
+const WATERMARK_PATH = path.join(process.cwd(), 'public', 'brand', 'logo', 'lavika-wordmark-white.png');
+
+let watermarkBuffer: Buffer | null = null;
+function getWatermarkBuffer(): Buffer {
+  if (watermarkBuffer) return watermarkBuffer;
+  if (!fs.existsSync(WATERMARK_PATH)) {
+    throw new Error(`Watermark logo not found at ${WATERMARK_PATH}`);
+  }
+  watermarkBuffer = fs.readFileSync(WATERMARK_PATH);
+  return watermarkBuffer;
+}
+
+interface WatermarkPlacement {
+  /** Width in px (height auto-calc preserve aspect ratio) */
+  width: number;
+  /** Margin from edges in px */
+  marginX: number;
+  marginY: number;
+  /** Anchor: 'bottom-right' for posts, 'bottom-center' for stories */
+  anchor: 'bottom-right' | 'bottom-center';
+  /** Opacity 0-1 (PNG alpha multiplier) */
+  opacity: number;
+}
+
+function getWatermarkPlacement(format: SocialFormat): WatermarkPlacement {
+  const isStory = format.endsWith('_9_16');
+  if (isStory) {
+    return {
+      width: 200,
+      marginX: 0,
+      marginY: 80, // sopra safe-area UI bottom Story
+      anchor: 'bottom-center',
+      opacity: 0.85,
+    };
+  }
+  // Feed posts (4:5, 1:1)
+  return {
+    width: 140,
+    marginX: 32,
+    marginY: 32,
+    anchor: 'bottom-right',
+    opacity: 0.85,
+  };
+}
+
+/**
+ * Render the watermark layer (resized + opacity adjusted) ready to be
+ * composited onto the final image.
+ */
+async function renderWatermarkLayer(
+  format: SocialFormat,
+  spec: FormatSpec,
+): Promise<{ buffer: Buffer; top: number; left: number }> {
+  const placement = getWatermarkPlacement(format);
+  const sourceLogo = getWatermarkBuffer();
+
+  // Resize logo to target width + apply opacity
+  const resized = await sharp(sourceLogo)
+    .resize({ width: placement.width })
+    .ensureAlpha()
+    // Multiply alpha channel by opacity
+    .composite([{
+      input: Buffer.from([255, 255, 255, Math.round(placement.opacity * 255)]),
+      raw: { width: 1, height: 1, channels: 4 },
+      tile: true,
+      blend: 'dest-in',
+    }])
+    .png()
+    .toBuffer();
+
+  const meta = await sharp(resized).metadata();
+  const wmW = meta.width ?? placement.width;
+  const wmH = meta.height ?? Math.round(placement.width * 0.3);
+
+  let left = 0;
+  if (placement.anchor === 'bottom-right') {
+    left = spec.width - wmW - placement.marginX;
+  } else {
+    // bottom-center
+    left = Math.round((spec.width - wmW) / 2);
+  }
+  const top = spec.height - wmH - placement.marginY;
+
+  return { buffer: resized, top, left };
 }
 
 /* ──────────────────────────────────────────────────────────────────
@@ -124,38 +223,67 @@ function truncate(text: string, max: number): string {
 }
 
 /**
- * Wrap title to lines respecting maxCharsPerLine, breaking on words.
- * Returns array of lines (max 3 lines).
+ * Wrap title to lines, **punctuation-aware**:
+ *
+ *  1. Spezza il titolo in frasi su `.`, `!`, `?` (punteggiatura forte).
+ *     Ogni frase parte su una nuova riga → il punto fermo non viene mai
+ *     spezzato nel mezzo di una riga (era il problema visibile sui post
+ *     reali tipo "Catania. Sicilia che / non molla.").
+ *  2. Per ogni frase, se entra in una sola riga (≤ maxCharsPerLine) la
+ *     teniamo intera. Altrimenti word-wrap interno classico.
+ *  3. Stop a maxLines (default 3); il resto viene troncato con `…`.
  */
 function wrapTitle(text: string, maxCharsPerLine: number, maxLines = 3): string[] {
-  const words = text.split(/\s+/);
+  // Split sentences keeping trailing punctuation. Lookbehind: split AFTER `.`/`!`/`?`
+  // followed by whitespace — così "Catania. Sicilia" → ["Catania.", "Sicilia"]
+  const sentences = text
+    .split(/(?<=[.!?])\s+/)
+    .map(s => s.trim())
+    .filter(Boolean);
+
   const lines: string[] = [];
-  let current = '';
 
-  for (const word of words) {
-    const next = current ? current + ' ' + word : word;
-    if (next.length <= maxCharsPerLine) {
-      current = next;
-    } else {
-      if (current) lines.push(current);
-      // If word alone > max, hard-break it
-      if (word.length > maxCharsPerLine) {
-        lines.push(word.slice(0, maxCharsPerLine - 1) + '…');
-        current = '';
-      } else {
-        current = word;
-      }
-      if (lines.length >= maxLines) break;
+  outer: for (const sentence of sentences) {
+    if (lines.length >= maxLines) break;
+
+    // Frase corta → una sola riga
+    if (sentence.length <= maxCharsPerLine) {
+      lines.push(sentence);
+      continue;
     }
-  }
-  if (current && lines.length < maxLines) lines.push(current);
 
-  // If we ran out of lines but more text remained, append … to last line
+    // Frase lunga → word-wrap interno
+    const words = sentence.split(/\s+/);
+    let current = '';
+    for (const word of words) {
+      const next = current ? current + ' ' + word : word;
+      if (next.length <= maxCharsPerLine) {
+        current = next;
+      } else {
+        if (current) {
+          lines.push(current);
+          if (lines.length >= maxLines) { current = ''; break outer; }
+        }
+        // Parola sola più lunga della riga → hard-break
+        if (word.length > maxCharsPerLine) {
+          lines.push(word.slice(0, maxCharsPerLine - 1) + '…');
+          current = '';
+        } else {
+          current = word;
+        }
+      }
+    }
+    if (current && lines.length < maxLines) lines.push(current);
+  }
+
+  // Più contenuto di quanto encodato → ellissi sull'ultima riga
   if (lines.length >= maxLines) {
     const totalUsed = lines.join(' ').length;
-    if (totalUsed < text.length) {
+    if (totalUsed < text.length - 2) {
       const last = lines[lines.length - 1];
-      lines[lines.length - 1] = last.slice(0, Math.max(0, last.length - 1)) + '…';
+      if (!/[…!?.]$/.test(last)) {
+        lines[lines.length - 1] = last.slice(0, Math.max(0, last.length - 1)) + '…';
+      }
     }
   }
 
@@ -351,6 +479,17 @@ export async function buildSocialAsset(opts: BuildAssetOpts): Promise<BuiltAsset
 
       composed = await sharp(cropped).composite(composites).toBuffer();
     }
+  }
+
+  // 3.5. Watermark layer — overlay logo LAVIKA su tutti gli asset
+  try {
+    const wm = await renderWatermarkLayer(opts.format, spec);
+    composed = await sharp(composed)
+      .composite([{ input: wm.buffer, top: wm.top, left: wm.left }])
+      .toBuffer();
+  } catch (e) {
+    // Watermark missing è non-fatal: log e continua. Asset esce senza brand.
+    console.warn('[assetBuilder] Watermark skipped:', e);
   }
 
   // 4. Output JPEG (mandatory for IG, lighter for all platforms).
