@@ -10,6 +10,7 @@ interface PatchPayload {
   status?: unknown;
   is_active?: unknown;
   cover_override_url?: unknown;
+  duration_minutes?: unknown;
 }
 
 export async function PATCH(
@@ -80,6 +81,14 @@ export async function PATCH(
     updateData.cover_override_url = coverOverride;
   }
 
+  if (Object.prototype.hasOwnProperty.call(body, 'duration_minutes')) {
+    if (typeof body.duration_minutes !== 'number' || !Number.isFinite(body.duration_minutes)
+        || body.duration_minutes <= 0 || body.duration_minutes > 1440) {
+      return NextResponse.json({ error: 'duration_minutes deve essere intero 1..1440.' }, { status: 400 });
+    }
+    updateData.duration_minutes = Math.floor(body.duration_minutes);
+  }
+
   if (Object.keys(updateData).length === 1) {
     return NextResponse.json({ error: 'Nessun campo da aggiornare.' }, { status: 400 });
   }
@@ -88,7 +97,7 @@ export async function PATCH(
     .from('home_schedule_cards')
     .update(updateData)
     .eq('id', id)
-    .select('id,format_id,label,access,start_at,status,is_active,cover_override_url,source_type,series_id,occurrence_key,created_at,updated_at')
+    .select('id,format_id,label,access,start_at,status,is_active,cover_override_url,source_type,series_id,occurrence_key,duration_minutes,created_at,updated_at')
     .single();
 
   if (error) {

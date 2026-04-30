@@ -11,6 +11,15 @@ interface CreateCardPayload {
   status?: unknown;
   is_active?: unknown;
   cover_override_url?: unknown;
+  duration_minutes?: unknown;
+}
+
+const DEFAULT_DURATION_MINUTES = 60;
+function normalizeDurationMinutes(value: unknown): number {
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0 && value <= 1440) {
+    return Math.floor(value);
+  }
+  return DEFAULT_DURATION_MINUTES;
 }
 
 function parseDateIso(value: string | null): string | null {
@@ -39,7 +48,7 @@ export async function GET(request: Request) {
 
   let query = supabaseServer
     .from('home_schedule_cards')
-    .select('id,format_id,label,access,start_at,status,is_active,cover_override_url,source_type,series_id,occurrence_key,created_at,updated_at', {
+    .select('id,format_id,label,access,start_at,status,is_active,cover_override_url,source_type,series_id,occurrence_key,duration_minutes,created_at,updated_at', {
       count: 'exact',
     })
     .order('start_at', { ascending: true })
@@ -151,12 +160,13 @@ export async function POST(request: Request) {
     source_type: 'manual',
     series_id: null,
     occurrence_key: null,
+    duration_minutes: normalizeDurationMinutes(body?.duration_minutes),
   };
 
   const { data, error } = await supabaseServer
     .from('home_schedule_cards')
     .insert(payload)
-    .select('id,format_id,label,access,start_at,status,is_active,cover_override_url,source_type,series_id,occurrence_key,created_at,updated_at')
+    .select('id,format_id,label,access,start_at,status,is_active,cover_override_url,source_type,series_id,occurrence_key,duration_minutes,created_at,updated_at')
     .single();
 
   if (error) {

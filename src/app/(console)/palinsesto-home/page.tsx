@@ -27,6 +27,7 @@ interface CommonFormState {
   cover_override_url: string;
   status: ScheduleStatus;
   is_active: boolean;
+  duration_minutes: string;  // string per input number; serializzato a int 1..1440 al submit
 }
 interface SingleFormState extends CommonFormState { start_at_local: string; }
 interface RecurringFormState extends CommonFormState {
@@ -53,10 +54,16 @@ function isoToInputValue(isoValue: string): string {
   return local ? local.slice(0, 16) : '';
 }
 function makeDefaultSingleState(): SingleFormState {
-  return { format_id: '', label: '', access: 'bronze', cover_override_url: '', status: 'draft', is_active: true, start_at_local: isoToInputValue(new Date().toISOString()) };
+  return { format_id: '', label: '', access: 'bronze', cover_override_url: '', status: 'draft', is_active: true, start_at_local: isoToInputValue(new Date().toISOString()), duration_minutes: '60' };
 }
 function makeDefaultRecurringState(): RecurringFormState {
-  return { format_id: '', label: '', access: 'bronze', cover_override_url: '', status: 'draft', is_active: true, dtstart_local: isoToInputValue(new Date().toISOString()), freq: 'WEEKLY', interval: 1, byday: ['MO', 'WE', 'FR'], until_local: '', max_occurrences: '' };
+  return { format_id: '', label: '', access: 'bronze', cover_override_url: '', status: 'draft', is_active: true, dtstart_local: isoToInputValue(new Date().toISOString()), freq: 'WEEKLY', interval: 1, byday: ['MO', 'WE', 'FR'], until_local: '', max_occurrences: '', duration_minutes: '60' };
+}
+
+function parseDurationMinutes(value: string): number | null {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0 || n > 1440) return null;
+  return Math.floor(n);
 }
 
 /* >=1024 = master-detail split layout (desktop + iPad landscape).
@@ -214,10 +221,13 @@ export default function PalinsestoHomePage() {
     if (!singleState.format_id) { showToast('warning', 'Seleziona format.'); return; }
     const startAtIso = localRomeToUtcIso(`${singleState.start_at_local}:00`);
     if (!startAtIso) { showToast('warning', 'Data/ora invalida.'); return; }
+    const duration = parseDurationMinutes(singleState.duration_minutes);
+    if (duration === null) { showToast('warning', 'Durata (min) deve essere 1..1440.'); return; }
     const payload = {
       format_id: singleState.format_id, label: singleState.label.trim() || null,
       access: singleState.access, cover_override_url: singleState.cover_override_url.trim() || null,
       status: singleState.status, is_active: singleState.is_active, start_at: startAtIso,
+      duration_minutes: duration,
     };
     const editing = Boolean(editingCard);
     const endpoint = editing ? `/api/dev/schedule/cards/${editingCard?.id}` : '/api/dev/schedule/cards';
@@ -237,6 +247,8 @@ export default function PalinsestoHomePage() {
       freq: recurringState.freq, interval: Math.max(1, recurringState.interval),
       byday: recurringState.freq === 'WEEKLY' ? recurringState.byday : [], count: null, untilLocal: null,
     });
+    const duration = parseDurationMinutes(recurringState.duration_minutes);
+    if (duration === null) { showToast('warning', 'Durata (min) deve essere 1..1440.'); return; }
     const payload: Record<string, unknown> = {
       format_id: recurringState.format_id, label: recurringState.label.trim() || null,
       access: recurringState.access, cover_override_url: recurringState.cover_override_url.trim() || null,
@@ -244,6 +256,7 @@ export default function PalinsestoHomePage() {
       timezone: 'Europe/Rome', dtstart_local: `${recurringState.dtstart_local}:00`, rrule,
       until_local: recurringState.until_local ? `${recurringState.until_local}T23:59:59` : null,
       max_occurrences: maxOcc,
+      duration_minutes: duration,
     };
     const editing = Boolean(editingSeries);
     const endpoint = editing ? `/api/dev/schedule/series/${editingSeries?.id}` : '/api/dev/schedule/series';
@@ -301,6 +314,7 @@ export default function PalinsestoHomePage() {
       format_id: card.format_id, label: card.label ?? '', access: card.access,
       cover_override_url: card.cover_override_url ?? '', status: card.status, is_active: card.is_active,
       start_at_local: isoToInputValue(card.start_at),
+      duration_minutes: String(card.duration_minutes ?? 60),
     });
     setFormOpen(true);
   };
@@ -327,6 +341,7 @@ export default function PalinsestoHomePage() {
       freq: parsedFreq, interval: Number.isFinite(parsedInterval) ? parsedInterval : 1, byday: parsedByday,
       until_local: item.until_local ? item.until_local.slice(0, 10) : '',
       max_occurrences: item.max_occurrences ? String(item.max_occurrences) : '',
+      duration_minutes: String(item.duration_minutes ?? 60),
     });
     setFormOpen(true);
   };
@@ -482,14 +497,26 @@ export default function PalinsestoHomePage() {
 
       {/* Single date OR Recurring fields */}
       {createMode === 'single' ? (
-        <div>
-          <label className="typ-micro block mb-1.5">Data / Ora (Europe/Rome) *</label>
-          <input
-            type="datetime-local" required
-            value={singleState.start_at_local}
-            onChange={e => setSingleState(p => ({ ...p, start_at_local: e.target.value }))}
-            className="input"
-          />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className="typ-micro block mb-1.5">Data / Ora (Europe/Rome) *</label>
+            <input
+              type="datetime-local" required
+              value={singleState.start_at_local}
+              onChange={e => setSingleState(p => ({ ...p, start_at_local: e.target.value }))}
+              className="input"
+            />
+          </div>
+          <div>
+            <label className="typ-micro block mb-1.5">Durata (min) *</label>
+            <input
+              type="number" min={1} max={1440} required
+              value={singleState.duration_minutes}
+              onChange={e => setSingleState(p => ({ ...p, duration_minutes: e.target.value }))}
+              className="input"
+              placeholder="60"
+            />
+          </div>
         </div>
       ) : (
         <div className="card card-body vstack" style={{ gap: 'var(--s4)', background: 'var(--card-muted)' }}>
@@ -517,7 +544,7 @@ export default function PalinsestoHomePage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div>
               <label className="typ-micro block mb-1.5">Intervallo</label>
               <input
@@ -525,6 +552,16 @@ export default function PalinsestoHomePage() {
                 value={recurringState.interval}
                 onChange={e => setRecurringState(p => ({ ...p, interval: Math.max(1, Number(e.target.value) || 1) }))}
                 className="input"
+              />
+            </div>
+            <div>
+              <label className="typ-micro block mb-1.5">Durata (min) *</label>
+              <input
+                type="number" min={1} max={1440} required
+                value={recurringState.duration_minutes}
+                onChange={e => setRecurringState(p => ({ ...p, duration_minutes: e.target.value }))}
+                className="input"
+                placeholder="60"
               />
             </div>
             <div>
