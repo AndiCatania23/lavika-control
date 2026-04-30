@@ -56,21 +56,21 @@ interface FormatSpec {
 const FORMAT_SPECS: Record<SocialFormat, FormatSpec> = {
   ig_feed_4_5: {
     width: 1080, height: 1350,
-    titleFontSize: 72, titleMaxCharsPerLine: 22, titleMaxTotalChars: 70,
+    titleFontSize: 96, titleMaxCharsPerLine: 20, titleMaxTotalChars: 70,
     cropVerticalBias: 0.35,
     textPaddingX: 24, textPaddingY: 16,
     textBottomMargin: 48, lineGap: 8,
   },
   ig_square_1_1: {
     width: 1080, height: 1080,
-    titleFontSize: 64, titleMaxCharsPerLine: 24, titleMaxTotalChars: 56,
+    titleFontSize: 84, titleMaxCharsPerLine: 22, titleMaxTotalChars: 56,
     cropVerticalBias: 0.4,
     textPaddingX: 24, textPaddingY: 14,
     textBottomMargin: 40, lineGap: 8,
   },
   ig_story_9_16: {
     width: 1080, height: 1920,
-    titleFontSize: 80, titleMaxCharsPerLine: 22, titleMaxTotalChars: 110,
+    titleFontSize: 108, titleMaxCharsPerLine: 20, titleMaxTotalChars: 110,
     cropVerticalBias: 0.3,
     textPaddingX: 32, textPaddingY: 18,
     textBottomMargin: 220,  // safe-area UI Story (logo profilo, tap, swipe)
@@ -78,21 +78,21 @@ const FORMAT_SPECS: Record<SocialFormat, FormatSpec> = {
   },
   fb_feed_4_5: {
     width: 1080, height: 1350,
-    titleFontSize: 72, titleMaxCharsPerLine: 22, titleMaxTotalChars: 70,
+    titleFontSize: 96, titleMaxCharsPerLine: 20, titleMaxTotalChars: 70,
     cropVerticalBias: 0.35,
     textPaddingX: 24, textPaddingY: 16,
     textBottomMargin: 48, lineGap: 8,
   },
   fb_square_1_1: {
     width: 1080, height: 1080,
-    titleFontSize: 64, titleMaxCharsPerLine: 24, titleMaxTotalChars: 56,
+    titleFontSize: 84, titleMaxCharsPerLine: 22, titleMaxTotalChars: 56,
     cropVerticalBias: 0.4,
     textPaddingX: 24, textPaddingY: 14,
     textBottomMargin: 40, lineGap: 8,
   },
   fb_story_9_16: {
     width: 1080, height: 1920,
-    titleFontSize: 80, titleMaxCharsPerLine: 22, titleMaxTotalChars: 110,
+    titleFontSize: 108, titleMaxCharsPerLine: 20, titleMaxTotalChars: 110,
     cropVerticalBias: 0.3,
     textPaddingX: 32, textPaddingY: 18,
     textBottomMargin: 220,
