@@ -17,8 +17,9 @@
  * Dati live da GET /api/console/formats.
  */
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Plus, RefreshCw, Search, ChevronRight } from 'lucide-react';
+import { Plus, RefreshCw, Search, ChevronRight, Lock } from 'lucide-react';
 
 interface FormatRow {
   id: string;
@@ -58,19 +59,26 @@ function formatRelative(iso: string | null): string {
 }
 
 export default function FormatsPage() {
+  const router = useRouter();
   const [formats, setFormats] = useState<FormatRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [showEmpty, setShowEmpty] = useState(true);
+  const [wizardEnabled, setWizardEnabled] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/console/formats', { cache: 'no-store' });
-      const data = await res.json();
-      if (res.ok) setFormats(data.items ?? []);
-      else console.error('formats fetch error', data);
+      const [fmtRes, flagsRes] = await Promise.all([
+        fetch('/api/console/formats', { cache: 'no-store' }),
+        fetch('/api/console/feature-flags', { cache: 'no-store' }),
+      ]);
+      const fmtData = await fmtRes.json();
+      const flagsData = await flagsRes.json();
+      if (fmtRes.ok) setFormats(fmtData.items ?? []);
+      else console.error('formats fetch error', fmtData);
+      setWizardEnabled(Boolean(flagsData?.enable_format_wizard?.enabled));
     } catch (err) {
       console.error('formats fetch failed', err);
     } finally {
@@ -117,12 +125,22 @@ export default function FormatsPage() {
           >
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
           </button>
-          <button
-            onClick={() => alert('Wizard "Nuovo Format" — FASE 4 (in arrivo)')}
-            className="btn btn-primary"
-          >
-            <Plus size={16} /> Nuovo Format
-          </button>
+          {wizardEnabled ? (
+            <button
+              onClick={() => router.push('/content/formats/new')}
+              className="btn btn-primary"
+            >
+              <Plus size={16} /> Nuovo Format
+            </button>
+          ) : (
+            <button
+              disabled
+              className="btn btn-ghost"
+              title="Wizard disabilitato. Abilita il flag enable_format_wizard in sync_config per attivarlo."
+            >
+              <Lock size={16} /> Nuovo Format
+            </button>
+          )}
         </div>
       </div>
 
