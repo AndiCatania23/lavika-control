@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabaseServer';
-import { publishFbPhotoPost, publishIgPhotoPost } from '@/lib/meta/publisher';
+import {
+  publishFbPhotoPost, publishIgPhotoPost,
+  publishIgStoryPhoto, publishIgStoryVideo,
+  publishFbStoryPhoto, publishFbStoryVideo,
+} from '@/lib/meta/publisher';
 import { MetaApiError } from '@/lib/meta/client';
 import { rewriteToPublicBase, MEDIA_PUBLIC_BASE_URL } from '@/lib/r2MediaClient';
 
@@ -79,12 +83,45 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     // Costruisci URL trusted per Meta: custom domain R2 (preferito) o proxy Vercel (fallback)
     const publicAssetUrl = getPublicAssetUrl(req, id, variant.asset_url);
 
-    if (variant.platform === 'facebook') {
-      const r = await publishFbPhotoPost({ imageUrl: publicAssetUrl, caption: variant.caption ?? '' });
-      result = { id: r.post_id ?? r.id, permalink: r.permalink_url };
-    } else if (variant.platform === 'instagram') {
-      const r = await publishIgPhotoPost({ imageUrl: publicAssetUrl, caption: variant.caption ?? '' });
-      result = { id: r.id, permalink: r.permalink };
+    /* Routing platform × format. Format è quello selezionato nel Composer:
+         feed_post  → Feed (foto)
+         story      → Story 24h (foto)
+         story_video → Story 24h (video)
+         reel       → Reel feed permanente (video) — TBD
+         carousel   → Album foto — TBD
+       Riferimento: src/app/(console)/social/composer/page.tsx PLATFORMS array.
+       Per il fix del bug "ogni cosa va al Feed" (2026-04-30) il routing
+       per 'story' va a publishIgStoryPhoto / publishFbStoryPhoto (NON a
+       publishXxxPhotoPost che è solo Feed). */
+    const fmt = variant.format;
+    const caption = variant.caption ?? '';
+
+    if (variant.platform === 'instagram') {
+      if (fmt === 'story_video') {
+        const r = await publishIgStoryVideo({ videoUrl: publicAssetUrl, caption });
+        result = { id: r.id, permalink: r.permalink };
+      } else if (fmt === 'story') {
+        const r = await publishIgStoryPhoto({ imageUrl: publicAssetUrl, caption });
+        result = { id: r.id, permalink: r.permalink };
+      } else if (fmt === 'feed_post') {
+        const r = await publishIgPhotoPost({ imageUrl: publicAssetUrl, caption });
+        result = { id: r.id, permalink: r.permalink };
+      } else {
+        throw new Error(`Format '${fmt}' su Instagram non ancora supportato (TODO: reel, carousel)`);
+      }
+    } else if (variant.platform === 'facebook') {
+      if (fmt === 'story_video') {
+        const r = await publishFbStoryVideo({ videoUrl: publicAssetUrl, caption });
+        result = { id: r.post_id ?? r.id, permalink: r.permalink_url };
+      } else if (fmt === 'story') {
+        const r = await publishFbStoryPhoto({ imageUrl: publicAssetUrl, caption });
+        result = { id: r.post_id ?? r.id, permalink: r.permalink_url };
+      } else if (fmt === 'feed_post') {
+        const r = await publishFbPhotoPost({ imageUrl: publicAssetUrl, caption });
+        result = { id: r.post_id ?? r.id, permalink: r.permalink_url };
+      } else {
+        throw new Error(`Format '${fmt}' su Facebook non ancora supportato (TODO: reel)`);
+      }
     } else {
       throw new Error(`Platform '${variant.platform}' non supportata in questa versione`);
     }

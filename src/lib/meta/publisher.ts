@@ -169,6 +169,177 @@ export async function publishIgPhotoPost(opts: {
 }
 
 /* ──────────────────────────────────────────────────────────────────
+   Instagram — Story Photo (2-step, media_type=STORIES)
+   Sparisce dopo 24h. Stessa API del Photo post Feed ma con
+   media_type=STORIES. JPEG/PNG only (no WebP).
+   ────────────────────────────────────────────────────────────────── */
+
+export async function publishIgStoryPhoto(opts: {
+  imageUrl: string;
+  caption?: string;     // appears in story sticker (link / mention) — non sempre visibile
+}): Promise<IgPostResult> {
+  const cfg = getMetaConfig();
+  if (!cfg) throw new Error('Meta env vars not configured');
+
+  const container = await metaPost<{ id: string }>(
+    `/${cfg.igBusinessId}/media`,
+    {
+      image_url: opts.imageUrl,
+      media_type: 'STORIES',
+      caption: opts.caption ?? '',
+    }
+  );
+  const containerId = container.id;
+  await waitForIgContainerReady(containerId);
+
+  const published = await metaPost<{ id: string }>(
+    `/${cfg.igBusinessId}/media_publish`,
+    { creation_id: containerId }
+  );
+
+  let permalink: string | undefined;
+  try {
+    const meta = await metaGet<{ permalink?: string }>(
+      `/${published.id}?fields=permalink`
+    );
+    permalink = meta.permalink;
+  } catch { /* ignore */ }
+
+  return { id: published.id, containerId, permalink };
+}
+
+/* ──────────────────────────────────────────────────────────────────
+   Instagram — Story Video (2-step, media_type=STORIES con video_url)
+   Container può richiedere più tempo (encoding) → maxWait 120s.
+   Video MP4 H264 yuv420p (vedi remotion.config.ts), 9:16 1080×1920.
+   ────────────────────────────────────────────────────────────────── */
+
+export async function publishIgStoryVideo(opts: {
+  videoUrl: string;
+  caption?: string;
+}): Promise<IgPostResult> {
+  const cfg = getMetaConfig();
+  if (!cfg) throw new Error('Meta env vars not configured');
+
+  const container = await metaPost<{ id: string }>(
+    `/${cfg.igBusinessId}/media`,
+    {
+      video_url: opts.videoUrl,
+      media_type: 'STORIES',
+      caption: opts.caption ?? '',
+    }
+  );
+  const containerId = container.id;
+  // Video container needs more time to process (encoding)
+  await waitForIgContainerReady(containerId, 120000);
+
+  const published = await metaPost<{ id: string }>(
+    `/${cfg.igBusinessId}/media_publish`,
+    { creation_id: containerId }
+  );
+
+  let permalink: string | undefined;
+  try {
+    const meta = await metaGet<{ permalink?: string }>(
+      `/${published.id}?fields=permalink`
+    );
+    permalink = meta.permalink;
+  } catch { /* ignore */ }
+
+  return { id: published.id, containerId, permalink };
+}
+
+/* ──────────────────────────────────────────────────────────────────
+   Facebook — Story Photo (2-step: upload unpublished → photo_stories)
+   Sparisce dopo 24h. Endpoint dedicato photo_stories (NON feed photos).
+   ────────────────────────────────────────────────────────────────── */
+
+export async function publishFbStoryPhoto(opts: {
+  imageUrl: string;
+  caption?: string;     // ignored su FB Story (non c'è caption in story photo)
+}): Promise<FbPostResult> {
+  const cfg = getMetaConfig();
+  if (!cfg) throw new Error('Meta env vars not configured');
+
+  // Step 1: upload photo unpublished → ottieni photo_id
+  const photo = await metaPost<{ id: string }>(
+    `/${cfg.pageId}/photos`,
+    { url: opts.imageUrl, published: 'false' }
+  );
+
+  // Step 2: pubblica come story
+  const story = await metaPost<{ post_id?: string; success?: boolean }>(
+    `/${cfg.pageId}/photo_stories`,
+    { photo_id: photo.id }
+  );
+
+  return {
+    id: story.post_id ?? photo.id,
+    post_id: story.post_id,
+    permalink_url: undefined,  // FB Stories non ritornano permalink standard
+  };
+}
+
+/* ──────────────────────────────────────────────────────────────────
+   Facebook — Story Video (resumable upload con file_url, 3-step)
+   Sparisce dopo 24h. Endpoint dedicato video_stories.
+
+   Flow:
+     1. start  → riceve { video_id, upload_url }
+     2. upload → POST upload_url con header `file_url: <publicUrl>`
+     3. finish → publish definitivo
+   Richiede video MP4 H264 yuv420p, 9:16, max 60s, accessibile via HTTPS.
+   ────────────────────────────────────────────────────────────────── */
+
+export async function publishFbStoryVideo(opts: {
+  videoUrl: string;
+  caption?: string;     // description del video
+}): Promise<FbPostResult> {
+  const cfg = getMetaConfig();
+  if (!cfg) throw new Error('Meta env vars not configured');
+
+  // Step 1: start upload session
+  const start = await metaPost<{ video_id: string; upload_url: string }>(
+    `/${cfg.pageId}/video_stories`,
+    { upload_phase: 'start' }
+  );
+  const { video_id, upload_url } = start;
+
+  // Step 2: upload via file_url (Meta fetcha il file dal nostro CDN)
+  const uploadRes = await fetch(upload_url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `OAuth ${cfg.pageAccessToken}`,
+      'file_url': opts.videoUrl,
+    },
+  });
+  const uploadJson = await uploadRes.json() as { success?: boolean; error?: MetaError };
+  if (!uploadRes.ok || uploadJson.error) {
+    throw new MetaApiError(
+      uploadJson.error ?? { message: 'Upload phase failed' },
+      uploadRes.status
+    );
+  }
+
+  // Step 3: finish + publish
+  const finishParams: Record<string, string> = {
+    upload_phase: 'finish',
+    video_id,
+  };
+  if (opts.caption) finishParams.description = opts.caption;
+  const finish = await metaPost<{ post_id?: string; success?: boolean }>(
+    `/${cfg.pageId}/video_stories`,
+    finishParams
+  );
+
+  return {
+    id: finish.post_id ?? video_id,
+    post_id: finish.post_id,
+    permalink_url: undefined,
+  };
+}
+
+/* ──────────────────────────────────────────────────────────────────
    Delete (per test cleanup)
    ────────────────────────────────────────────────────────────────── */
 

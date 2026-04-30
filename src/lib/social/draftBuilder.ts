@@ -18,7 +18,8 @@ export type Platform = 'instagram' | 'facebook' | 'tiktok';
 export type FormatKey =
   | 'feed_post'
   | 'feed_post_4_5'
-  | 'story'
+  | 'story'         // Story 9:16 image (24h)
+  | 'story_video'   // Story 9:16 video (24h, MP4 via Remotion)
   | 'reel'
   | 'carousel'
   | 'photo_mode';
@@ -61,7 +62,7 @@ function resolveSocialFormat(platform: Platform, format: FormatKey): SocialForma
     // Carousel uses square (legacy) — first slide locks ratio for all
     return platform === 'facebook' ? 'fb_square_1_1' : 'ig_square_1_1';
   }
-  if (format === 'story') {
+  if (format === 'story' || format === 'story_video') {
     return platform === 'facebook' ? 'fb_story_9_16' : 'ig_story_9_16';
   }
   if (format === 'reel') {
@@ -75,6 +76,52 @@ function resolveSocialFormat(platform: Platform, format: FormatKey): SocialForma
   }
   // Default fallback
   return 'ig_feed_4_5';
+}
+
+/* ──────────────────────────────────────────────────────────────────
+   Recipe selector — sceglie la pipeline asset in base al format
+   ────────────────────────────────────────────────────────────────── */
+
+interface JobRecipe {
+  recipe: 'sharp_text_overlay' | 'remotion_render';
+  recipe_params: Record<string, unknown>;
+}
+
+/** Sceglie recipe + params per il social_asset_jobs in base al format Composer. */
+function buildJobRecipe(args: {
+  format: FormatKey;
+  socialFormat: SocialFormat;
+  sourceUrl: string;
+  title: string;
+}): JobRecipe {
+  const { format, socialFormat, sourceUrl, title } = args;
+
+  // Story video / Reel video → Remotion. Default composition: MatchScorecardStory
+  // (NOTA: pensata per match results, ma usata anche per pill in attesa della
+  // composition generica `PillStoryVideo`. Step futuro nel piano social.)
+  if (format === 'story_video' || format === 'reel') {
+    return {
+      recipe: 'remotion_render',
+      recipe_params: {
+        compositionId: 'MatchScorecardStory',
+        // inputProps minimi: il component usa defaultProps per i campi non passati
+        inputProps: {
+          heroPhotoUrl: sourceUrl,
+          resultLabel: title.length > 0 ? title.split(/[.!?]/)[0].trim().toUpperCase() : 'LAVIKA',
+        },
+      },
+    };
+  }
+
+  // Tutti gli altri (feed_post, story image, square, ...) → Sharp text overlay
+  return {
+    recipe: 'sharp_text_overlay',
+    recipe_params: {
+      sourceUrl,
+      format: socialFormat,
+      title,
+    },
+  };
 }
 
 /* ──────────────────────────────────────────────────────────────────
@@ -155,17 +202,19 @@ export async function buildDraftFromPill(opts: BuildDraftFromPillOpts): Promise<
     }
     variantIds.push(variant.id);
 
-    // Insert asset job
+    // Insert asset job (recipe scelto in base al format)
+    const jobRecipe = buildJobRecipe({
+      format: variantSpec.format,
+      socialFormat,
+      sourceUrl: pill.image_url,
+      title: pill.title,
+    });
     const { data: job, error: jErr } = await supabaseServer
       .from('social_asset_jobs')
       .insert({
         variant_id: variant.id,
-        recipe: 'sharp_text_overlay',
-        recipe_params: {
-          sourceUrl: pill.image_url,
-          format:    socialFormat,
-          title:     pill.title,
-        },
+        recipe: jobRecipe.recipe,
+        recipe_params: jobRecipe.recipe_params,
         status: 'queued',
       })
       .select('id')
@@ -260,16 +309,18 @@ export async function buildDraftFromEpisode(opts: {
     }
     variantIds.push(variant.id);
 
+    const jobRecipe = buildJobRecipe({
+      format: v.format,
+      socialFormat,
+      sourceUrl: ep.thumbnail_url,
+      title: epTitle,
+    });
     const { data: job, error: jErr } = await supabaseServer
       .from('social_asset_jobs')
       .insert({
         variant_id: variant.id,
-        recipe: 'sharp_text_overlay',
-        recipe_params: {
-          sourceUrl: ep.thumbnail_url,
-          format:    socialFormat,
-          title:     epTitle,
-        },
+        recipe: jobRecipe.recipe,
+        recipe_params: jobRecipe.recipe_params,
         status: 'queued',
       })
       .select('id')
