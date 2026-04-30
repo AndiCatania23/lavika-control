@@ -62,10 +62,8 @@ const AREAS: NavArea[] = [
   {
     key: 'oggi', href: '/dashboard', label: 'Oggi', icon: LayoutDashboard,
     matchPrefixes: ['/dashboard', '/analytics'],
-    subItems: [
-      { href: '/dashboard', label: 'Dashboard' },
-      { href: '/analytics', label: 'Analytics' },
-    ],
+    // Niente subItems → click diretto a /dashboard.
+    // Analytics resta accessibile dal quick-search (Cmd+K).
   },
   {
     key: 'editoriale', href: '/pills', label: 'Editoriale', icon: FileEdit,
