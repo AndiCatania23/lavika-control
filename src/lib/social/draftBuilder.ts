@@ -8,6 +8,7 @@
 
 import { supabaseServer } from '@/lib/supabaseServer';
 import type { SocialFormat } from './assetBuilder';
+import { splitEditorialTitle } from './headlineSplit';
 
 /* ──────────────────────────────────────────────────────────────────
    Types
@@ -38,6 +39,10 @@ export interface BuildDraftFromPillOpts {
   variants: VariantSpec[];
   /** Override draft title; default = `Pill: ${pill.title}` */
   title?: string;
+  /** Override per la headline visiva degli asset (Strategy 1 audit 2026-04-30).
+      Se omesso, applica `splitEditorialTitle` al pill.title. La caption usa
+      sempre il titolo originale, NON l'headline override. */
+  headlineOverride?: string;
   createdBy?: string;
   campaignId?: string;
 }
@@ -155,7 +160,14 @@ export async function buildDraftFromPill(opts: BuildDraftFromPillOpts): Promise<
   if (pErr || !pill) throw new Error(`Pill non trovata: ${opts.pillId} (${pErr?.message ?? 'no row'})`);
   if (!pill.image_url) throw new Error('Pill non ha image_url — impossibile generare asset');
 
-  // 2. Default caption (placeholder — AI lo migliorerà nello Step "Brand")
+  // 2. Headline asset = override utente OR split editoriale automatico OR titolo intero.
+  //    splitEditorialTitle ritorna identity se ≤ 60 char. La caption usa SEMPRE
+  //    il titolo originale (anche se headline è splittata).
+  const assetHeadline = (opts.headlineOverride && opts.headlineOverride.trim().length > 0)
+    ? opts.headlineOverride.trim()
+    : splitEditorialTitle(pill.title).headline;
+
+  // Default caption (placeholder — AI lo migliorerà nello Step "Brand")
   const defaultCaption = `${pill.title}\n\n#Lavika #ForzaCatania #SerieC`;
 
   // 3. Insert draft
@@ -202,12 +214,14 @@ export async function buildDraftFromPill(opts: BuildDraftFromPillOpts): Promise<
     }
     variantIds.push(variant.id);
 
-    // Insert asset job (recipe scelto in base al format)
+    // Insert asset job (recipe scelto in base al format).
+    // title = headline visiva asset (può essere override / splittata),
+    // NON il pill.title intero che resta nella caption.
     const jobRecipe = buildJobRecipe({
       format: variantSpec.format,
       socialFormat,
       sourceUrl: pill.image_url,
-      title: pill.title,
+      title: assetHeadline,
     });
     const { data: job, error: jErr } = await supabaseServer
       .from('social_asset_jobs')

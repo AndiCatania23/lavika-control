@@ -10,6 +10,9 @@ interface PostBody {
     scheduledAt?: string | null;
   }>;
   title?: string;
+  /** Override headline visiva asset. Se omesso, applica split editoriale
+      automatico al pill.title quando supera 60 char (vedi headlineSplit.ts). */
+  headlineOverride?: string;
 }
 
 /**
@@ -39,6 +42,7 @@ export async function POST(request: Request) {
       pillId: body.pillId,
       variants: body.variants,
       title: body.title,
+      headlineOverride: body.headlineOverride,
     });
     return NextResponse.json({
       ok: true,

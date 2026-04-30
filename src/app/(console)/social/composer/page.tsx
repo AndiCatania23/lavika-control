@@ -5,8 +5,9 @@ import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft, Wand2, Pill as PillIcon, Film, Sparkles,
-  Instagram, Facebook, Music2, RefreshCw,
+  Instagram, Facebook, Music2, RefreshCw, AlertTriangle,
 } from 'lucide-react';
+import { splitEditorialTitle, needsHeadlineWarning, HEADLINE_SOFT_MAX } from '@/lib/social/headlineSplit';
 
 /* ────────────────────────────────────────────────────────────────────
    Types
@@ -99,6 +100,12 @@ function ComposerInner() {
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
 
+  // Headline override per asset (Strategy #1 audit 2026-04-30).
+  // Si attiva SOLO quando il pill.title supera HEADLINE_SOFT_MAX (60 char).
+  // Default = headline proposta dallo split editoriale; utente può editare.
+  const [headlineOverride, setHeadlineOverride] = useState<string>('');
+  const [headlineDirty, setHeadlineDirty]       = useState<boolean>(false);
+
   // Selection: which (platform, format) couples are active
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const cellKey = (p: Platform, f: Format) => `${p}:${f}`;
@@ -133,6 +140,30 @@ function ComposerInner() {
   }, [sourceKind, pills.length, episodes.length]);
 
   const selectedCount = useMemo(() => Object.values(selected).filter(Boolean).length, [selected]);
+
+  // Pill attualmente selezionata (per warning headline lungo)
+  const selectedPill = useMemo(
+    () => sourceKind === 'pill' && sourceId ? pills.find(p => p.id === sourceId) : undefined,
+    [sourceKind, sourceId, pills]
+  );
+  const headlineNeedsWarning = !!(selectedPill && needsHeadlineWarning(selectedPill.title));
+  const autoHeadline = useMemo(
+    () => selectedPill ? splitEditorialTitle(selectedPill.title).headline : '',
+    [selectedPill]
+  );
+
+  // Sync default headline quando cambia la pill selezionata e l'utente non l'ha
+  // ancora editata a mano (headlineDirty=false).
+  useEffect(() => {
+    if (!headlineDirty) {
+      setHeadlineOverride(autoHeadline);
+    }
+  }, [autoHeadline, headlineDirty]);
+
+  // Quando cambia source, reset dirty flag (ricominciamo a tracciare auto vs manuale)
+  useEffect(() => {
+    setHeadlineDirty(false);
+  }, [sourceId, sourceKind]);
 
   const togglePresetAllIG    = () => {
     const ig = PLATFORMS.find(p => p.id === 'instagram')!;
@@ -176,11 +207,22 @@ function ComposerInner() {
       : '/api/social/drafts/from-episode';
     const idKey = sourceKind === 'pill' ? 'pillId' : 'episodeId';
 
+    // Per pill: include headline override se differisce dal pill.title intero.
+    // Se utente non ha toccato e pill ≤ 60 char, headlineOverride === pill.title → omettiamo
+    // (il backend applica splitEditorialTitle che ritorna identity per ≤ 60).
+    const body: Record<string, unknown> = { [idKey]: sourceId, variants };
+    if (sourceKind === 'pill' && selectedPill) {
+      const trimmed = headlineOverride.trim();
+      if (trimmed && trimmed !== selectedPill.title) {
+        body.headlineOverride = trimmed;
+      }
+    }
+
     try {
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ [idKey]: sourceId, variants }),
+        body: JSON.stringify(body),
       });
       const data = await res.json() as { ok: boolean; redirectTo?: string; error?: string };
       if (!res.ok || !data.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
@@ -264,6 +306,57 @@ function ComposerInner() {
           </div>
         )}
       </div>
+
+      {/* Headline warning + override (Strategy #1 audit 2026-04-30).
+          Si attiva solo quando la pill selezionata ha titolo > HEADLINE_SOFT_MAX.
+          La caption usa SEMPRE il titolo intero — l'override tocca solo la
+          headline visibile sull'asset. */}
+      {headlineNeedsWarning && selectedPill && (
+        <div className="card" style={{
+          padding: 14,
+          background: 'rgba(245, 158, 11, 0.08)',
+          border: '1px solid rgba(245, 158, 11, 0.3)',
+        }}>
+          <div className="flex items-start gap-2" style={{ marginBottom: 10 }}>
+            <AlertTriangle size={18} style={{ color: '#f59e0b', flexShrink: 0, marginTop: 2 }} />
+            <div className="typ-body-sm" style={{ flex: 1 }}>
+              <strong>Titolo lungo ({selectedPill.title.length} caratteri).</strong>{' '}
+              Sopra {HEADLINE_SOFT_MAX} char la headline sull&apos;asset viene splittata
+              automaticamente sui break editoriali (`:`, `—`, `,`).
+              Puoi accettare la proposta o riscrivere la headline.
+              <br />
+              <span style={{ color: 'var(--text-muted)' }}>
+                La caption userà sempre il titolo completo.
+              </span>
+            </div>
+          </div>
+          <div className="typ-caption" style={{ color: 'var(--text-muted)', marginBottom: 4 }}>
+            Headline asset
+          </div>
+          <input
+            type="text"
+            className="input w-full"
+            value={headlineOverride}
+            onChange={e => { setHeadlineOverride(e.target.value); setHeadlineDirty(true); }}
+            placeholder={autoHeadline}
+            maxLength={70}
+          />
+          <div className="flex items-center justify-between" style={{ marginTop: 6 }}>
+            <span className="typ-caption" style={{ color: 'var(--text-muted)' }}>
+              {headlineOverride.length} / 70 char
+            </span>
+            {headlineDirty && (
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => { setHeadlineOverride(autoHeadline); setHeadlineDirty(false); }}
+              >
+                <RefreshCw size={12} /> Reset proposta
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Step 2: Platforms × Formats matrix */}
       <div>
