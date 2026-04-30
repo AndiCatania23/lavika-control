@@ -31,11 +31,22 @@ import { getNotificationsData, AppNotification, getGlobalSearchData, GlobalSearc
 
 /* ==================================================================
    NAVIGATION model
-   5 aree: Oggi · Editoriale · Sync & Jobs · Utenti · Social
-   (Shop e Segnalazioni rimangono raggiungibili dal Search palette)
+   6 aree macro: Oggi · Editoriale · Social · Sync & Jobs · Utenti · Notifiche
+   - Bottom nav mobile mostra le 5 più usate (Notifiche è desktopOnly: accessibile
+     tramite bell-icon nel topbar mobile)
+   - Sidebar desktop mostra tutte e 6, con sub-voci espanse sotto area attiva
+   - Tap su mobile su area con subItems apre bottom-sheet
+   - Click desktop su area senza subItems naviga, con subItems naviga al primo
+     (l'area resta evidenziata e le sub-voci sono già visibili)
+   (Shop, Segnalazioni, Settings restano raggiungibili dal Search palette)
    ================================================================== */
 
-type NavAreaKey = 'oggi' | 'editoriale' | 'sync' | 'utenti' | 'social';
+type NavAreaKey = 'oggi' | 'editoriale' | 'sync' | 'utenti' | 'social' | 'notifiche';
+
+interface SubNavItem {
+  href: string;
+  label: string;
+}
 
 interface NavArea {
   key: NavAreaKey;
@@ -43,14 +54,57 @@ interface NavArea {
   label: string;
   icon: typeof LayoutDashboard;
   matchPrefixes: string[];
+  subItems?: SubNavItem[];
+  desktopOnly?: boolean;
 }
 
 const AREAS: NavArea[] = [
-  { key: 'oggi',       href: '/dashboard',      label: 'Oggi',       icon: LayoutDashboard, matchPrefixes: ['/dashboard', '/analytics'] },
-  { key: 'editoriale', href: '/pills',          label: 'Editoriale', icon: FileEdit,        matchPrefixes: ['/pills', '/palinsesto-home', '/media', '/home-schedule'] },
-  { key: 'social',     href: '/social',         label: 'Social',     icon: Megaphone,       matchPrefixes: ['/social'] },
-  { key: 'sync',       href: '/jobs',           label: 'Sync & Jobs',icon: Workflow,        matchPrefixes: ['/jobs', '/errors', '/notifications'] },
-  { key: 'utenti',     href: '/users',          label: 'Utenti',     icon: Users,           matchPrefixes: ['/users', '/sessions'] },
+  {
+    key: 'oggi', href: '/dashboard', label: 'Oggi', icon: LayoutDashboard,
+    matchPrefixes: ['/dashboard', '/analytics'],
+    subItems: [
+      { href: '/dashboard', label: 'Dashboard' },
+      { href: '/analytics', label: 'Analytics' },
+    ],
+  },
+  {
+    key: 'editoriale', href: '/pills', label: 'Editoriale', icon: FileEdit,
+    matchPrefixes: ['/pills', '/palinsesto-home', '/media', '/home-schedule', '/content'],
+    subItems: [
+      { href: '/pills',           label: 'Pillole' },
+      { href: '/palinsesto-home', label: 'Palinsesto Home' },
+      { href: '/media',           label: 'Media' },
+      { href: '/content/formats', label: 'Format & Source' },
+      { href: '/home-schedule',   label: 'Home Schedule' },
+    ],
+  },
+  {
+    key: 'social', href: '/social', label: 'Social', icon: Megaphone,
+    matchPrefixes: ['/social'],
+    // nessun subItems → click diretto a /social (la pagina ha nav interna)
+  },
+  {
+    key: 'sync', href: '/jobs', label: 'Sync & Jobs', icon: Workflow,
+    matchPrefixes: ['/jobs', '/errors'],
+    subItems: [
+      { href: '/jobs',            label: 'Job & Runs' },
+      { href: '/errors',          label: 'Errori' },
+      { href: '/content/formats', label: 'Configurazione Format' },  // cross-link
+    ],
+  },
+  {
+    key: 'utenti', href: '/users', label: 'Utenti', icon: Users,
+    matchPrefixes: ['/users', '/sessions'],
+    subItems: [
+      { href: '/users',    label: 'Utenti' },
+      { href: '/sessions', label: 'Sessioni' },
+    ],
+  },
+  {
+    key: 'notifiche', href: '/notifications', label: 'Notifiche', icon: Bell,
+    matchPrefixes: ['/notifications'],
+    desktopOnly: true,  // mobile: bell-icon nel topbar (già esistente)
+  },
 ];
 
 function matchActive(pathname: string, area: NavArea): boolean {
@@ -78,6 +132,7 @@ export function AppShell({ title, subtitle, leading, trailing, children }: AppSh
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [submenuArea, setSubmenuArea] = useState<NavArea | null>(null);  // mobile bottom-sheet
 
   const notifRef = useRef<HTMLDivElement>(null);
 
@@ -118,16 +173,39 @@ export function AppShell({ title, subtitle, leading, trailing, children }: AppSh
             const active = matchActive(pathname, a);
             const Icon = a.icon;
             return (
-              <Link
-                key={a.key}
-                href={a.href}
-                className="siderail-item"
-                data-active={active ? 'true' : 'false'}
-                title={a.label}
-              >
-                <Icon className="w-[20px] h-[20px] shrink-0" strokeWidth={1.75} />
-                <span className="siderail-item-label">{a.label}</span>
-              </Link>
+              <div key={a.key}>
+                <Link
+                  href={a.href}
+                  className="siderail-item"
+                  data-active={active ? 'true' : 'false'}
+                  title={a.label}
+                >
+                  <Icon className="w-[20px] h-[20px] shrink-0" strokeWidth={1.75} />
+                  <span className="siderail-item-label">{a.label}</span>
+                </Link>
+                {/* Sub-voci: visibili solo su sidebar espansa (xl) E quando area è attiva */}
+                {active && a.subItems && a.subItems.length > 0 && (
+                  <div className="hidden xl:flex flex-col gap-0.5 ml-9 mt-0.5 mb-1">
+                    {a.subItems.map(si => {
+                      const subActive = pathname === si.href || pathname.startsWith(si.href + '/');
+                      return (
+                        <Link
+                          key={si.href}
+                          href={si.href}
+                          className="px-2 py-1 rounded-md text-[13px] leading-tight transition-colors"
+                          style={{
+                            color: subActive ? 'var(--text-hi)' : 'var(--text-muted)',
+                            background: subActive ? 'var(--card-muted)' : 'transparent',
+                            fontWeight: subActive ? 600 : 400,
+                          }}
+                        >
+                          {si.label}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             );
           })}
         </nav>
@@ -200,11 +278,30 @@ export function AppShell({ title, subtitle, leading, trailing, children }: AppSh
         </main>
       </div>
 
-      {/* ────── Bottom tab bar (mobile only) ────── */}
+      {/* ────── Bottom tab bar (mobile only) — Notifiche esclusa (bell topbar) ────── */}
       <nav className="tabbar">
-        {AREAS.map(a => {
+        {AREAS.filter(a => !a.desktopOnly).map(a => {
           const active = matchActive(pathname, a);
           const Icon = a.icon;
+          const hasSub = !!a.subItems && a.subItems.length > 0;
+
+          // Tap su area con subItems → apre bottom-sheet con sub-voci
+          if (hasSub) {
+            return (
+              <button
+                key={a.key}
+                type="button"
+                onClick={() => setSubmenuArea(a)}
+                className="tabbar-tab"
+                data-active={active ? 'true' : 'false'}
+              >
+                <Icon className="w-[22px] h-[22px]" strokeWidth={1.75} />
+                <span className="truncate w-full px-1">{a.label}</span>
+              </button>
+            );
+          }
+
+          // Senza subItems → link diretto (Social)
           return (
             <Link
               key={a.key}
@@ -221,6 +318,11 @@ export function AppShell({ title, subtitle, leading, trailing, children }: AppSh
 
       {/* ────── Global search sheet ────── */}
       {searchOpen && <SearchSheet onClose={() => setSearchOpen(false)} />}
+
+      {/* ────── Mobile area sub-menu sheet ────── */}
+      {submenuArea && (
+        <SubmenuSheet area={submenuArea} pathname={pathname} onClose={() => setSubmenuArea(null)} />
+      )}
     </div>
   );
 }
@@ -327,20 +429,63 @@ function SearchSheet({ onClose }: { onClose: () => void }) {
 }
 
 const QUICK_ITEMS: Array<{ id: string; href: string; title: string; icon: typeof LayoutDashboard }> = [
-  { id: 'p1',  href: '/dashboard',       title: 'Oggi — Dashboard',    icon: LayoutDashboard },
-  { id: 'p2',  href: '/pills',           title: 'Pillole',             icon: Pill },
-  { id: 'p3',  href: '/palinsesto-home', title: 'Palinsesto Home',     icon: CalendarClock },
-  { id: 'p4',  href: '/media',           title: 'Media — Copertine',   icon: ImageIcon },
-  { id: 'p5',  href: '/social',          title: 'Social — Composer',   icon: Megaphone },
-  { id: 'p6',  href: '/jobs',            title: 'Job & Runs',          icon: Workflow },
-  { id: 'p7',  href: '/errors',          title: 'Errori',              icon: AlertTriangle },
-  { id: 'p8',  href: '/notifications',   title: 'Notifiche',           icon: Bell },
-  { id: 'p9',  href: '/users',           title: 'Utenti',              icon: Users },
-  { id: 'p10', href: '/reports',         title: 'Segnalazioni',        icon: Flag },
-  { id: 'p11', href: '/shop',            title: 'Shop',                icon: ShoppingBag },
-  { id: 'p12', href: '/analytics',       title: 'Analytics complete',  icon: LayoutDashboard },
-  { id: 'p13', href: '/settings',        title: 'Impostazioni',        icon: Settings },
+  { id: 'p1',  href: '/dashboard',       title: 'Oggi — Dashboard',     icon: LayoutDashboard },
+  { id: 'p2',  href: '/pills',           title: 'Pillole',              icon: Pill },
+  { id: 'p3',  href: '/palinsesto-home', title: 'Palinsesto Home',      icon: CalendarClock },
+  { id: 'p4',  href: '/media',           title: 'Media — Copertine',    icon: ImageIcon },
+  { id: 'p5',  href: '/content/formats', title: 'Format & Source',      icon: Clapperboard },
+  { id: 'p6',  href: '/social',          title: 'Social — Composer',    icon: Megaphone },
+  { id: 'p7',  href: '/jobs',            title: 'Job & Runs',           icon: Workflow },
+  { id: 'p8',  href: '/errors',          title: 'Errori',               icon: AlertTriangle },
+  { id: 'p9',  href: '/notifications',   title: 'Notifiche',            icon: Bell },
+  { id: 'p10', href: '/users',           title: 'Utenti',               icon: Users },
+  { id: 'p11', href: '/reports',         title: 'Segnalazioni',         icon: Flag },
+  { id: 'p12', href: '/shop',            title: 'Shop',                 icon: ShoppingBag },
+  { id: 'p13', href: '/analytics',       title: 'Analytics complete',   icon: LayoutDashboard },
+  { id: 'p14', href: '/settings',        title: 'Impostazioni',         icon: Settings },
 ];
+
+function SubmenuSheet({ area, pathname, onClose }: { area: NavArea; pathname: string; onClose: () => void }) {
+  const Icon = area.icon;
+  return (
+    <>
+      <div className="sheet-backdrop" onClick={onClose} />
+      <div className="sheet" role="dialog" aria-label={`Sotto-menu ${area.label}`}>
+        <div className="sheet-grip" />
+        <div className="flex items-center gap-2 mb-3">
+          <Icon className="w-[20px] h-[20px] shrink-0" strokeWidth={1.75} />
+          <h2 className="typ-h2 grow">{area.label}</h2>
+          <button onClick={onClose} className="btn btn-quiet btn-icon btn-sm" aria-label="Chiudi">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="vstack" style={{ gap: 4 }}>
+          {(area.subItems ?? []).map(si => {
+            const subActive = pathname === si.href || pathname.startsWith(si.href + '/');
+            return (
+              <Link
+                key={si.href}
+                href={si.href}
+                onClick={onClose}
+                className="row block hover:bg-[color:var(--card-muted)]"
+                data-active={subActive ? 'true' : 'false'}
+                style={{
+                  padding: '12px 14px',
+                  borderRadius: 10,
+                  background: subActive ? 'var(--card-muted)' : 'transparent',
+                  fontWeight: subActive ? 600 : 500,
+                  color: subActive ? 'var(--text-hi)' : 'var(--text)',
+                }}
+              >
+                {si.label}
+              </Link>
+            );
+          })}
+        </div>
+      </div>
+    </>
+  );
+}
 
 function QuickJumpPages({ onPick }: { onPick: () => void }) {
   return (

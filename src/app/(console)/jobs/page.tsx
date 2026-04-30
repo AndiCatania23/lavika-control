@@ -7,7 +7,8 @@ import { getJobs, Job } from '@/lib/data';
 import { saveRunSourceMapping } from '@/lib/jobRunSourceRegistry';
 import { StatusPill } from '@/components/StatusPill';
 import { useToast } from '@/lib/toast';
-import { Play, Clock, Calendar, ChevronRight, Workflow, Video, RefreshCw } from 'lucide-react';
+import { Play, Clock, Calendar, ChevronRight, Workflow, Video, RefreshCw, Settings } from 'lucide-react';
+import Link from 'next/link';
 
 // Map from quickSource.id → Supabase content_formats.id
 const SOURCE_FORMAT_MAP: Record<string, string> = {
@@ -153,6 +154,10 @@ export default function JobsPage() {
           <Clock className="w-4 h-4" />
           <span className="hidden md:inline">Esecuzioni</span>
         </button>
+        <Link href="/content/formats" className="btn btn-ghost btn-sm">
+          <Settings className="w-4 h-4" />
+          <span className="hidden md:inline">Configurazione Format</span>
+        </Link>
       </div>
 
       {/* Quick sync sources — compact row with thumb + title + action */}
