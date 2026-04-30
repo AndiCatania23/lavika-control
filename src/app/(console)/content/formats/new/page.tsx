@@ -31,7 +31,7 @@ import { ArrowLeft, ArrowRight, Check, Loader2, AlertCircle } from 'lucide-react
 
 const DRAFT_KEY = 'lavika-wizard-format-draft-v1';
 
-type Platform = 'youtube' | 'manual';
+type Platform = 'youtube' | 'facebook' | 'manual';
 type Badge = 'bronze' | 'silver' | 'gold';
 type SchedulePreset = 'manual' | 'daily-22' | 'weekly-fri-18' | 'custom';
 
@@ -150,7 +150,7 @@ export default function FormatWizardPage() {
   // Step 2 validation
   const step2Valid = useMemo(() => {
     if (state.platform === 'manual') return true;
-    if (state.platform === 'youtube') {
+    if (state.platform === 'youtube' || state.platform === 'facebook') {
       return state.channel.trim().length > 0
         && state.validate_status === 'ok';
     }
@@ -177,7 +177,7 @@ export default function FormatWizardPage() {
   }, [state.sync_trigger_offset_minutes, state.schedule_preset, state.schedule_cron_custom]);
 
   const onValidateChannel = useCallback(async () => {
-    if (state.platform !== 'youtube') return;
+    if (state.platform !== 'youtube' && state.platform !== 'facebook') return;
     update('validate_status', 'checking');
     update('validate_message', '');
     try {
@@ -222,25 +222,35 @@ export default function FormatWizardPage() {
       const fmtData = await fmtRes.json();
       if (!fmtRes.ok) throw new Error(fmtData.error ?? 'Crea format fallito');
 
-      // 2. Crea video_source collegato (se non manual senza channel)
-      if (state.platform === 'youtube' || state.platform === 'manual') {
+      // 2. Crea video_source collegato (sempre, per qualsiasi platform supportata)
+      {
         const sourceId = `${state.id}-source`; // convenzione: <slug>-source per il primo
+        // Filtri specifici per platform: FB ha textContains anziché titleContains
+        const titleFilters = toCsv(state.title_contains);
+        const excludeFilters = toCsv(state.exclude_words);
+        const filtersByPlatform: Record<string, unknown> = {
+          minDuration: Number(state.min_duration),
+          maxDuration: Number(state.max_duration),
+          excludeWords: excludeFilters,
+        };
+        if (state.platform === 'facebook') {
+          filtersByPlatform.textContains = titleFilters;
+        } else {
+          filtersByPlatform.titleContains = titleFilters;
+        }
+
         const sourcePayload = {
           id: sourceId,
           format_id: state.id,
           name: state.title.trim().toUpperCase(),
           platform: state.platform,
           channel: state.platform === 'manual' ? null : state.channel.trim(),
-          filters: {
-            minDuration: Number(state.min_duration),
-            maxDuration: Number(state.max_duration),
-            titleContains: toCsv(state.title_contains),
-            excludeWords: toCsv(state.exclude_words),
-          },
+          filters: filtersByPlatform,
           processing: {
             order: 'uploadDate-asc',
             resolveMissingUploadDate: true,
             skipThumbnail: true,  // riusa cover format come fallback (default piano)
+            ...(state.platform === 'facebook' ? { initialBackfillUnlimited: true } : {}),
           },
           metadata: { folder: state.id },  // R2 folder = slug (convenzione lowercase)
           season: { strategy: 'year-from-upload-date' },
@@ -414,36 +424,42 @@ lavika-videos/${state.id || '<slug>'}/<season>/hls/...`}
           <>
             <div>
               <label className="typ-micro block mb-1.5">Piattaforma</label>
-              <div className="hstack" style={{ gap: 'var(--s2)' }}>
-                {(['youtube', 'manual'] as Platform[]).map(p => (
+              <div className="hstack" style={{ gap: 'var(--s2)', flexWrap: 'wrap' }}>
+                {(['youtube', 'facebook', 'manual'] as Platform[]).map(p => (
                   <button
                     key={p}
                     onClick={() => { update('platform', p); update('validate_status', 'idle'); update('validate_message', ''); }}
                     className={`btn ${state.platform === p ? 'btn-primary' : 'btn-ghost'}`}
-                    style={{ flex: 1 }}
+                    style={{ flex: 1, minWidth: 100 }}
                   >
-                    {p === 'youtube' ? '📺 YouTube' : '⬆️ Manual'}
+                    {p === 'youtube' ? '📺 YouTube' : p === 'facebook' ? '📘 Facebook' : '⬆️ Manual'}
                   </button>
                 ))}
               </div>
-              <p className="typ-micro" style={{ color: 'var(--text-muted)', marginTop: 4 }}>
-                Facebook supportato solo via CLI legacy per ora (decisione architetturale).
-              </p>
             </div>
 
-            {state.platform === 'youtube' && (
+            {(state.platform === 'youtube' || state.platform === 'facebook') && (
               <>
                 <div>
-                  <label className="typ-micro block mb-1.5">URL canale o playlist *</label>
+                  <label className="typ-micro block mb-1.5">
+                    {state.platform === 'youtube' ? 'URL canale o playlist YouTube *' : 'URL pagina Facebook *'}
+                  </label>
                   <input
                     type="url"
                     value={state.channel}
                     onChange={e => { update('channel', e.target.value); update('validate_status', 'idle'); }}
                     className="input"
-                    placeholder="https://www.youtube.com/@canale/streams oppure /playlist?list=..."
+                    placeholder={
+                      state.platform === 'youtube'
+                        ? 'https://www.youtube.com/@canale/streams'
+                        : 'https://www.facebook.com/<page>/live_videos'
+                    }
                   />
                   <p className="typ-micro" style={{ color: 'var(--text-muted)', marginTop: 4 }}>
-                    Pattern accettati: <code>/@canale</code>, <code>/playlist?list=</code>, <code>/channel/</code>, <code>/c/</code>, <code>/user/</code>
+                    {state.platform === 'youtube'
+                      ? <>Pattern: <code>/@canale</code>, <code>/playlist?list=</code>, <code>/channel/</code>, <code>/c/</code>, <code>/user/</code></>
+                      : <>Pattern: <code>https://www.facebook.com/&lt;page&gt;/live_videos</code>. La discovery via Puppeteer scraperà gli URL video.</>
+                    }
                   </p>
                 </div>
                 <div className="hstack" style={{ gap: 'var(--s2)', alignItems: 'center' }}>
@@ -466,6 +482,13 @@ lavika-videos/${state.id || '<slug>'}/<season>/hls/...`}
                     </span>
                   )}
                 </div>
+                {state.platform === 'facebook' && (
+                  <div className="card card-body" style={{ background: 'var(--warning-soft)', fontSize: 13 }}>
+                    ⚠ Facebook richiede cookie validi sul Mac (controllati settimanalmente
+                    via GH Action <code>check-cookies.yml</code>). Se la discovery fallisce,
+                    rigenera i cookie via il check workflow.
+                  </div>
+                )}
               </>
             )}
 
