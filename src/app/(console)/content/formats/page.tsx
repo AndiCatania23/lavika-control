@@ -44,8 +44,8 @@ interface FormatRow {
 
 const PLACEHOLDER = '/immagini/placeholder.webp';
 
-function formatRelative(iso: string | null): string {
-  if (!iso) return '—';
+function formatRelative(iso: string | null): string | null {
+  if (!iso) return null;
   const d = new Date(iso);
   const diffMs = Date.now() - d.getTime();
   const min = Math.floor(diffMs / 60000);
@@ -221,7 +221,9 @@ export default function FormatsPage() {
                   {f.category && <span>· {f.category}</span>}
                   <span>· {f.episodes_active}/{f.episodes_total} ep</span>
                   <span>· {f.sources_enabled}/{f.sources_total} src</span>
-                  <span>· last sync {formatRelative(f.last_sync_at)}</span>
+                  {formatRelative(f.last_sync_at) && (
+                    <span>· sync {formatRelative(f.last_sync_at)}</span>
+                  )}
                 </div>
               </div>
               <ChevronRight size={16} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
