@@ -22,6 +22,7 @@ interface PatchSeriesPayload {
   is_active?: unknown;
   scope?: unknown;
   effective_from_local?: unknown;
+  duration_minutes?: unknown;
 }
 
 interface SeriesRow {
@@ -37,6 +38,7 @@ interface SeriesRow {
   max_occurrences: number | null;
   status: 'draft' | 'published';
   is_active: boolean;
+  duration_minutes: number;
 }
 
 function normalizeLocalInput(value: unknown): string | null {
@@ -58,7 +60,7 @@ async function fetchSeriesById(id: string): Promise<SeriesRow | null> {
   if (!supabaseServer) return null;
   const { data, error } = await supabaseServer
     .from('home_schedule_series')
-    .select('id,format_id,label,access,cover_override_url,timezone,dtstart_local,rrule,until_local,max_occurrences,status,is_active')
+    .select('id,format_id,label,access,cover_override_url,timezone,dtstart_local,rrule,until_local,max_occurrences,status,is_active,duration_minutes')
     .eq('id', id)
     .maybeSingle();
 
@@ -163,6 +165,15 @@ export async function PATCH(
     ? (typeof body.is_active === 'boolean' ? body.is_active : current.is_active)
     : current.is_active;
 
+  let nextDurationMinutes = current.duration_minutes;
+  if (Object.prototype.hasOwnProperty.call(body, 'duration_minutes')) {
+    if (typeof body.duration_minutes !== 'number' || !Number.isFinite(body.duration_minutes)
+        || body.duration_minutes <= 0 || body.duration_minutes > 1440) {
+      return NextResponse.json({ error: 'duration_minutes deve essere intero 1..1440.' }, { status: 400 });
+    }
+    nextDurationMinutes = Math.floor(body.duration_minutes);
+  }
+
   if (scope === 'all') {
     const updateData = {
       format_id: nextFormatId,
@@ -176,6 +187,7 @@ export async function PATCH(
       max_occurrences: nextMaxOccurrences,
       status: nextStatus,
       is_active: nextIsActive,
+      duration_minutes: nextDurationMinutes,
       updated_at: new Date().toISOString(),
     };
 
@@ -183,7 +195,7 @@ export async function PATCH(
       .from('home_schedule_series')
       .update(updateData)
       .eq('id', id)
-      .select('id,format_id,label,access,cover_override_url,timezone,dtstart_local,rrule,until_local,max_occurrences,status,is_active,created_at,updated_at')
+      .select('id,format_id,label,access,cover_override_url,timezone,dtstart_local,rrule,until_local,max_occurrences,status,is_active,duration_minutes,created_at,updated_at')
       .single();
 
     if (error) {
@@ -247,12 +259,13 @@ export async function PATCH(
     max_occurrences: nextMaxOccurrences,
     status: nextStatus,
     is_active: nextIsActive,
+    duration_minutes: nextDurationMinutes,
   };
 
   const { data: created, error: createError } = await supabaseServer
     .from('home_schedule_series')
     .insert(createPayload)
-    .select('id,format_id,label,access,cover_override_url,timezone,dtstart_local,rrule,until_local,max_occurrences,status,is_active,created_at,updated_at')
+    .select('id,format_id,label,access,cover_override_url,timezone,dtstart_local,rrule,until_local,max_occurrences,status,is_active,duration_minutes,created_at,updated_at')
     .single();
 
   if (createError) {

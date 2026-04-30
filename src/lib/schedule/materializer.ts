@@ -16,6 +16,7 @@ interface SeriesRow {
   max_occurrences: number | null;
   status: ScheduleStatus;
   is_active: boolean;
+  duration_minutes: number;
 }
 
 interface ExceptionRow {
@@ -39,6 +40,7 @@ interface MaterializedRow {
   source_type: 'series';
   series_id: string;
   occurrence_key: string;
+  duration_minutes: number;
 }
 
 export interface RetireSeriesOptions {
@@ -88,7 +90,7 @@ async function fetchSeries(seriesId?: string): Promise<SeriesRow[]> {
 
   let query = supabaseServer
     .from('home_schedule_series')
-    .select('id,format_id,label,access,cover_override_url,timezone,dtstart_local,rrule,until_local,max_occurrences,status,is_active')
+    .select('id,format_id,label,access,cover_override_url,timezone,dtstart_local,rrule,until_local,max_occurrences,status,is_active,duration_minutes')
     .order('created_at', { ascending: true });
 
   if (seriesId) {
@@ -182,6 +184,7 @@ function buildRowsForSeries(
       source_type: 'series',
       series_id: series.id,
       occurrence_key: makeOccurrenceKey(series.id, startAtUtcIso),
+      duration_minutes: series.duration_minutes,
     });
   }
 
@@ -251,6 +254,7 @@ async function upsertRows(rows: MaterializedRow[]): Promise<number> {
           source_type: row.source_type,
           series_id: row.series_id,
           occurrence_key: row.occurrence_key,
+          duration_minutes: row.duration_minutes,
           updated_at: new Date().toISOString(),
         })
         .eq('id', existingId);

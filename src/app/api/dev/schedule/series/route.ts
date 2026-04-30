@@ -18,6 +18,15 @@ interface CreateSeriesPayload {
   max_occurrences?: unknown;
   status?: unknown;
   is_active?: unknown;
+  duration_minutes?: unknown;
+}
+
+const DEFAULT_DURATION_MINUTES = 60;
+function normalizeDurationMinutes(value: unknown): number {
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0 && value <= 1440) {
+    return Math.floor(value);
+  }
+  return DEFAULT_DURATION_MINUTES;
 }
 
 function normalizeLocalInput(value: unknown): string | null {
@@ -44,7 +53,7 @@ export async function GET(request: Request) {
 
   let query = supabaseServer
     .from('home_schedule_series')
-    .select('id,format_id,label,access,cover_override_url,timezone,dtstart_local,rrule,until_local,max_occurrences,status,is_active,created_at,updated_at', {
+    .select('id,format_id,label,access,cover_override_url,timezone,dtstart_local,rrule,until_local,max_occurrences,status,is_active,duration_minutes,created_at,updated_at', {
       count: 'exact',
     })
     .order('dtstart_local', { ascending: true })
@@ -164,12 +173,13 @@ export async function POST(request: Request) {
     max_occurrences: maxOccurrences,
     status: body.status,
     is_active: isActive,
+    duration_minutes: normalizeDurationMinutes(body?.duration_minutes),
   };
 
   const { data, error } = await supabaseServer
     .from('home_schedule_series')
     .insert(payload)
-    .select('id,format_id,label,access,cover_override_url,timezone,dtstart_local,rrule,until_local,max_occurrences,status,is_active,created_at,updated_at')
+    .select('id,format_id,label,access,cover_override_url,timezone,dtstart_local,rrule,until_local,max_occurrences,status,is_active,duration_minutes,created_at,updated_at')
     .single();
 
   if (error) {

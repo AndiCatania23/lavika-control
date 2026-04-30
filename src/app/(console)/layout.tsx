@@ -15,6 +15,8 @@ function resolveTitle(pathname: string): { title: string; subtitle?: string } {
   if (pathname.startsWith('/pills'))           return { title: 'Pillole',   subtitle: 'Editoriale' };
   if (pathname.startsWith('/palinsesto-home')) return { title: 'Palinsesto',subtitle: 'Homepage app' };
   if (pathname.startsWith('/media'))           return { title: 'Media',     subtitle: 'Copertine e players' };
+  if (pathname.startsWith('/content/formats')) return { title: 'Format',    subtitle: 'Configurazione contenuti' };
+  if (pathname.startsWith('/content'))         return { title: 'Contenuti', subtitle: 'Configurazione' };
   if (pathname.startsWith('/jobs'))            return { title: 'Job & Runs',subtitle: 'Sync daemon' };
   if (pathname.startsWith('/errors'))          return { title: 'Errori',    subtitle: 'Log e triage' };
   if (pathname.startsWith('/notifications'))   return { title: 'Notifiche', subtitle: 'Storico' };

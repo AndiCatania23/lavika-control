@@ -20,6 +20,7 @@ export interface ScheduleCard {
   source_type: ScheduleSourceType;
   series_id: string | null;
   occurrence_key: string | null;
+  duration_minutes: number;
   created_at: string;
   updated_at: string;
 }
@@ -38,6 +39,7 @@ export interface ScheduleSeries {
   max_occurrences: number | null;
   status: ScheduleStatus;
   is_active: boolean;
+  duration_minutes: number;
   created_at: string;
   updated_at: string;
 }
