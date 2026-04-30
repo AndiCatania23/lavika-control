@@ -52,6 +52,31 @@ Rispondi SOLO con un oggetto JSON valido (nessun markdown, nessun testo fuori), 
 {"title": string, "content": string, "source": string}`;
 }
 
+/**
+ * Smart truncate del content: se il testo eccede maxChars, taglia all'ultima
+ * frase completa (`.` / `!` / `?`) prima del limite. Evita troncamenti brutali
+ * a metà parola tipo "...a un forte spirit" (era il bug pre-2026-04-30 sera).
+ *
+ * Fallback: se non trova punteggiatura, taglia all'ultimo spazio + `…`.
+ */
+function smartTruncateContent(content: string, maxChars: number): string {
+  if (content.length <= maxChars) return content;
+  const slice = content.slice(0, maxChars);
+  const lastSentenceEnd = Math.max(
+    slice.lastIndexOf('.'),
+    slice.lastIndexOf('!'),
+    slice.lastIndexOf('?'),
+  );
+  // Accetta il taglio solo se non sacrifica troppo (almeno 70% del maxChars)
+  if (lastSentenceEnd > maxChars * 0.7) {
+    return content.slice(0, lastSentenceEnd + 1).trim();
+  }
+  // Fallback: ultimo spazio + ellissi (graceful)
+  const lastSpace = slice.lastIndexOf(' ');
+  if (lastSpace > 0) return slice.slice(0, lastSpace).trim() + '…';
+  return slice + '…';
+}
+
 function extractJsonBlock(text: string): { title: string; content: string; source: string | null } | null {
   if (!text) return null;
   // Strip markdown fences if present
@@ -144,7 +169,7 @@ export async function POST(request: Request) {
     .from('pills')
     .insert({
       title: parsed.title,
-      content: parsed.content.slice(0, 800),
+      content: smartTruncateContent(parsed.content, 1500),
       type: body.type,
       pill_category: body.category,
       status: 'draft',
