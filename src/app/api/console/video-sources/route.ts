@@ -137,6 +137,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: `Source con id "${id}" esiste già` }, { status: 409 });
   }
 
+  // metadata.folder è REQUIRED per il sync (compone path R2 "folder/season/hls/...").
+  // Se mancante, fallback automatico = format_id (es. press-conference). Evita
+  // bug 2026-05-08 dove category=null + folder=null produceva path "catania/null/..."
+  // con stringification letterale di null in JS template string.
+  const metadataObj = asObject(body.metadata) ?? {};
+  const folderInMetadata = asText(metadataObj.folder);
+  if (!folderInMetadata) {
+    metadataObj.folder = formatId; // default robusto: usa format_id come folder R2
+  }
+
+  // category è legacy (campo storico pre-format_id). Default = format_id se non
+  // specificata, così sync legacy continua a funzionare anche per source nuove.
+  const categoryValue = asText(body.category) ?? formatId;
+
   const insertPayload = {
     id,
     format_id: formatId,
@@ -148,10 +162,10 @@ export async function POST(request: Request) {
     naming: asObject(body.naming) ?? {},
     notifications: asObject(body.notifications) ?? {},
     ui_format: asObject(body.ui_format) ?? {},
-    metadata: asObject(body.metadata) ?? {},
+    metadata: metadataObj,
     season: asObject(body.season),
     match_resolver: asObject(body.match_resolver),
-    category: asText(body.category),
+    category: categoryValue,
     subcategory: asText(body.subcategory),
     schedule_cron: asText(body.schedule_cron),
     scan_window: typeof body.scan_window === 'number' && body.scan_window > 0 ? Math.floor(body.scan_window) : 14,
