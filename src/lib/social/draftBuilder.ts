@@ -84,6 +84,40 @@ function resolveSocialFormat(platform: Platform, format: FormatKey): SocialForma
 }
 
 /* ──────────────────────────────────────────────────────────────────
+   Caption job enqueue (caption-engine daemon picks it up on Mac)
+   ────────────────────────────────────────────────────────────────── */
+
+async function enqueueCaptionJob(args: {
+  variantId: string;
+  sourceType: 'pill' | 'episode' | 'match_event' | 'manual';
+  sourceId: string;
+  platform: Platform;
+  format: FormatKey;
+  externalContext?: string | null;
+}): Promise<string | null> {
+  if (!supabaseServer) return null;
+  const { data, error } = await supabaseServer
+    .from('caption_jobs')
+    .insert({
+      variant_id: args.variantId,
+      source_type: args.sourceType,
+      source_id: args.sourceId,
+      platform: args.platform,
+      format: args.format,
+      external_context: args.externalContext ?? null,
+      status: 'queued',
+    })
+    .select('id')
+    .single<{ id: string }>();
+  if (error) {
+    // Non-fatal: caption stays = defaultCaption (template). Log + continue.
+    console.error('[draftBuilder] enqueueCaptionJob failed:', error.message);
+    return null;
+  }
+  return data?.id ?? null;
+}
+
+/* ──────────────────────────────────────────────────────────────────
    Recipe selector — sceglie la pipeline asset in base al format
    ────────────────────────────────────────────────────────────────── */
 
@@ -239,6 +273,18 @@ export async function buildDraftFromPill(opts: BuildDraftFromPillOpts): Promise<
       throw new Error(`Insert job failed: ${jErr?.message}`);
     }
     jobIds.push(job.id);
+
+    // Enqueue caption-engine job (Ollama on-premise, daemon Mac).
+    // La defaultCaption resta come fallback temporaneo: il daemon sovrascrive
+    // social_variants.caption con il hook generato + hashtag tier-based.
+    // Vedi docs/social-engine/00-overview.md.
+    await enqueueCaptionJob({
+      variantId: variant.id,
+      sourceType: 'pill',
+      sourceId: opts.pillId,
+      platform: variantSpec.platform,
+      format: variantSpec.format,
+    });
   }
 
   return {
@@ -345,6 +391,15 @@ export async function buildDraftFromEpisode(opts: {
       throw new Error(`Insert job failed: ${jErr?.message}`);
     }
     jobIds.push(job.id);
+
+    // Enqueue caption-engine job (parallelo all'asset job).
+    await enqueueCaptionJob({
+      variantId: variant.id,
+      sourceType: 'episode',
+      sourceId: opts.episodeId,
+      platform: v.platform,
+      format: v.format,
+    });
   }
 
   return {
