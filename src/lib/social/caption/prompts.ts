@@ -53,6 +53,56 @@ export const HOOK_OUTPUT_SCHEMA = `{
   ]
 }`;
 
+/**
+ * Platform-tuning constraints per il prompt del hook generator.
+ * Algoritmi Meta downrankano cross-posting identico → ogni platform deve
+ * avere caption diverse per stile/lunghezza.
+ *
+ * Numeri verificati:
+ * - IG Feed sweet spot 138-150 char (Socialinsider)
+ * - FB Feed: <80 char = +66% engagement (Mari Smith dataset)
+ * - IG Story: text overlay 3-7 parole
+ * - Reel: hook in 1 riga 50-80 char
+ */
+export interface PlatformHint {
+  targetChars: { min: number; max: number };
+  style: string;
+  hashtagsInCaption: boolean;
+}
+
+export function platformHint(platform: 'instagram' | 'facebook', format: string): PlatformHint {
+  // Story / Story video: text overlay minimal
+  if (format.startsWith('ig_story') || format.startsWith('fb_story') || format === 'story' || format === 'story_video') {
+    return {
+      targetChars: { min: 10, max: 50 },
+      style: 'Story format: testo minimal (3-7 parole, quasi un titolo). Niente CTA esplicita. Niente hashtag in caption (vanno in sticker).',
+      hashtagsInCaption: false,
+    };
+  }
+  // Reel: hook in 1 riga
+  if (format === 'reel') {
+    return {
+      targetChars: { min: 30, max: 80 },
+      style: 'Reel format: hook in 1 riga, punchy. Massimo 80 caratteri. Pensato per video corto.',
+      hashtagsInCaption: true,
+    };
+  }
+  // Facebook Feed
+  if (platform === 'facebook') {
+    return {
+      targetChars: { min: 40, max: 80 },
+      style: 'Facebook Feed: BREVISSIMO. Sotto gli 80 caratteri batte i lunghi del +66% engagement (Mari Smith dataset). NON ripetere lo stile IG. Punchy, frase secca, niente preamboli. Audience FB e\' piu\' over-30, meno tollerante a hook IG-style.',
+      hashtagsInCaption: true,
+    };
+  }
+  // Instagram Feed / carousel (default)
+  return {
+    targetChars: { min: 100, max: 150 },
+    style: 'Instagram Feed: hook editorial-magazine. Sweet spot 138-150 caratteri. Primi 125 visibili prima di "altro" → tutto il gancio sta li\'. Hook + 1 frase di apertura del gap, mai svelare la pill.',
+    hashtagsInCaption: true,
+  };
+}
+
 export const NLI_SYSTEM = `Sei un fact-checker rigoroso ma equo per caption social di un'app calcistica.
 
 FLAGGA come contradiction=true SOLO SE la CAPTION:

@@ -6,17 +6,24 @@
  */
 
 import { ollamaGenerate, safeJsonParse, GEN_MODEL } from './ollamaClient';
-import { HOOK_GENERATOR_SYSTEM, HOOK_OUTPUT_SCHEMA } from './prompts';
-import type { CaptionSource, ExtractedFacts, GeneratorOutput, HookVariant } from './types';
+import { HOOK_GENERATOR_SYSTEM, HOOK_OUTPUT_SCHEMA, platformHint } from './prompts';
+import type { CaptionSource, ExtractedFacts, GeneratorOutput, HookVariant, Platform, SocialFormat } from './types';
 
 export async function generateHooks(
   source: CaptionSource,
   facts: ExtractedFacts,
+  opts?: { platform?: Platform; format?: SocialFormat | string },
 ): Promise<GeneratorOutput> {
   const allowedEntities = facts.entities.map((e) => e.name).filter(Boolean);
   const negativeEntities = facts.entities
     .filter((e) => e.polarity === 'negative')
     .map((e) => e.name);
+
+  // Platform tuning: char budget + style hint specifici per platform×format.
+  // Senza questo, gemma3 generava caption "di lunghezza casuale" per ogni variant.
+  const platform = opts?.platform || 'instagram';
+  const format = String(opts?.format || 'ig_feed_4_5');
+  const hint = platformHint(platform, format);
 
   const prompt = `PILL TITLE: ${source.title}
 PILL CATEGORY: ${source.category ?? 'unknown'}
@@ -31,7 +38,13 @@ FORBIDDEN_CLAIMS: ${JSON.stringify(facts.forbidden_claims)}
 KEY_CLAIM: ${facts.key_claim}
 SENTIMENT: ${facts.sentiment}
 
-Genera 3 hook DIVERSI per framework. JSON output:
+=== PLATFORM TUNING ===
+TARGET_PLATFORM: ${platform}
+TARGET_FORMAT: ${format}
+CHAR_BUDGET: ${hint.targetChars.min}-${hint.targetChars.max} caratteri (hard target, NON sforare)
+STYLE_NOTE: ${hint.style}
+
+Genera 3 hook DIVERSI per framework, TUTTI rispettando CHAR_BUDGET e STYLE_NOTE. JSON output:
 ${HOOK_OUTPUT_SCHEMA}`;
 
   const raw = await ollamaGenerate(prompt, {

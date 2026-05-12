@@ -58,7 +58,10 @@ export async function runCaptionEngine(req: CaptionEngineRequest): Promise<Capti
     out.attempts = attempt;
 
     const t2 = Date.now();
-    const hooks = await generateHooks(req.source, facts);
+    const hooks = await generateHooks(req.source, facts, {
+      platform: req.platform,
+      format: req.format,
+    });
     out.latency_ms.generate += Date.now() - t2;
     out.variants_generated = hooks.variants.length;
 
