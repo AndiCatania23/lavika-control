@@ -26,6 +26,10 @@ interface Variant {
   status: 'draft' | 'asset_pending' | 'asset_ready' | 'scheduled' | 'publishing' | 'published' | 'failed' | 'skipped';
   error: string | null;
   latestJob: { status: string; error: string | null; attempts: number } | null;
+  /** Stato del caption-engine job (Ollama on-premise). Pending = la caption
+   *  attuale è il placeholder defaultCaption, completed = caption è il hook
+   *  generato + hashtag tier-based. */
+  captionJob: { status: string; last_error: string | null; attempts: number; completed_at: string | null } | null;
 }
 
 interface Source {
@@ -109,10 +113,17 @@ export default function DraftPreviewPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Polling: while any variant is in asset_pending or publishing, refresh every 3s
+  // Polling: refresh ogni 3s finché c'è work in corso.
+  // Include: asset generation, publishing, caption-engine generation (~47s cold).
   useEffect(() => {
     if (!data) return;
-    const needsPolling = data.variants.some(v => v.status === 'asset_pending' || v.status === 'publishing');
+    const needsPolling = data.variants.some(v => {
+      if (v.status === 'asset_pending' || v.status === 'publishing') return true;
+      // Caption-engine on Mac: pending finche daemon non scrive la caption hook
+      const cs = v.captionJob?.status;
+      if (cs === 'queued' || cs === 'claimed') return true;
+      return false;
+    });
     if (!needsPolling) return;
     const t = setInterval(load, 3000);
     return () => clearInterval(t);
@@ -339,7 +350,20 @@ function VariantCard({ variant, onChanged }: { variant: Variant; onChanged: () =
 
         {/* Caption editor */}
         <div style={{ marginTop: 8 }}>
-          <label className="typ-micro block mb-1" style={{ color: 'var(--text-muted)' }}>Caption</label>
+          <div className="flex items-center gap-2 mb-1">
+            <label className="typ-micro" style={{ color: 'var(--text-muted)' }}>Caption</label>
+            {(variant.captionJob?.status === 'queued' || variant.captionJob?.status === 'claimed') && (
+              <span className="typ-micro flex items-center gap-1" style={{ color: 'var(--accent-raw)' }}>
+                <RefreshCw className="w-3 h-3 animate-spin" />
+                Hook AI in generazione (~45s)…
+              </span>
+            )}
+            {variant.captionJob?.status === 'failed' && (
+              <span className="typ-micro" style={{ color: 'var(--warning)' }}>
+                ⚠ Caption AI fallita, mostro placeholder
+              </span>
+            )}
+          </div>
           <textarea
             value={captionDraft}
             onChange={e => setCaptionDraft(e.target.value)}

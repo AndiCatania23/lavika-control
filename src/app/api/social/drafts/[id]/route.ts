@@ -35,15 +35,23 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: vErr.message }, { status: 500 });
   }
 
-  // Fetch latest job per variant for status visibility
+  // Fetch latest asset job per variant for status visibility
   const variantIds = (variants ?? []).map(v => v.id);
   let jobs: Array<{ id: string; variant_id: string; status: string; error: string | null; result_url: string | null; attempts: number; updated_at: string }> = [];
+  let captionJobs: Array<{ id: string; variant_id: string; status: string; last_error: string | null; attempts: number; updated_at: string; completed_at: string | null }> = [];
   if (variantIds.length > 0) {
-    const { data: js } = await supabaseServer
-      .from('social_asset_jobs')
-      .select('id, variant_id, status, error, result_url, attempts, updated_at')
-      .in('variant_id', variantIds);
+    const [{ data: js }, { data: cjs }] = await Promise.all([
+      supabaseServer
+        .from('social_asset_jobs')
+        .select('id, variant_id, status, error, result_url, attempts, updated_at')
+        .in('variant_id', variantIds),
+      supabaseServer
+        .from('caption_jobs')
+        .select('id, variant_id, status, last_error, attempts, updated_at, completed_at')
+        .in('variant_id', variantIds),
+    ]);
     jobs = js ?? [];
+    captionJobs = cjs ?? [];
   }
   // Group: latest job per variant
   const jobByVariant = new Map<string, typeof jobs[0]>();
@@ -51,6 +59,13 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     const prev = jobByVariant.get(j.variant_id);
     if (!prev || new Date(j.updated_at) > new Date(prev.updated_at)) {
       jobByVariant.set(j.variant_id, j);
+    }
+  }
+  const captionJobByVariant = new Map<string, typeof captionJobs[0]>();
+  for (const j of captionJobs) {
+    const prev = captionJobByVariant.get(j.variant_id);
+    if (!prev || new Date(j.updated_at) > new Date(prev.updated_at)) {
+      captionJobByVariant.set(j.variant_id, j);
     }
   }
 
@@ -77,6 +92,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     variants: (variants ?? []).map(v => ({
       ...v,
       latestJob: jobByVariant.get(v.id) ?? null,
+      captionJob: captionJobByVariant.get(v.id) ?? null,
     })),
     source,
   });
