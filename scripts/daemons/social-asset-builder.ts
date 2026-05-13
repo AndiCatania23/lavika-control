@@ -29,6 +29,7 @@ import { createClient } from '@supabase/supabase-js';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { buildSocialAsset } from '../../src/lib/social/assetBuilder';
 import { renderRemotionComposition } from '../../src/lib/social/remotionRenderer';
+import { directVideoLayout } from '../../src/lib/social/pillContentDirector';
 
 /* ────────────────────────────── Config ────────────────────────────── */
 
@@ -106,10 +107,71 @@ async function runRecipe(recipe: string, params: Record<string, unknown>): Promi
       return asset as RecipeResult;
     }
     case 'remotion_render': {
-      const p = params as { compositionId: string; inputProps?: Record<string, unknown>; width?: number; height?: number };
+      const p = params as {
+        compositionId: string;
+        inputProps?: Record<string, unknown>;
+        width?: number;
+        height?: number;
+        /** Quando presente, il daemon chiama il Content Director (Ollama)
+         *  per riformulare e dirigere il layout PRIMA di renderizzare.
+         *  Se LLM fallisce, fallback agli inputProps regex già passati. */
+        pillId?: string;
+      };
+
+      let finalInputProps = p.inputProps ?? {};
+
+      // ── Content Director: per le composition PillStatVideo, chiamiamo
+      //    Ollama gemma3 per capire la pill semanticamente e dirigere la
+      //    sua narrazione (mode, headline riformulata, payoff, tono).
+      //    Se LLM fallisce → fallback ai valori regex (già nei inputProps).
+      if (p.compositionId === 'PillStatVideo' && p.pillId) {
+        try {
+          log('content director: fetching pill', { pillId: p.pillId });
+          const { data: pill, error: pErr } = await supabase
+            .from('pills')
+            .select('title, content, pill_category, image_url')
+            .eq('id', p.pillId)
+            .single<{ title: string; content: string | null; pill_category: string | null; image_url: string | null }>();
+
+          if (pErr || !pill) {
+            log('content director: pill not found, using regex fallback', { pillId: p.pillId, err: pErr?.message });
+          } else {
+            const t0 = Date.now();
+            const director = await directVideoLayout({
+              title: pill.title,
+              content: pill.content,
+              pill_category: pill.pill_category,
+            });
+            log('content director: done', {
+              ms: Date.now() - t0,
+              mode: director.mode,
+              tone: director.tone,
+              rationale: director._rationale,
+            });
+            // Sovrascrive i campi semantici, preserva imageUrl + category
+            finalInputProps = {
+              ...finalInputProps,
+              mode: director.mode === 'achievement' ? 'stat' : director.mode,
+              number: director.number,
+              numberSuffix: director.numberSuffix,
+              eyebrow: director.eyebrow,
+              heroText: director.heroText,
+              context: director.context,
+              payoff: director.payoff,
+              _llm_director_done: true,
+              _llm_tone: director.tone,
+            };
+          }
+        } catch (e) {
+          // LLM down/timeout → log e continua con regex fallback.
+          // Asset uscirà comunque ma con regex extractor (no rotture).
+          log('content director: failed, regex fallback', { err: (e as Error).message });
+        }
+      }
+
       const video = await renderRemotionComposition({
         compositionId: p.compositionId,
-        inputProps:    p.inputProps ?? {},
+        inputProps:    finalInputProps,
         width:         p.width,
         height:        p.height,
       });

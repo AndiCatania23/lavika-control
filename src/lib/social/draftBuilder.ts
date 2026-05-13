@@ -145,8 +145,10 @@ function buildJobRecipe(args: {
     payoff?: string;
     category: string | null;
   };
+  /** Quando passato, il daemon chiama il Content Director Ollama. */
+  pillId?: string;
 }): JobRecipe {
-  const { format, socialFormat, sourceUrl, title, pillStatPayload } = args;
+  const { format, socialFormat, sourceUrl, title, pillStatPayload, pillId } = args;
 
   // Story video / Reel video → Remotion.
   // Routing:
@@ -175,6 +177,11 @@ function buildJobRecipe(args: {
             // il focus su numero/headline.
             imageUrl: sourceUrl,
           },
+          // Quando il daemon vede pillId, chiama il Content Director
+          // (Ollama gemma3) per riformulare/dirigere la pill semanticamente.
+          // Se LLM fallisce, i valori regex pre-computati nei inputProps
+          // restano e l'asset esce comunque (no rotture).
+          pillId,
         },
       };
     }
@@ -305,6 +312,7 @@ export async function buildDraftFromPill(opts: BuildDraftFromPillOpts): Promise<
       sourceUrl: pill.image_url,
       title: assetHeadline,
       pillStatPayload: statPayload,
+      pillId: pill.id,
     });
     const { data: job, error: jErr } = await supabaseServer
       .from('social_asset_jobs')
