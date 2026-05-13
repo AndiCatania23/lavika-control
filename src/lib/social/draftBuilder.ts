@@ -9,6 +9,7 @@
 import { supabaseServer } from '@/lib/supabaseServer';
 import type { SocialFormat } from './assetBuilder';
 import { splitEditorialTitle } from './headlineSplit';
+import { extractStatFromPill } from './extractStatFromPill';
 
 /* ──────────────────────────────────────────────────────────────────
    Types
@@ -132,18 +133,44 @@ function buildJobRecipe(args: {
   socialFormat: SocialFormat;
   sourceUrl: string;
   title: string;
+  /** Quando la sorgente è una pill, passa il payload stat per routare a
+   *  PillStatVideo. Se omesso, fallback a MatchScorecardStory. */
+  pillStatPayload?: {
+    number: number | null;
+    numberSuffix: string;
+    context: string;
+    heroText: string;
+    category: string | null;
+  };
 }): JobRecipe {
-  const { format, socialFormat, sourceUrl, title } = args;
+  const { format, socialFormat, sourceUrl, title, pillStatPayload } = args;
 
-  // Story video / Reel video → Remotion. Default composition: MatchScorecardStory
-  // (NOTA: pensata per match results, ma usata anche per pill in attesa della
-  // composition generica `PillStoryVideo`. Step futuro nel piano social.)
+  // Story video / Reel video → Remotion.
+  // Routing:
+  //   - Se è una pill (pillStatPayload presente) → PillStatVideo (Caso C
+  //     stat motion graphics: numero counter-up + contesto gold + bg nero).
+  //   - Altrimenti (episode, manual) → MatchScorecardStory placeholder
+  //     finché non implementiamo Caso A/B (citazione, gol).
   if (format === 'story_video' || format === 'reel') {
+    if (pillStatPayload) {
+      return {
+        recipe: 'remotion_render',
+        recipe_params: {
+          compositionId: 'PillStatVideo',
+          inputProps: {
+            number: pillStatPayload.number,
+            numberSuffix: pillStatPayload.numberSuffix,
+            context: pillStatPayload.context,
+            heroText: pillStatPayload.heroText,
+            category: pillStatPayload.category ?? 'numeri',
+          },
+        },
+      };
+    }
     return {
       recipe: 'remotion_render',
       recipe_params: {
         compositionId: 'MatchScorecardStory',
-        // inputProps minimi: il component usa defaultProps per i campi non passati
         inputProps: {
           heroPhotoUrl: sourceUrl,
           resultLabel: title.length > 0 ? title.split(/[.!?]/)[0].trim().toUpperCase() : 'LAVIKA',
@@ -201,6 +228,14 @@ export async function buildDraftFromPill(opts: BuildDraftFromPillOpts): Promise<
     ? opts.headlineOverride.trim()
     : splitEditorialTitle(pill.title).headline;
 
+  // 2.5 Stat payload — usato per routare le variant story_video/reel verso
+  //     la composition PillStatVideo (numero counter-up + contesto gold).
+  //     Categoria pill (numeri/storia) determina il "tono" della motion graphics.
+  const statPayload = {
+    ...extractStatFromPill({ title: pill.title, content: pill.content, pill_category: pill.pill_category }),
+    category: pill.pill_category,
+  };
+
   // Default caption (placeholder — AI lo migliorerà nello Step "Brand")
   const defaultCaption = `${pill.title}\n\n#Lavika #ForzaCatania #SerieC`;
 
@@ -251,11 +286,14 @@ export async function buildDraftFromPill(opts: BuildDraftFromPillOpts): Promise<
     // Insert asset job (recipe scelto in base al format).
     // title = headline visiva asset (può essere override / splittata),
     // NON il pill.title intero che resta nella caption.
+    // statPayload viene passato sempre: il routing decide se usarlo
+    // (story_video/reel → PillStatVideo) o ignorarlo (image formats).
     const jobRecipe = buildJobRecipe({
       format: variantSpec.format,
       socialFormat,
       sourceUrl: pill.image_url,
       title: assetHeadline,
+      pillStatPayload: statPayload,
     });
     const { data: job, error: jErr } = await supabaseServer
       .from('social_asset_jobs')
