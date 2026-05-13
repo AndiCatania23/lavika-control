@@ -204,15 +204,18 @@ export async function generateStoryboard(args: {
   const validImageStrategies = new Set(['ken-burns-zoom-in', 'ken-burns-zoom-out', 'parallax-up', 'static-darken']);
 
   const scenes: Scene[] = (parsed.scenes ?? [])
-    .filter((s): s is Partial<Scene> => !!s && typeof s === 'object')
-    .map((s, i) => ({
-      id: typeof s.id === 'string' ? s.id : `s${i + 1}`,
-      duration: typeof s.duration === 'number' ? Math.max(15, Math.min(150, s.duration)) : 60,
-      anim: validAnims.has(s.anim as SceneAnim) ? (s.anim as SceneAnim) : 'fade-in',
-      style: validStyles.has(s.style as SceneStyle) ? (s.style as SceneStyle) : 'subtle',
-      text: typeof s.text === 'string' ? s.text : '',
-      emphasis: typeof s.emphasis === 'string' ? s.emphasis : undefined,
-    }))
+    .filter((s) => !!s && typeof s === 'object')
+    .map((s, i) => {
+      const obj = s as unknown as Record<string, unknown>;
+      return {
+        id: typeof obj.id === 'string' ? obj.id : `s${i + 1}`,
+        duration: typeof obj.duration === 'number' ? Math.max(15, Math.min(150, obj.duration)) : 60,
+        anim: validAnims.has(obj.anim as SceneAnim) ? (obj.anim as SceneAnim) : ('fade-in' as SceneAnim),
+        style: validStyles.has(obj.style as SceneStyle) ? (obj.style as SceneStyle) : ('subtle' as SceneStyle),
+        text: typeof obj.text === 'string' ? obj.text : '',
+        emphasis: typeof obj.emphasis === 'string' ? obj.emphasis : undefined,
+      };
+    })
     .filter(s => s.text.length > 0 || s.anim === 'quote-marks' || s.anim === 'fade-in')
     .slice(0, 6);
 
