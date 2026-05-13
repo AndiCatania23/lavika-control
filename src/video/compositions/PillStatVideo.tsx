@@ -34,56 +34,78 @@ const ACCENT_GOLD = '#FFC72C';
 const WORDMARK_WHITE = 'brand/logo/lavika-wordmark-white.png';
 
 export const pillStatVideoSchema = z.object({
-  /** Numero principale da animare. NULL = mostriamo `heroText` invece del numero. */
+  /**
+   * Layout mode in base al pattern semantico del titolo pill.
+   *  - stat        numero counter-up + context UPPERCASE sotto (default)
+   *  - anniversary numero + eyebrow "ANNI FA" gold + headline editoriale
+   *  - year        anno pop-in + headline editoriale
+   *  - hero        solo testo grande, niente numero
+   */
+  mode: z.enum(['stat', 'anniversary', 'year', 'hero']).default('stat'),
+  /** Numero principale da animare. NULL in mode 'hero'. */
   number: z.number().nullable(),
-  /** Testo contesto sotto il numero (es. "GOL IN STAGIONE"). Già uppercase. */
+  /** Testo contesto sotto il numero (mode 'stat'). Già uppercase. */
   context: z.string(),
-  /** Testo hero quando number è null (es. titolo della pill). */
+  /** Headline editoriale (mode anniversary/year/hero). Es. "Di Tacchio · Trionfo playoff". */
   heroText: z.string().optional(),
-  /** Suffisso opzionale del numero (es. "%", "°"). */
+  /** Eyebrow sotto al numero (mode anniversary: "ANNI FA"). */
+  eyebrow: z.string().optional(),
+  /** Suffisso inline del numero (es. "%", "°"). */
   numberSuffix: z.string().optional(),
-  /** Categoria pill (numeri/storia/flash/rivali) — usata per micro-tweak palette. */
+  /** Categoria pill (numeri/storia/flash/rivali) — micro-tweak palette. */
   category: z.string().optional(),
 });
 
 export type PillStatVideoProps = z.infer<typeof pillStatVideoSchema>;
 
 export const defaultPillStatVideoProps: PillStatVideoProps = {
+  mode: 'stat',
   number: 12,
   context: 'GOL DI CATURANO IN STAGIONE',
   numberSuffix: '',
+  eyebrow: '',
   category: 'numeri',
 };
 
 export const PillStatVideo: React.FC<PillStatVideoProps> = ({
-  number, context, heroText, numberSuffix, category,
+  mode = 'stat', number, context, heroText, eyebrow, numberSuffix, category,
 }) => {
   const frame = useCurrentFrame();
   const { fps, durationInFrames, width, height } = useVideoConfig();
 
   const isStory = height / width > 1.5;
+  // Per anniversary/year il numero è più piccolo per fare spazio alla headline editoriale.
+  const isCompactNumber = mode === 'anniversary' || mode === 'year';
   const POS = isStory
     ? {
-        numberFontSize: number !== null && number >= 1000 ? 380 : 520,
+        numberFontSize: isCompactNumber ? 380 : (number !== null && number >= 1000 ? 380 : 520),
         contextFontSize: 56,
         contextLetterSpacing: 6,
-        contextMaxWidth: 800,
-        heroTextFontSize: 200,
+        contextMaxWidth: 880,
+        heroTextFontSize: isCompactNumber ? 78 : 200,
+        heroTextLetterSpacing: -1,
+        eyebrowFontSize: 40,
+        eyebrowLetterSpacing: 10,
         wordmarkBottom: 140,
         wordmarkWidth: 240,
-        numberCenter: '42%',
+        numberCenter: isCompactNumber ? '34%' : '42%',
         contextTop: '60%',
+        eyebrowOffset: 30,
       }
     : {
-        numberFontSize: number !== null && number >= 1000 ? 280 : 380,
+        numberFontSize: isCompactNumber ? 280 : (number !== null && number >= 1000 ? 280 : 380),
         contextFontSize: 44,
         contextLetterSpacing: 5,
-        contextMaxWidth: 760,
-        heroTextFontSize: 140,
+        contextMaxWidth: 800,
+        heroTextFontSize: isCompactNumber ? 60 : 140,
+        heroTextLetterSpacing: -1,
+        eyebrowFontSize: 32,
+        eyebrowLetterSpacing: 8,
         wordmarkBottom: 80,
         wordmarkWidth: 180,
-        numberCenter: '38%',
+        numberCenter: isCompactNumber ? '32%' : '38%',
         contextTop: '60%',
+        eyebrowOffset: 24,
       };
 
   /* ── Number animation timeline ──
@@ -191,7 +213,7 @@ export const PillStatVideo: React.FC<PillStatVideoProps> = ({
         opacity: 0.7,
       }} />
 
-      {/* ─── NUMBER MEGA centrato vertical (o hero text se number=null) */}
+      {/* ─── NUMBER MEGA centrato vertical (oppure hero text se mode='hero') */}
       <div style={{
         position: 'absolute',
         top: POS.numberCenter,
@@ -207,7 +229,7 @@ export const PillStatVideo: React.FC<PillStatVideoProps> = ({
         lineHeight: 0.9,
         letterSpacing: -8,
       }}>
-        {number !== null && displayedNumber !== null ? (
+        {mode !== 'hero' && number !== null && displayedNumber !== null ? (
           <span style={{ fontSize: POS.numberFontSize }}>
             {displayedNumber}{numberSuffix ?? ''}
           </span>
@@ -224,7 +246,34 @@ export const PillStatVideo: React.FC<PillStatVideoProps> = ({
         )}
       </div>
 
-      {/* ─── CONTEXT uppercase gold sotto */}
+      {/* ─── EYEBROW gold sotto al numero (anniversary mode: "ANNI FA").
+              Si attiva solo se eyebrow è valorizzato e non siamo in mode hero. */}
+      {mode === 'anniversary' && eyebrow && (
+        <div style={{
+          position: 'absolute',
+          // Subito sotto al numero (number font size + offset)
+          top: `calc(${POS.numberCenter} + ${POS.numberFontSize / 2}px + ${POS.eyebrowOffset}px)`,
+          left: 0,
+          right: 0,
+          textAlign: 'center',
+          opacity: contextOpacity,
+          transform: `translateY(${contextY}px)`,
+        }}>
+          <div style={{
+            color: ACCENT_GOLD,
+            fontFamily: FONT_DISPLAY,
+            fontSize: POS.eyebrowFontSize,
+            letterSpacing: POS.eyebrowLetterSpacing,
+            textShadow: `0 2px 12px ${ACCENT_GOLD}44, 0 2px 8px rgba(0,0,0,0.6)`,
+          }}>
+            {eyebrow}
+          </div>
+        </div>
+      )}
+
+      {/* ─── CONTEXT/HEADLINE sotto:
+              - mode='stat' o 'hero' → context UPPERCASE gold (es. "GOL IN STAGIONE")
+              - mode='anniversary' o 'year' → heroText bianco grande (frase narrativa) */}
       <div style={{
         position: 'absolute',
         top: POS.contextTop,
@@ -235,18 +284,33 @@ export const PillStatVideo: React.FC<PillStatVideoProps> = ({
         transform: `translateY(${contextY}px)`,
         padding: '0 80px',
       }}>
-        <div style={{
-          color: ACCENT_GOLD,
-          fontFamily: FONT_DISPLAY,
-          fontSize: POS.contextFontSize,
-          letterSpacing: POS.contextLetterSpacing,
-          lineHeight: 1.15,
-          maxWidth: POS.contextMaxWidth,
-          margin: '0 auto',
-          textShadow: `0 4px 20px ${ACCENT_GOLD}33, 0 2px 8px rgba(0,0,0,0.6)`,
-        }}>
-          {context}
-        </div>
+        {(mode === 'anniversary' || mode === 'year') && heroText ? (
+          <div style={{
+            color: '#FFFFFF',
+            fontFamily: FONT_DISPLAY,
+            fontSize: POS.heroTextFontSize,
+            letterSpacing: POS.heroTextLetterSpacing,
+            lineHeight: 1.05,
+            maxWidth: POS.contextMaxWidth,
+            margin: '0 auto',
+            textShadow: '0 4px 20px rgba(0,0,0,0.7), 0 2px 8px rgba(0,0,0,0.5)',
+          }}>
+            {heroText}
+          </div>
+        ) : context ? (
+          <div style={{
+            color: ACCENT_GOLD,
+            fontFamily: FONT_DISPLAY,
+            fontSize: POS.contextFontSize,
+            letterSpacing: POS.contextLetterSpacing,
+            lineHeight: 1.15,
+            maxWidth: POS.contextMaxWidth,
+            margin: '0 auto',
+            textShadow: `0 4px 20px ${ACCENT_GOLD}33, 0 2px 8px rgba(0,0,0,0.6)`,
+          }}>
+            {context}
+          </div>
+        ) : null}
       </div>
 
       {/* ─── Category badge piccolo top (es. "NUMERI · LAVIKA SPORT") */}
