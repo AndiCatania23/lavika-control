@@ -95,3 +95,34 @@ export async function warmupModels(): Promise<void> {
     ollamaEmbed('warmup'),
   ]);
 }
+
+/**
+ * Forza l'unload del modello dalla RAM/VRAM Ollama (TTL 0).
+ * Da chiamare in `finally` dopo call LLM per liberare immediatamente.
+ *
+ * Use case: il Mac Mini ha 24GB di RAM e gira anche app/sync/control,
+ * non vogliamo che gemma3:12b (~9.5GB) resti caricata dopo che il job
+ * social asset è finito. KEEP_ALIVE=0 nelle request fa il suo lavoro
+ * ma con job consecutivi ravvicinati il modello può restare caricato.
+ *
+ * Implementazione: chiama `POST /api/generate` con keep_alive=0 e
+ * prompt minimo "." → Ollama unloads il modello al termine.
+ * Fire-and-forget: non blocchiamo il caller, ignoriamo errori.
+ */
+export async function ollamaUnloadModel(model: string): Promise<void> {
+  try {
+    await fetch(`${OLLAMA_URL}/api/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        prompt: '',
+        keep_alive: 0,         // numero 0 = unload immediato dopo questa request
+        stream: false,
+        options: { num_predict: 1 },
+      }),
+    });
+  } catch {
+    // Ignora errori — best-effort cleanup
+  }
+}

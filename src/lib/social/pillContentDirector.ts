@@ -17,7 +17,7 @@
  * KEEP_ALIVE=0 → unload subito. €0/mese.
  */
 
-import { ollamaGenerate, GEN_MODEL, safeJsonParse } from './caption/ollamaClient';
+import { ollamaGenerate, ollamaUnloadModel, GEN_MODEL, safeJsonParse } from './caption/ollamaClient';
 
 export interface DirectorOutput {
   /** Layout mode scelto dall'LLM in base alla semantica pill. */
@@ -235,14 +235,23 @@ export async function directVideoLayout(pill: PillInput): Promise<DirectorOutput
 
 Genera SOLO il JSON output, niente prefazione né code fence.`;
 
-  const raw = await ollamaGenerate(userPrompt, {
-    model: GEN_MODEL,
-    system: SYSTEM_PROMPT,
-    jsonMode: true,
-    temperature: 0.2,  // bassa creatività → ridotta hallucination
-    numPredict: 600,
-    timeoutMs: 180_000,
-  });
+  let raw: string;
+  try {
+    raw = await ollamaGenerate(userPrompt, {
+      model: GEN_MODEL,
+      system: SYSTEM_PROMPT,
+      jsonMode: true,
+      temperature: 0.2,  // bassa creatività → ridotta hallucination
+      numPredict: 600,
+      timeoutMs: 180_000,
+    });
+  } finally {
+    // Unload esplicito gemma3:12b dalla RAM/VRAM Ollama dopo ogni call.
+    // KEEP_ALIVE=0 nelle request fa già il suo lavoro, ma con job
+    // consecutivi ravvicinati il modello può restare caricato.
+    // Fire-and-forget: non aspettiamo, non blocchiamo il caller.
+    ollamaUnloadModel(GEN_MODEL).catch(() => { /* best-effort */ });
+  }
 
   // Parsing tollerante (fences, prefix testo, ecc.)
   let parsed = safeJsonParse<Partial<DirectorOutput>>(raw);

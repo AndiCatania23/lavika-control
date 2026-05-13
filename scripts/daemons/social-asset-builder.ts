@@ -123,10 +123,13 @@ async function runRecipe(recipe: string, params: Record<string, unknown>): Promi
       // ── Content Director: per le composition PillStatVideo, chiamiamo
       //    Ollama gemma3 per capire la pill semanticamente e dirigere la
       //    sua narrazione (mode, headline riformulata, payoff, tono).
+      //    L'LLM viene caricato per la call e SCARICATO subito dopo
+      //    (KEEP_ALIVE=0 + ollamaUnloadModel esplicito nel director's finally)
+      //    → la RAM del Mac torna libera tra job consecutivi.
       //    Se LLM fallisce → fallback ai valori regex (già nei inputProps).
       if (p.compositionId === 'PillStatVideo' && p.pillId) {
         try {
-          log('content director: fetching pill', { pillId: p.pillId });
+          log('content director: fetching pill (Ollama gemma3 LOADING)', { pillId: p.pillId });
           const { data: pill, error: pErr } = await supabase
             .from('pills')
             .select('title, content, pill_category, image_url')
@@ -142,7 +145,7 @@ async function runRecipe(recipe: string, params: Record<string, unknown>): Promi
               content: pill.content,
               pill_category: pill.pill_category,
             });
-            log('content director: done', {
+            log('content director: done (Ollama UNLOADING in background)', {
               ms: Date.now() - t0,
               mode: director.mode,
               tone: director.tone,
