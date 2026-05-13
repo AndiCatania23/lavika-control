@@ -32,6 +32,7 @@ import { renderRemotionComposition } from '../../src/lib/social/remotionRenderer
 import { directVideoLayout } from '../../src/lib/social/pillContentDirector';
 import { extractFactsFromPill } from '../../src/lib/social/pillFactExtractor';
 import { classifyNarrative, generateStoryboard, validateStoryboard } from '../../src/lib/social/pillStoryboardBuilder';
+import { episodeToFacts, formatLabel as episodeFormatLabel } from '../../src/lib/social/episodeFactAdapter';
 
 /* ────────────────────────────── Config ────────────────────────────── */
 
@@ -131,13 +132,67 @@ async function runRecipe(recipe: string, params: Record<string, unknown>): Promi
       let finalInputProps = p.inputProps ?? {};
       let directorMeta: RecipeResult['llm_meta'] | undefined;
 
-      // ── AIDirectedStoryVideo: pipeline 3-step zero-API ──
-      //    1) extractFactsFromPill (LLM): facts strutturati dal title
-      //    2) classifyNarrative (deterministic): quote/anniversary/year/stat/narrative
-      //    3) generateStoryboard (LLM): scene[] con animazioni dichiarate
-      //    4) validateStoryboard (deterministic): grounding check + timing
-      //    Render: AIDirectedStoryVideo composition esegue scene-by-scene.
-      if (p.compositionId === 'AIDirectedStoryVideo' && p.pillId) {
+      // ── AIDirectedStoryVideo per EPISODI (no LLM extraction, adapter
+      //    deterministico episodeToFacts. Solo Step 3 LLM (storyboard).
+      const episodeId = (params as { episodeId?: string }).episodeId;
+      if (p.compositionId === 'AIDirectedStoryVideo' && episodeId) {
+        try {
+          log('AI-Director-v2 EPISODE: fetching', { episodeId });
+          const { data: ep } = await supabase
+            .from('content_episodes')
+            .select(`id, title, format_id, thumbnail_url, duration_secs,
+                     speaker:players!speaker_id(id, full_name),
+                     match:matches!match_id(id, kickoff_at, matchday,
+                       home_team:teams!matches_home_team_id_fkey(normalized_name, short_name),
+                       away_team:teams!matches_away_team_id_fkey(normalized_name, short_name))`)
+            .eq('id', episodeId)
+            .single();
+          if (!ep) throw new Error('episode not found');
+
+          // Step 1: facts deterministico (NO LLM call — risparmio 15s)
+          const facts = episodeToFacts(ep as Parameters<typeof episodeToFacts>[0]);
+          log('AI-Director-v2 EPISODE: facts adapted (deterministic)', {
+            speaker: facts.speaker,
+            teams: facts.teams,
+            secondary: facts.secondary_phrase,
+          });
+
+          // Step 2: classifica come "news" se ha speaker (quote-like), altrimenti "narrative"
+          // Step 3: storyboard via LLM
+          const t0 = Date.now();
+          const cls = facts.speaker ? 'news' : 'narrative';
+          const storyboard = await generateStoryboard({ facts, classification: cls });
+          const t1 = Date.now();
+
+          const validation = validateStoryboard({
+            storyboard,
+            facts,
+            title: (ep as { title?: string }).title ?? '',
+          });
+          log('AI-Director-v2 EPISODE: storyboard done', {
+            storyboard_ms: t1 - t0,
+            scenes: storyboard.scenes.length,
+            grounding_pct: validation.grounding_pct,
+          });
+
+          finalInputProps = {
+            scenes: storyboard.scenes,
+            imageUrl: (ep as { thumbnail_url?: string | null }).thumbnail_url ?? undefined,
+            imageStrategy: storyboard.image_strategy,
+            tone: storyboard.tone,
+            category: episodeFormatLabel((ep as { format_id?: string | null }).format_id ?? null),
+          } as Record<string, unknown>;
+          directorMeta = {
+            mode: storyboard.narrative_type,
+            tone: storyboard.tone,
+            shareability_score: storyboard.shareability_score,
+            shareability_factors: [],
+            rationale: storyboard._rationale,
+          };
+        } catch (e) {
+          log('AI-Director-v2 EPISODE failed, using defaults', { err: (e as Error).message });
+        }
+      } else if (p.compositionId === 'AIDirectedStoryVideo' && p.pillId) {
         try {
           log('AI-Director-v2: fetching pill', { pillId: p.pillId });
           const { data: pill } = await supabase

@@ -147,8 +147,11 @@ function buildJobRecipe(args: {
   };
   /** Quando passato, il daemon chiama il Content Director Ollama. */
   pillId?: string;
+  /** Episode source: alternativa a pillId. Daemon usa adapter
+   *  episodeToFacts + stesso pipeline storyboard. */
+  episodeId?: string;
 }): JobRecipe {
-  const { format, socialFormat, sourceUrl, title, pillStatPayload, pillId } = args;
+  const { format, socialFormat, sourceUrl, title, pillStatPayload, pillId, episodeId } = args;
 
   // Story video / Reel video → Remotion.
   // Routing:
@@ -158,6 +161,24 @@ function buildJobRecipe(args: {
   //   - Altrimenti (episode, manual) → MatchScorecardStory placeholder
   //     finché non implementiamo Caso A/B (citazione, gol).
   if (format === 'story_video' || format === 'reel') {
+    // Episode → AIDirectedStoryVideo pipeline (daemon usa episodeToFacts adapter)
+    if (episodeId) {
+      return {
+        recipe: 'remotion_render',
+        recipe_params: {
+          compositionId: 'AIDirectedStoryVideo',
+          inputProps: {
+            // Defaults che il daemon sovrascrive con storyboard generato
+            scenes: [],
+            imageUrl: sourceUrl,
+            imageStrategy: 'ken-burns-zoom-in',
+            tone: 'factual',
+            category: 'episode',
+          },
+          episodeId,
+        },
+      };
+    }
     if (pillStatPayload) {
       // NEW (2026-05-13): per le pill usiamo AIDirectedStoryVideo (pipeline
       // 3-step storyboard scene-by-scene). PillStatVideo resta come legacy
@@ -377,7 +398,11 @@ export async function buildDraftFromEpisode(opts: {
 
   const { data: ep, error: eErr } = await supabaseServer
     .from('content_episodes')
-    .select('id, title, format_id, thumbnail_url, match_id')
+    .select(`id, title, format_id, thumbnail_url, match_id, duration_secs,
+             speaker:players!speaker_id(id, full_name),
+             match:matches!match_id(id, kickoff_at, matchday,
+               home_team:teams!matches_home_team_id_fkey(normalized_name, short_name),
+               away_team:teams!matches_away_team_id_fkey(normalized_name, short_name))`)
     .eq('id', opts.episodeId)
     .single<EpisodeRow>();
 
@@ -434,6 +459,8 @@ export async function buildDraftFromEpisode(opts: {
       socialFormat,
       sourceUrl: ep.thumbnail_url,
       title: epTitle,
+      // story_video/reel → daemon usa episodeToFacts adapter + storyboard AI
+      episodeId: opts.episodeId,
     });
     const { data: job, error: jErr } = await supabaseServer
       .from('social_asset_jobs')
