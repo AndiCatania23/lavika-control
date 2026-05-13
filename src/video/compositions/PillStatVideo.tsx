@@ -403,8 +403,10 @@ export const PillStatVideo: React.FC<PillStatVideoProps> = ({
         </div>
       )}
 
-      {/* ─── EYEBROW gold sotto al numero (anniversary mode: "ANNI FA").
-              Si attiva solo se eyebrow è valorizzato e non siamo in mode hero. */}
+      {/* ─── EYEBROW gold subito sotto al numero.
+              Solo per mode='anniversary' ("ANNI FA").
+              Per mode='stat' niente eyebrow visuale: l'unità è dentro il context
+              (es. "GOL DALLA PANCHINA") per evitare 3 livelli sovrapposti. */}
       {mode === 'anniversary' && eyebrow && (
         <div style={{
           position: 'absolute',
@@ -428,9 +430,11 @@ export const PillStatVideo: React.FC<PillStatVideoProps> = ({
         </div>
       )}
 
-      {/* ─── CONTEXT/HEADLINE sotto:
-              - mode='stat' o 'hero' → context UPPERCASE gold (es. "GOL IN STAGIONE")
-              - mode='anniversary' o 'year' → heroText bianco grande (frase narrativa) */}
+      {/* ─── CONTEXT/HEADLINE sotto numero:
+              - mode='anniversary' o 'year' → heroText BIANCO grande (frase narrativa)
+              - mode='stat' → context BIANCO MEDIO (qualifica del numero, es. "DALLA PANCHINA").
+                Niente più gold qui per non confondersi col payoff gold sotto.
+              - mode='hero' → context UPPERCASE gold (fallback minimal). */}
       <div style={{
         position: 'absolute',
         top: POS.contextTop,
@@ -453,6 +457,19 @@ export const PillStatVideo: React.FC<PillStatVideoProps> = ({
             textShadow: '0 4px 20px rgba(0,0,0,0.7), 0 2px 8px rgba(0,0,0,0.5)',
           }}>
             {heroText}
+          </div>
+        ) : mode === 'stat' && context ? (
+          <div style={{
+            color: '#FFFFFF',
+            fontFamily: FONT_DISPLAY,
+            fontSize: POS.contextFontSize,
+            letterSpacing: POS.contextLetterSpacing,
+            lineHeight: 1.15,
+            maxWidth: POS.contextMaxWidth,
+            margin: '0 auto',
+            textShadow: '0 4px 20px rgba(0,0,0,0.7), 0 2px 8px rgba(0,0,0,0.5)',
+          }}>
+            {context}
           </div>
         ) : context ? (
           <div style={{

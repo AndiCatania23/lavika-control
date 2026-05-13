@@ -108,7 +108,10 @@ Output JSON ESATTO (niente fence, niente prefazione):
 ALTRE REGOLE:
 - numberSuffix solo se il title ha "%" o "°" attaccato al numero
 - payoff: usa SOLO la parte del title DOPO i ":" (se presente), altrimenti vuoto
-- eyebrow: deduci dal contesto del title (es. "10 anni fa" → ANNI FA, "12 gol" → GOL)
+- eyebrow per mode 'stat': SEMPRE vuoto. L'unità entra nel context.
+  context per mode 'stat' = UNITÀ + QUALIFICA unite (es. "GOL DALLA PANCHINA",
+  "GOL IN STAGIONE", "VITTORIE CONSECUTIVE"). Senza speaker prefix. UPPERCASE.
+- eyebrow per mode 'anniversary': SEMPRE "ANNI FA"
 - Se NON c'è numero ovvio nel title, vai in "hero"
 - max char enforced: heroText ≤ 50, context ≤ 40, payoff ≤ 30
 
@@ -145,12 +148,25 @@ OUTPUT: {
   "mode": "stat",
   "number": 12,
   "numberSuffix": "",
-  "eyebrow": "GOL",
+  "eyebrow": "",
   "heroText": "Caturano: 12 gol in stagione",
-  "context": "DI CATURANO IN STAGIONE",
+  "context": "GOL IN STAGIONE",
   "payoff": "",
   "tone": "celebrative",
-  "_rationale": "Stat numero gol, eyebrow GOL, niente payoff (no ':' editoriale)"
+  "_rationale": "Stat con speaker prefix Caturano. Context include unità+qualifica unite per chiarezza visiva (1 livello bianco sotto numero, no eyebrow)"
+}
+
+INPUT: { title: "12 gol dalla panchina: la forza nascosta del Catania", category: "numeri" }
+OUTPUT: {
+  "mode": "stat",
+  "number": 12,
+  "numberSuffix": "",
+  "eyebrow": "",
+  "heroText": "12 gol dalla panchina",
+  "context": "GOL DALLA PANCHINA",
+  "payoff": "LA FORZA NASCOSTA DEL CATANIA",
+  "tone": "celebrative",
+  "_rationale": "Stat con editorial split: context=unità+qualifica unite (GOL DALLA PANCHINA, bianco grande sotto numero), payoff=parte dopo ':' (gold piccolo). Niente eyebrow per evitare 3 livelli sovrapposti."
 }
 
 INPUT: { title: "Promosso in B nel 2007", category: "storia" }

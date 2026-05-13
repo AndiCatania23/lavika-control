@@ -67,6 +67,18 @@ const NUMBER_REGEX = /(\d{1,4})(°|%)?/;
 const ANNIVERSARY_REGEX = /(\d{1,3})\s+anni\s+(?:fa|dopo)\b/i;
 
 /**
+ * Unità sportive comuni che seguono un numero. Catturate come `eyebrow`
+ * sotto il numero per separare "12 gol" → number=12 + eyebrow=GOL +
+ * context=resto, invece di context="GOL DALLA PANCHINA" che mischia
+ * unità e qualifica.
+ *
+ * Pattern guarda il numero + spazio + unit ovunque nel title (non solo
+ * all'inizio post-rimozione), così funziona anche con speaker prefix
+ * tipo "Caturano: 12 gol in stagione".
+ */
+const NUMBER_WITH_UNIT_REGEX = /(\d{1,4})(?:°|%)?\s+(gol|reti|anni|vittorie|sconfitte|pareggi|partite|presenze|minuti|punti|posti?|posizion[ei]|spettatori|tifosi|titoli|coppe|trofei|trionfi|cartellini|assist|tiri|cross|falli|corner|rigori|stagion[ei])\b/i;
+
+/**
  * Detection citazione "Nome: 'quote'" / "Nome: \"quote\"" (anche
  * virgolette tipografiche). Prima 1-3 parole capitalizzate, poi `:`,
  * poi una QUOTE TEXT racchiusa tra virgolette (presenza obbligatoria
@@ -247,14 +259,24 @@ export function extractStatFromPill(pill: PillLike): PillStatPayload {
   }
 
   // ──── MODE 3: stat (default, counter-up) ────
-  const context = cleanText(withoutNumber, { uppercase: true });
+  // Strategia "2 livelli sotto numero" per non sovraccaricare:
+  //   - context BIANCO = unit + qualifica unite (es. "GOL DALLA PANCHINA")
+  //   - payoff GOLD   = morale dopo i `:` se presente
+  //   - NIENTE eyebrow visuale (sarebbe un terzo livello sovrapposto).
+  // Strip speaker prefix da context per evitare "Caturano · GOL IN STAGIONE"
+  // → diventa "GOL IN STAGIONE" più pulito.
+  let contextRaw = sourceStr.replace(NUMBER_REGEX, ' ');
+  // Strip speaker prefix "Nome: " all'inizio se presente
+  contextRaw = contextRaw.replace(/^[A-ZÀ-Ý][a-zà-ÿA-ZÀ-Ý'.\s]{1,30}:\s*/, '').trim();
+
+  const context = cleanText(contextRaw, { uppercase: true });
   return {
     mode: 'stat',
     number,
     numberSuffix: suffix,
     context: context || cleanText(mainTitle, { uppercase: true }),
     heroText: mainTitle,
-    eyebrow: '',
+    eyebrow: '',  // niente eyebrow visuale per stat (vedi commento sopra)
     payoff,
   };
 }
