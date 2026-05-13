@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.lavika.night-smm-brief</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/andreafailla/LAVIKA-SPORT/scripts/night-smm-brief.sh</string>
+  </array>
+
+  <!-- One-shot ogni notte: NO KeepAlive, NO RunAtLoad.
+       Schedule fisso 03:00 locale ogni giorno. -->
+  <key>RunAtLoad</key>
+  <false/>
+  <key>KeepAlive</key>
+  <false/>
+
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>3</integer>
+    <key>Minute</key>
+    <integer>0</integer>
+  </dict>
+
+  <!-- Priorità bassa: il job DEVE non disturbare nulla.
+       Nice = +20 (lowest priority CPU su macOS, range -20..20). -->
+  <key>Nice</key>
+  <integer>20</integer>
+
+  <key>LowPriorityIO</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>/Users/andreafailla/LAVIKA-SPORT/logs/night-smm-brief.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/andreafailla/LAVIKA-SPORT/logs/night-smm-brief-error.log</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+  </dict>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/andreafailla/LAVIKA-SPORT/repos/control</string>
+
+  <key>SoftResourceLimits</key>
+  <dict>
+    <!-- Memoria max process: 2GB (Ollama gemma3:12b carica ~8GB nel daemon Ollama
+         separato, non in questo processo. Qui giriamo solo TS + HTTP client). -->
+    <key>ResidentSetSize</key>
+    <integer>2147483648</integer>
+  </dict>
+</dict>
+</plist>

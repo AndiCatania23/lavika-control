@@ -11,7 +11,7 @@
  */
 
 import Link from 'next/link';
-import { ArrowLeft, Instagram, Facebook, RefreshCw, TrendingUp, TrendingDown, Minus, Sparkles, Trophy, AlertTriangle, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Instagram, Facebook, RefreshCw, TrendingUp, TrendingDown, Minus, Sparkles, Trophy, AlertTriangle, ExternalLink, Sunrise, Flame, Target } from 'lucide-react';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { Sparkline } from '@/components/social/Sparkline';
 
@@ -36,6 +36,36 @@ interface PostObj {
   eng?: number;
   mediaType?: string;
   publishedAt?: string;
+}
+
+interface BriefRecommendation {
+  priority: 'high' | 'med' | 'medium' | 'low';
+  title: string;
+  why: string;
+  action: string;
+}
+
+interface BriefPostDiagnosis {
+  external_post_id: string;
+  platform: string;
+  permalink: string | null;
+  thumbnail_url: string | null;
+  caption_snippet: string;
+  engagement_rate: number;
+  account_avg: number;
+  delta_pct: number;
+  reasons: string[];
+  suggested_fix: string;
+}
+
+interface MorningBrief {
+  brief_date: string;
+  mode: 'early' | 'active';
+  brief_markdown: string;
+  recommendations: BriefRecommendation[];
+  post_diagnoses: BriefPostDiagnosis[];
+  generated_at: string;
+  llm_duration_ms: number | null;
 }
 
 interface SummaryRow {
@@ -75,6 +105,17 @@ async function loadSummary(): Promise<{ ig: SummaryRow | null; fb: SummaryRow | 
       : fb?.refreshed_at ? new Date(fb.refreshed_at)
       : null;
   return { ig, fb, refreshedAt };
+}
+
+async function loadLatestBrief(): Promise<MorningBrief | null> {
+  if (!supabaseServer) return null;
+  const { data } = await supabaseServer
+    .from('smm_night_briefs')
+    .select('brief_date, mode, brief_markdown, recommendations, post_diagnoses, generated_at, llm_duration_ms')
+    .order('brief_date', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return (data as MorningBrief | null) ?? null;
 }
 
 // ============================================================================
@@ -288,6 +329,203 @@ function GrowthChart({ ig, fb }: { ig: SummaryRow | null; fb: SummaryRow | null 
   );
 }
 
+/* ──────────────────────────────────────────────────────────────────
+   Morning Brief — sezione hero in cima alla dashboard.
+   Mostra la sintesi generata dal daemon Mac notturno (cron 03:00).
+   ────────────────────────────────────────────────────────────────── */
+
+function extractBriefHeadline(markdown: string): string {
+  const m = markdown.match(/^>\s+(.+)$/m);
+  return m ? m[1].trim() : '';
+}
+
+function extractBriefTodayAction(markdown: string): string {
+  const m = markdown.match(/##\s*Stasera\s*\n([^\n#]+)/);
+  return m ? m[1].trim() : '';
+}
+
+function normalizePriority(p: BriefRecommendation['priority']): 'high' | 'med' | 'low' {
+  if (p === 'high') return 'high';
+  if (p === 'low') return 'low';
+  return 'med';
+}
+
+const PRIORITY_BADGE: Record<'high' | 'med' | 'low', { label: string; bg: string; fg: string }> = {
+  high: { label: 'Alta', bg: 'color-mix(in oklab, var(--danger) 14%, transparent)', fg: 'var(--danger)' },
+  med:  { label: 'Media', bg: 'color-mix(in oklab, var(--accent-raw) 14%, transparent)', fg: 'var(--accent-raw)' },
+  low:  { label: 'Bassa', bg: 'var(--n-100)', fg: 'var(--text-muted)' },
+};
+
+function RecommendationCard({ rec }: { rec: BriefRecommendation }) {
+  const p = normalizePriority(rec.priority);
+  const badge = PRIORITY_BADGE[p];
+  return (
+    <div
+      className="card"
+      style={{
+        padding: 'var(--s4)',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 'var(--s2)',
+        borderLeft: `3px solid ${badge.fg}`,
+      }}
+    >
+      <div className="flex items-center gap-2 flex-wrap">
+        <span
+          className="typ-micro"
+          style={{
+            fontWeight: 600,
+            padding: '2px 8px',
+            borderRadius: 'var(--r-pill)',
+            background: badge.bg,
+            color: badge.fg,
+            textTransform: 'uppercase',
+            letterSpacing: '.04em',
+          }}
+        >
+          {badge.label}
+        </span>
+        <strong style={{ fontSize: 14 }}>{rec.title}</strong>
+      </div>
+      <p className="typ-caption" style={{ margin: 0, color: 'var(--text-muted)' }}>
+        {rec.why}
+      </p>
+      <p className="typ-caption" style={{ margin: 0, fontWeight: 500 }}>
+        → {rec.action}
+      </p>
+    </div>
+  );
+}
+
+function MorningBriefSection({ brief }: { brief: MorningBrief }) {
+  const headline = extractBriefHeadline(brief.brief_markdown);
+  const todayAction = extractBriefTodayAction(brief.brief_markdown);
+  const generated = new Date(brief.generated_at);
+  const recs = brief.recommendations || [];
+
+  return (
+    <div
+      className="card"
+      style={{
+        padding: 'var(--s5)',
+        background: 'linear-gradient(180deg, color-mix(in oklab, var(--accent-raw) 6%, var(--card)) 0%, var(--card) 100%)',
+        borderColor: 'color-mix(in oklab, var(--accent-raw) 24%, var(--hairline-soft))',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 'var(--s4)',
+      }}
+    >
+      <div className="flex items-center gap-2 flex-wrap">
+        <Sunrise className="w-5 h-5" style={{ color: 'var(--accent-raw)' }} />
+        <h2 className="typ-h2" style={{ margin: 0 }}>Brief del mattino</h2>
+        <span className="grow" />
+        <span className="typ-micro" style={{ color: 'var(--text-muted)' }}>
+          {brief.brief_date} · gen. {fmtRelativeTime(generated)}
+        </span>
+      </div>
+
+      {headline && (
+        <p
+          style={{
+            margin: 0,
+            fontSize: 18,
+            lineHeight: 1.45,
+            fontWeight: 500,
+            color: 'var(--text)',
+          }}
+        >
+          {headline}
+        </p>
+      )}
+
+      {todayAction && (
+        <div
+          className="flex items-start gap-2"
+          style={{
+            padding: 'var(--s3) var(--s4)',
+            background: 'color-mix(in oklab, var(--accent-raw) 8%, transparent)',
+            borderRadius: 'var(--r-m)',
+            border: '1px solid color-mix(in oklab, var(--accent-raw) 20%, transparent)',
+          }}
+        >
+          <Target className="w-4 h-4 shrink-0" style={{ color: 'var(--accent-raw)', marginTop: 3 }} />
+          <div>
+            <div className="typ-micro" style={{ fontWeight: 600, color: 'var(--accent-raw)', textTransform: 'uppercase', letterSpacing: '.04em' }}>
+              Stasera
+            </div>
+            <p style={{ margin: '2px 0 0 0', fontSize: 14 }}>{todayAction}</p>
+          </div>
+        </div>
+      )}
+
+      {recs.length > 0 && (
+        <div className="vstack" style={{ gap: 'var(--s3)' }}>
+          <div className="flex items-center gap-2">
+            <Flame className="w-4 h-4" style={{ color: 'var(--accent-raw)' }} />
+            <h3 className="typ-h3" style={{ margin: 0 }}>Raccomandazioni</h3>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {recs.map((rec, i) => <RecommendationCard key={i} rec={rec} />)}
+          </div>
+        </div>
+      )}
+
+      <details>
+        <summary className="typ-micro" style={{ cursor: 'pointer', color: 'var(--text-muted)', userSelect: 'none' }}>
+          Brief completo (markdown)
+        </summary>
+        <pre
+          style={{
+            margin: 'var(--s3) 0 0 0',
+            padding: 'var(--s4)',
+            background: 'var(--card-muted)',
+            borderRadius: 'var(--r-s)',
+            whiteSpace: 'pre-wrap',
+            fontSize: 12,
+            lineHeight: 1.6,
+            fontFamily: 'inherit',
+            color: 'var(--text)',
+          }}
+        >
+          {brief.brief_markdown}
+        </pre>
+      </details>
+    </div>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────────────
+   Post diagnosis — arricchisce le card "Da migliorare" col perché +
+   come fix (dalla tabella smm_night_briefs.post_diagnoses).
+   ────────────────────────────────────────────────────────────────── */
+
+function PostDiagnosisBox({ diagnosis }: { diagnosis: BriefPostDiagnosis }) {
+  return (
+    <div
+      style={{
+        marginTop: 'var(--s2)',
+        padding: 'var(--s2) var(--s3)',
+        background: 'color-mix(in oklab, var(--warn) 8%, transparent)',
+        borderRadius: 'var(--r-s)',
+        borderLeft: '2px solid var(--warn)',
+        fontSize: 12,
+        lineHeight: 1.5,
+      }}
+    >
+      <div style={{ color: 'var(--text-muted)' }}>
+        {diagnosis.reasons.map((r, i) => (
+          <div key={i} style={{ marginBottom: i < diagnosis.reasons.length - 1 ? 2 : 0 }}>
+            • {r}
+          </div>
+        ))}
+      </div>
+      <div style={{ marginTop: 4, fontWeight: 500, color: 'var(--text)' }}>
+        → {diagnosis.suggested_fix}
+      </div>
+    </div>
+  );
+}
+
 function EarlyModeBanner({ daysOfData, firstSnapshot }: { daysOfData: number; firstSnapshot: string | null }) {
   const daysToActive = Math.max(0, 14 - daysOfData);
   const daysSince = firstSnapshot ? Math.floor((Date.now() - new Date(firstSnapshot).getTime()) / 86_400_000) : 0;
@@ -321,7 +559,17 @@ function EarlyModeBanner({ daysOfData, firstSnapshot }: { daysOfData: number; fi
 // PAGE
 // ============================================================================
 export default async function SocialInsightsPage() {
-  const { ig, fb, refreshedAt } = await loadSummary();
+  const [{ ig, fb, refreshedAt }, brief] = await Promise.all([
+    loadSummary(),
+    loadLatestBrief(),
+  ]);
+
+  // Lookup: external_post_id → diagnosis. Le bottom_posts della view e le
+  // post_diagnoses del brief notturno hanno entrambi external_post_id.
+  const diagnosisByPostId = new Map<string, BriefPostDiagnosis>();
+  for (const d of brief?.post_diagnoses ?? []) {
+    diagnosisByPostId.set(d.external_post_id, d);
+  }
 
   // Modalità: early se almeno una platform è in early o se non abbiamo dati
   const mode: 'early' | 'active' =
@@ -378,6 +626,9 @@ export default async function SocialInsightsPage() {
           Crescita, engagement e cosa funziona sui canali LAVIKA. Dati Meta Graph aggiornati ogni 6h.
         </p>
       </div>
+
+      {/* Morning Brief (daemon Mac notturno) — hero in cima se disponibile */}
+      {brief && <MorningBriefSection brief={brief} />}
 
       {/* Early mode banner */}
       {mode === 'early' && <EarlyModeBanner daysOfData={daysOfData} firstSnapshot={firstSnapshot} />}
@@ -437,7 +688,15 @@ export default async function SocialInsightsPage() {
               <h2 className="typ-h2" style={{ margin: 0 }}>Da migliorare</h2>
             </div>
             {bottomMerged.length > 0 ? (
-              bottomMerged.map(p => <PostCard key={`bot-${p._platform}-${p.id}`} post={p} platform={p._platform} accent="bottom" />)
+              bottomMerged.map(p => {
+                const diag = diagnosisByPostId.get(p.id);
+                return (
+                  <div key={`bot-${p._platform}-${p.id}`}>
+                    <PostCard post={p} platform={p._platform} accent="bottom" />
+                    {diag && <PostDiagnosisBox diagnosis={diag} />}
+                  </div>
+                );
+              })
             ) : (
               <div className="card card-body typ-caption" style={{ color: 'var(--text-muted)' }}>
                 Servono almeno 3-5 post per il confronto.
