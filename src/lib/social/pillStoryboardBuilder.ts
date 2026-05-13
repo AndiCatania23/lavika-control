@@ -119,26 +119,42 @@ Stili disponibili (scegli per scena):
 - "glow": glow effect per emozione
 
 Durata scene: 30=1s, 60=2s, 90=3s. Total deve essere ≈ 240 (8s).
-DURATA MINIMA PER SCENA CON TESTO: 50 frame (1.67s) per essere leggibile.
-Scene "fade-in" finale può essere min 40 frame. Niente scene < 30 frame mai.
+DURATA MINIMA PER SCENA CON TESTO: 60 frame (2s) per essere leggibile.
+Total scene con testo: **MAX 2 scene principali + 1 outro corto**.
 
-PATTERN STORYBOARD PER NARRATIVE TYPE:
+FILOSOFIA COMPACT (importante!):
+Il titolo della pill è CORTO (30-70 char). Spezzarlo in 4 scene allunga
+artificialmente il video e fa percepire "tirato". Meglio 2 scene piene
++ outro. Una scena può contenere TUTTA una frase, non solo 1-2 parole.
 
-• quote:    s1=quote-marks (40f) → s2=type-on quote main (120f) → s3=attribution speaker (60f) → s4=fade-in (40f)
+PATTERN STORYBOARD PER NARRATIVE TYPE (2 scene principali + outro):
 
-• stat:     s1=counter-up numero (60f) → s2=eyebrow-tag unità (60f) → s3=scale-in/reveal-mask payoff (80f) → s4=fade-in (40f)
+• quote:    s1=quote-marks (50f) →
+            s2=type-on quote TUTTA + attribution allineata sotto (140f) →
+            s3=fade-in outro (50f)
 
-• anniversary: s1=counter-up N (60f) → s2=eyebrow-tag "ANNI FA" (50f) → s3=reveal-mask hero (90f) → s4=fade-in payoff (40f)
+• stat:     s1=counter-up numero + eyebrow unit (110f) →
+            s2=reveal-mask/scale-in payoff completo (90f) →
+            s3=fade-in outro (40f)
 
-• year:     s1=scale-in anno (70f) → s2=reveal-mask main_phrase (90f) → s3=slide-up/fade payoff (80f)
+• anniversary: s1=counter-up N + "ANNI FA" eyebrow (100f) →
+            s2=reveal-mask main_phrase TUTTA (100f) →
+            s3=fade-in payoff (40f)
 
-• news:     PATTERN EDITORIAL HEADLINE — è il 50% delle pill, regia dedicata:
-            s1=scale-in HOOK UPPERCASE bold/warning (70f) →
-            s2=type-on body narrativo (110f) →
-            s3=pulse-emphasis o slide-up payoff (60f).
-            Per tone "provocative" usa style="warning". Per "celebrative" style="gold".
+• year:     s1=scale-in anno (80f) →
+            s2=reveal-mask main_phrase completa (120f) →
+            s3=fade-in outro (40f)
 
-• narrative: fallback hero text — usa type-on/reveal-mask 2 scene.
+• news:     PATTERN EDITORIAL HEADLINE - regia compact, niente padding:
+            s1=scale-in HOOK keyword forte uppercase warning/gold (80f) →
+            s2=type-on body NARRATIVO COMPLETO (120f) con emphasis →
+            s3=fade-in/pulse outro (40f).
+            Per tone "provocative" usa style="warning" su s1.
+            Per "celebrative" usa style="gold" su s1.
+
+• narrative: 1 sola scena type-on TUTTO il titolo + outro:
+            s1=type-on titolo intero letter-by-letter con emphasis (180f) →
+            s2=fade-in outro (60f)
 
 TONO → STILE (importante!):
 - tone=provocative → style "warning" sulle scene principali (red accent #FF4444)
@@ -156,72 +172,85 @@ Output JSON ESATTO (niente fence):
   "_rationale": "<1 frase debug>"
 }
 
-ESEMPI:
+ESEMPI (notare: max 2 scene principali con testo + outro):
 
-INPUT facts: {quote:"Doppio risultato? Sconfitti se ci pensate", speaker:"Ricchiuti", number:null, main_phrase:"Doppio risultato?", ...}
+INPUT facts: {quote:"Doppio risultato? Sconfitti se ci pensate", speaker:"Ricchiuti"}
 INPUT type: "quote"
 OUTPUT:
 {
   "narrative_type": "quote",
   "scenes": [
-    {"id":"s1","duration":40,"anim":"quote-marks","style":"gold","text":"\\""},
-    {"id":"s2","duration":100,"anim":"type-on","style":"bold","text":"Doppio risultato? Sconfitti se ci pensate","emphasis":"Sconfitti"},
-    {"id":"s3","duration":60,"anim":"attribution","style":"gold","text":"RICCHIUTI"},
-    {"id":"s4","duration":40,"anim":"fade-in","style":"subtle","text":""}
+    {"id":"s1","duration":50,"anim":"quote-marks","style":"gold","text":"\\""},
+    {"id":"s2","duration":140,"anim":"type-on","style":"bold","text":"Doppio risultato? Sconfitti se ci pensate","emphasis":"Sconfitti"},
+    {"id":"s3","duration":50,"anim":"attribution","style":"gold","text":"RICCHIUTI"}
   ],
   "tone": "provocative",
   "image_strategy": "static-darken",
   "shareability_score": 8,
-  "_rationale": "Quote provocatoria, type-on per build up tension"
+  "_rationale": "Quote: virgolette → tutta la frase letter-by-letter → attribution outro. 3 elementi totali, niente filler."
 }
 
-INPUT facts: {number:12, number_unit:"gol", main_phrase:"12 gol dalla panchina", secondary_phrase:"la forza nascosta del Catania", tone_hint:"celebrative", ...}
+INPUT facts: {number:12, number_unit:"gol", main_phrase:"12 gol dalla panchina", secondary_phrase:"la forza nascosta del Catania", tone_hint:"celebrative"}
 INPUT type: "stat"
 OUTPUT:
 {
   "narrative_type": "stat",
   "scenes": [
-    {"id":"s1","duration":50,"anim":"counter-up","style":"bold","text":"12"},
-    {"id":"s2","duration":40,"anim":"eyebrow-tag","style":"gold","text":"GOL DALLA PANCHINA"},
-    {"id":"s3","duration":90,"anim":"reveal-mask","style":"gold","text":"LA FORZA NASCOSTA DEL CATANIA"},
-    {"id":"s4","duration":60,"anim":"fade-in","style":"subtle","text":""}
+    {"id":"s1","duration":110,"anim":"counter-up","style":"bold","text":"12"},
+    {"id":"s2","duration":90,"anim":"reveal-mask","style":"gold","text":"GOL DALLA PANCHINA · LA FORZA NASCOSTA"},
+    {"id":"s3","duration":40,"anim":"fade-in","style":"subtle","text":""}
   ],
   "tone": "celebrative",
   "image_strategy": "ken-burns-zoom-out",
   "shareability_score": 8,
-  "_rationale": "Stat sorprendente, counter-up sul numero protagonista, payoff con reveal mask"
+  "_rationale": "Stat compact: 12 conta + tutto il payoff in una scena reveal-mask"
 }
 
-INPUT facts: {main_phrase:"Tegola inaspettata", secondary_phrase:"Donnarumma rischia i primi playoff", tone_hint:"provocative", people:["Donnarumma"], ...}
+INPUT facts: {main_phrase:"Tegola inaspettata", secondary_phrase:"Donnarumma rischia i primi playoff", tone_hint:"provocative", people:["Donnarumma"]}
 INPUT type: "news"
 OUTPUT:
 {
   "narrative_type": "news",
   "scenes": [
-    {"id":"s1","duration":70,"anim":"scale-in","style":"warning","text":"TEGOLA INASPETTATA"},
-    {"id":"s2","duration":110,"anim":"type-on","style":"bold","text":"Donnarumma rischia i primi playoff","emphasis":"Donnarumma"},
-    {"id":"s3","duration":60,"anim":"pulse-emphasis","style":"warning","text":"PRIMI PLAYOFF A RISCHIO"}
+    {"id":"s1","duration":80,"anim":"scale-in","style":"warning","text":"TEGOLA INASPETTATA"},
+    {"id":"s2","duration":120,"anim":"type-on","style":"bold","text":"Donnarumma rischia i primi playoff","emphasis":"Donnarumma"},
+    {"id":"s3","duration":40,"anim":"fade-in","style":"subtle","text":""}
   ],
   "tone": "provocative",
   "image_strategy": "static-darken",
   "shareability_score": 8,
-  "_rationale": "News provocative: hook in red warning per drama, body type-on per build-up, pulse finale per emphasis"
+  "_rationale": "News provocative compact: hook red warning, body type-on completo con emphasis su Donnarumma, outro fade."
 }
 
-INPUT facts: {main_phrase:"Caturano salva il Catania", secondary_phrase:"pareggio prezioso contro l'Atalanta U23", tone_hint:"celebrative", people:["Caturano"], ...}
+INPUT facts: {main_phrase:"Caturano salva il Catania", secondary_phrase:"pareggio prezioso contro l'Atalanta U23", tone_hint:"celebrative", people:["Caturano"]}
 INPUT type: "news"
 OUTPUT:
 {
   "narrative_type": "news",
   "scenes": [
-    {"id":"s1","duration":70,"anim":"scale-in","style":"gold","text":"CATURANO SALVA"},
-    {"id":"s2","duration":110,"anim":"type-on","style":"bold","text":"pareggio prezioso contro l'Atalanta U23","emphasis":"prezioso"},
-    {"id":"s3","duration":60,"anim":"pulse-emphasis","style":"gold","text":"PUNTO D'ORO"}
+    {"id":"s1","duration":80,"anim":"scale-in","style":"gold","text":"CATURANO SALVA"},
+    {"id":"s2","duration":120,"anim":"type-on","style":"bold","text":"pareggio prezioso contro l'Atalanta U23","emphasis":"prezioso"},
+    {"id":"s3","duration":40,"anim":"fade-in","style":"subtle","text":""}
   ],
   "tone": "celebrative",
   "image_strategy": "ken-burns-zoom-out",
   "shareability_score": 8,
-  "_rationale": "News celebrative gol decisivo: hook bold gold, body con emphasis su 'prezioso', payoff celebrativo"
+  "_rationale": "News celebrative compact: hook gold scale-in, body type-on completo con emphasis su 'prezioso', outro."
+}
+
+INPUT facts: {main_phrase:"Casasola e Donnarumma verso il rientro per i playoff!", people:["Casasola","Donnarumma"]}
+INPUT type: "narrative"
+OUTPUT:
+{
+  "narrative_type": "narrative",
+  "scenes": [
+    {"id":"s1","duration":180,"anim":"type-on","style":"bold","text":"Casasola e Donnarumma verso il rientro per i playoff","emphasis":"rientro"},
+    {"id":"s2","duration":60,"anim":"fade-in","style":"subtle","text":""}
+  ],
+  "tone": "celebrative",
+  "image_strategy": "ken-burns-zoom-in",
+  "shareability_score": 7,
+  "_rationale": "Narrative compact: tutto il titolo type-on cinematografico, emphasis su 'rientro' che è la news, outro fade."
 }
 
 Output SOLO JSON. Componi storyboard per i facts qui sotto.`;

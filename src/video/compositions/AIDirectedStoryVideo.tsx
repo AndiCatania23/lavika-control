@@ -281,8 +281,16 @@ const SceneTypeOn: React.FC<{ scene: z.infer<typeof sceneSchema>; tone: string }
   const fade = sceneOpacity(frame, scene.duration);
   const color = colorForStyle(scene.style, tone);
   // LETTER-BY-LETTER reveal — più cinematografico di word-by-word
-  const chars = Array.from(scene.text);
-  const totalCharsAt = interpolate(frame, [0, scene.duration * 0.75], [0, chars.length], {
+  // Wrap parole in span non-spezzabili → CSS non spezza più "Donna/rumma".
+  const tokens: Array<{ text: string; start: number; isSpace: boolean }> = [];
+  {
+    let off = 0;
+    for (const w of scene.text.split(/(\s+)/)) {
+      tokens.push({ text: w, start: off, isSpace: /^\s+$/.test(w) });
+      off += w.length;
+    }
+  }
+  const totalCharsAt = interpolate(frame, [0, scene.duration * 0.75], [0, scene.text.length], {
     extrapolateLeft: 'clamp', extrapolateRight: 'clamp',
   });
   return (
@@ -300,21 +308,29 @@ const SceneTypeOn: React.FC<{ scene: z.infer<typeof sceneSchema>; tone: string }
         textAlign: 'center',
         maxWidth: 920,
       }}>
-        {chars.map((ch, i) => {
-          const charProgress = Math.max(0, Math.min(1, totalCharsAt - i));
-          // Cerca emphasis: highlight in gold le parole nel scene.emphasis
-          const wordsBefore = scene.text.slice(0, i).split(/\s+/);
-          const currentWord = wordsBefore[wordsBefore.length - 1] + (ch === ' ' ? '' : ch);
+        {tokens.map((t, ti) => {
+          if (t.isSpace) {
+            const cp = Math.max(0, Math.min(1, totalCharsAt - t.start));
+            return <span key={ti} style={{ opacity: cp }}>{t.text}</span>;
+          }
           const isEmphasis = !!(scene.emphasis &&
-            currentWord.toLowerCase().includes(scene.emphasis.toLowerCase()));
+            t.text.toLowerCase().includes(scene.emphasis.toLowerCase()));
           return (
-            <span key={i} style={{
-              opacity: charProgress,
-              color: isEmphasis ? ACCENT_GOLD : 'inherit',
+            <span key={ti} style={{
               display: 'inline-block',
-              transform: `translateY(${(1 - charProgress) * 12}px) scale(${0.85 + charProgress * 0.15})`,
+              whiteSpace: 'nowrap',
+              color: isEmphasis ? ACCENT_GOLD : 'inherit',
             }}>
-              {ch === ' ' ? ' ' : ch}
+              {Array.from(t.text).map((ch, ci) => {
+                const cp = Math.max(0, Math.min(1, totalCharsAt - (t.start + ci)));
+                return (
+                  <span key={ci} style={{
+                    display: 'inline-block',
+                    opacity: cp,
+                    transform: `translateY(${(1 - cp) * 12}px) scale(${0.85 + cp * 0.15})`,
+                  }}>{ch}</span>
+                );
+              })}
             </span>
           );
         })}
