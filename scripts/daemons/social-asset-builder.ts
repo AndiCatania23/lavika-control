@@ -93,6 +93,14 @@ interface RecipeResult {
   format: string;
   renderedTitle: string | null;
   renderedLines: string[];
+  /** Metadata LLM Content Director (solo PillStatVideo). Va nel asset_meta. */
+  llm_meta?: {
+    mode?: string;
+    tone?: string;
+    shareability_score?: number;
+    shareability_factors?: string[];
+    rationale?: string;
+  };
 }
 
 async function runRecipe(recipe: string, params: Record<string, unknown>): Promise<RecipeResult> {
@@ -119,6 +127,7 @@ async function runRecipe(recipe: string, params: Record<string, unknown>): Promi
       };
 
       let finalInputProps = p.inputProps ?? {};
+      let directorMeta: RecipeResult['llm_meta'] | undefined;
 
       // ── Content Director: per le composition PillStatVideo, chiamiamo
       //    Ollama gemma3 per capire la pill semanticamente e dirigere la
@@ -149,9 +158,14 @@ async function runRecipe(recipe: string, params: Record<string, unknown>): Promi
               ms: Date.now() - t0,
               mode: director.mode,
               tone: director.tone,
+              shareability: director.shareability_score,
+              factors: director.shareability_factors,
               rationale: director._rationale,
             });
-            // Sovrascrive i campi semantici, preserva imageUrl + category
+            // Sovrascrive i campi semantici, preserva imageUrl + category.
+            // shareability_score/factors NON vanno nei inputProps (la
+            // composition non li usa) ma vengono propagati a asset_meta
+            // tramite il job result-meta path. Salviamoli su closure scope.
             finalInputProps = {
               ...finalInputProps,
               mode: director.mode === 'achievement' ? 'stat' : director.mode,
@@ -163,6 +177,16 @@ async function runRecipe(recipe: string, params: Record<string, unknown>): Promi
               payoff: director.payoff,
               _llm_director_done: true,
               _llm_tone: director.tone,
+              _llm_shareability_score: director.shareability_score,
+              _llm_shareability_factors: director.shareability_factors,
+              _llm_rationale: director._rationale,
+            };
+            directorMeta = {
+              mode: director.mode,
+              tone: director.tone,
+              shareability_score: director.shareability_score,
+              shareability_factors: director.shareability_factors,
+              rationale: director._rationale,
             };
           }
         } catch (e) {
@@ -178,7 +202,7 @@ async function runRecipe(recipe: string, params: Record<string, unknown>): Promi
         width:         p.width,
         height:        p.height,
       });
-      return video as RecipeResult;
+      return { ...(video as RecipeResult), llm_meta: directorMeta };
     }
     case 'ffmpeg_resize':
       throw new Error('ffmpeg_resize: NOT YET IMPLEMENTED');
@@ -225,6 +249,10 @@ async function processJob(job: QueueJob): Promise<void> {
           recipe: job.recipe,
           built_at: new Date().toISOString(),
           built_by: WORKER_ID,
+          // LLM Content Director output (solo PillStatVideo + pill source).
+          // Usato dal SMM Night Brief per identificare pill ad alto
+          // "sends per reach" potential (IG 2026 ranking signal #1 Mosseri).
+          llm: asset.llm_meta ?? null,
         },
         status: 'asset_ready',
         updated_at: new Date().toISOString(),

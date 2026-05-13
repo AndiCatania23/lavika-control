@@ -45,6 +45,20 @@ export interface DirectorOutput {
   payoff: string;
   /** Tono emotivo (per future palette adaptive, oggi solo metadata). */
   tone: 'celebrative' | 'nostalgic' | 'provocative' | 'factual';
+  /**
+   * Shareability score 1-10 — quanto questo contenuto fa venire voglia
+   * a un tifoso di GIRARLO IN DM a un amico. Su Instagram 2026 il
+   * "sends per reach" è il segnale di ranking #1 (cit. Mosseri).
+   * Score alto significa: contenuto candidato per match-day priority,
+   * push notification ai super-fan, surface nel SMM brief mattutino.
+   */
+  shareability_score: number;
+  /**
+   * Fattori che giustificano lo score (curiosity_gap, polemic,
+   * insider, identitario, stat_surprise, comparison, throwback,
+   * humor, controversy).
+   */
+  shareability_factors: string[];
   /** Rationale interno (debug / log, non renderizzato). */
   _rationale?: string;
   /** Flag interno che indica che l'LLM ha generato questo output. */
@@ -94,7 +108,7 @@ Modes disponibili (scegli UNO):
 
 Output JSON ESATTO (niente fence, niente prefazione):
 {
-  "mode": "stat|anniversary|year|hero|achievement",
+  "mode": "stat|anniversary|year|hero|achievement|quote",
   "number": <int dal title|null>,
   "numberSuffix": "<vuoto|%|°>",
   "eyebrow": "<label uppercase: ANNI FA, GOL, VITTORIE, % — solo se serve>",
@@ -102,8 +116,37 @@ Output JSON ESATTO (niente fence, niente prefazione):
   "context": "<sotto-frase UPPERCASE per stat, vuoto altrimenti>",
   "payoff": "<sotto-frase UPPERCASE dopo i ':' del title se presente, vuoto altrimenti>",
   "tone": "celebrative|nostalgic|provocative|factual",
+  "shareability_score": <int 1-10>,
+  "shareability_factors": [<lista 1-3 fattori dalla lista qui sotto>],
   "_rationale": "<1 frase debug>"
 }
+
+SHAREABILITY SCORE (1-10): quanto questo contenuto fa VENIRE VOGLIA A UN TIFOSO
+di GIRARLO IN DM a un amico ("guarda questo!"). È il segnale di ranking #1 di
+Instagram 2026 (cit. Mosseri "sends per reach"). Valuta onestamente.
+
+Fattori che ALZANO lo score (cita 1-3 nei shareability_factors):
+- "curiosity_gap": numero/fatto sorprendente che fa "non lo sapevo!"
+- "polemic": arbitri, decisioni controverse, dichiarazioni forti
+- "insider": dettaglio che solo veri tifosi capiscono
+- "identitario": orgoglio Catania, sicilianità, storia gloriosa
+- "stat_surprise": numero contro-intuitivo o record
+- "comparison": confronto con altre squadre Serie C
+- "throwback": memoria condivisa che riaccende ricordi
+- "humor": battuta o ironia genuina
+- "controversy": tema divisivo (es. mister X sì o no)
+
+Fattori che ABBASSANO lo score:
+- Informazione generica/banale
+- Caption corporate / promo
+- Nessun hook emozionale
+- Riassunto neutrale di un evento ormai vecchio
+
+Esempi di scoring:
+  Score 9-10: scoop assoluto, dichiarazione bomba, gol decisivo all'ultimo
+  Score 7-8: stat sorprendente, anniversary forte, quote provocatoria
+  Score 4-6: stat ordinaria, info di servizio, content didascalico
+  Score 1-3: contenuto promozionale o filler senza emozione
 
 ALTRE REGOLE:
 - numberSuffix solo se il title ha "%" o "°" attaccato al numero
@@ -127,7 +170,9 @@ OUTPUT: {
   "context": "",
   "payoff": "",
   "tone": "provocative",
-  "_rationale": "Citazione diretta dello speaker Ricchiuti, layout quote con attribution"
+  "shareability_score": 8,
+  "shareability_factors": ["polemic", "insider"],
+  "_rationale": "Citazione diretta provocatoria di Ricchiuti, alta condivisibilità tra tifosi"
 }
 
 INPUT: { title: "Di Tacchio, 10 anni fa il trionfo playoff: l'esperienza conta", category: "flash" }
@@ -140,7 +185,9 @@ OUTPUT: {
   "context": "",
   "payoff": "L'ESPERIENZA CONTA",
   "tone": "nostalgic",
-  "_rationale": "Anniversary 10 anni fa, heroText prima del ':', payoff dopo"
+  "shareability_score": 7,
+  "shareability_factors": ["throwback", "identitario"],
+  "_rationale": "Anniversary 10 anni fa, heroText prima del ':', payoff dopo. Score alto: throwback emotivo + identitario."
 }
 
 INPUT: { title: "Caturano: 12 gol in stagione", category: "numeri" }
@@ -153,7 +200,9 @@ OUTPUT: {
   "context": "GOL IN STAGIONE",
   "payoff": "",
   "tone": "celebrative",
-  "_rationale": "Stat con speaker prefix Caturano. Context include unità+qualifica unite per chiarezza visiva (1 livello bianco sotto numero, no eyebrow)"
+  "shareability_score": 6,
+  "shareability_factors": ["stat_surprise", "identitario"],
+  "_rationale": "Stat con speaker prefix Caturano. Context include unità+qualifica unite per chiarezza visiva. Score medio: stat di routine."
 }
 
 INPUT: { title: "12 gol dalla panchina: la forza nascosta del Catania", category: "numeri" }
@@ -166,7 +215,9 @@ OUTPUT: {
   "context": "GOL DALLA PANCHINA",
   "payoff": "LA FORZA NASCOSTA DEL CATANIA",
   "tone": "celebrative",
-  "_rationale": "Stat con editorial split: context=unità+qualifica unite (GOL DALLA PANCHINA, bianco grande sotto numero), payoff=parte dopo ':' (gold piccolo). Niente eyebrow per evitare 3 livelli sovrapposti."
+  "shareability_score": 8,
+  "shareability_factors": ["stat_surprise", "insider", "identitario"],
+  "_rationale": "Stat con editorial split. Score alto: 12 gol dalla panchina è contro-intuitivo e fa girare in DM ('hai visto quanti gol dalla panchina?')."
 }
 
 INPUT: { title: "Promosso in B nel 2007", category: "storia" }
@@ -179,6 +230,8 @@ OUTPUT: {
   "context": "",
   "payoff": "",
   "tone": "nostalgic",
+  "shareability_score": 6,
+  "shareability_factors": ["throwback", "identitario"],
   "_rationale": "Anno storico promozione, heroText accorciato dal title"
 }
 
@@ -192,7 +245,9 @@ OUTPUT: {
   "context": "",
   "payoff": "",
   "tone": "provocative",
-  "_rationale": "No numero, hero text dal title intero"
+  "shareability_score": 7,
+  "shareability_factors": ["polemic", "insider"],
+  "_rationale": "No numero, hero text dal title intero. Score alto: 'tabù playoff' è una polemica condivisibile tra tifosi."
 }`;
 
 /* ──────────────────────────────────────────────────────────────────
@@ -201,6 +256,16 @@ OUTPUT: {
 
 const VALID_MODES = new Set<DirectorOutput['mode']>(['stat', 'anniversary', 'year', 'hero', 'achievement', 'quote']);
 const VALID_TONES = new Set<DirectorOutput['tone']>(['celebrative', 'nostalgic', 'provocative', 'factual']);
+const VALID_SHAREABILITY_FACTORS = new Set([
+  'curiosity_gap', 'polemic', 'insider', 'identitario',
+  'stat_surprise', 'comparison', 'throwback', 'humor', 'controversy',
+]);
+
+function clampScore(n: unknown, min = 1, max = 10, fallback = 5): number {
+  const v = typeof n === 'number' ? n : parseInt(String(n), 10);
+  if (Number.isNaN(v)) return fallback;
+  return Math.max(min, Math.min(max, Math.round(v)));
+}
 
 /** Stopword italiane comuni — escluse dal calcolo overlap title↔output. */
 const STOPWORDS = new Set([
@@ -323,6 +388,15 @@ Genera SOLO il JSON output, niente prefazione né code fence.`;
     );
   }
 
+  // Shareability validation + clamp
+  const shareability_score = clampScore(parsed.shareability_score, 1, 10, 5);
+  const rawFactors = Array.isArray(parsed.shareability_factors) ? parsed.shareability_factors : [];
+  const shareability_factors = rawFactors
+    .filter((f): f is string => typeof f === 'string')
+    .map(f => f.trim().toLowerCase())
+    .filter(f => VALID_SHAREABILITY_FACTORS.has(f))
+    .slice(0, 3);
+
   return {
     mode,
     number,
@@ -332,6 +406,8 @@ Genera SOLO il JSON output, niente prefazione né code fence.`;
     context: typeof parsed.context === 'string' ? parsed.context.trim().toUpperCase() : '',
     payoff,
     tone,
+    shareability_score,
+    shareability_factors,
     _rationale: typeof parsed._rationale === 'string' ? parsed._rationale : undefined,
     _llm_director_done: true,
   };
