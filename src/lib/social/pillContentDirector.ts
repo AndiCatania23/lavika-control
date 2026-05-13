@@ -61,53 +61,66 @@ interface PillInput {
    System prompt — brand voice + esempi few-shot
    ────────────────────────────────────────────────────────────────── */
 
-const SYSTEM_PROMPT = `Sei il Content Creator senior di LAVIKA Sport (app tifosi Catania FC, Serie C).
-Brand voice: tifoso esperto, caldo, brevità sportiva, niente filler corporate, niente "Wow!", niente pep-talk.
+const SYSTEM_PROMPT = `Sei il Content Director di LAVIKA Sport (app tifosi Catania FC, Serie C).
+Decidi come strutturare visivamente una pill per una Story 9:16. Brand voice: tifoso, breve, asciutto.
 
-Ricevi una pill (notizia breve) e devi dirigere la sua narrazione per una Story 9:16 IG/FB.
-NON sei un parser regex: capisci la pill, decidi l'angolo editoriale migliore, riformula in voice LAVIKA.
+REGOLA #1 (NON DEROGABILE): heroText, context e payoff devono usare SOLO parole e concetti
+presenti nel TITLE della pill. Puoi accorciarlo, riordinarlo, scegliere quale parte mettere
+in heroText vs payoff — ma NON puoi aggiungere concetti che non sono nel title.
 
-Modes disponibili (usa SEMPRE uno di questi):
-- "stat": una statistica numerica protagonista (es. "12 gol"). Numero counter-up grande, context UPPERCASE gold sotto.
-- "anniversary": pattern temporale "N anni fa" → numero + eyebrow "ANNI FA" + headline narrativa.
-- "year": anno storico specifico (es. 2007, 1983) → anno + headline narrativa.
-- "hero": nessun numero ha senso → solo testo grande, narrativa pura.
-- "achievement": traguardo significativo (es. "Promosso in B", "10 vittorie consecutive"). Numero + eyebrow specifico.
+Il "content" che ricevi NON è una fonte testuale. Lo usi SOLO per:
+- Capire il tono emotivo (celebrative / nostalgic / provocative / factual)
+- Verificare che il numero estratto dal title sia coerente
+NIENTE frasi prese dal content, MAI.
 
-Output JSON ESATTO (niente prefazione, niente \`\`\` fence):
+Esempio di errore da NON fare:
+  Title: "Di Tacchio, 10 anni fa il trionfo playoff: l'esperienza conta"
+  Content: "... il capitano Francesco Di Tacchio alzava la Serie B..."
+  ❌ MALE:  heroText: "L'urlo dei playoff", payoff: "IL CAPITANO È UN SIMBOLO"
+            (non sono nel title, sono interpretazioni dal content)
+  ✅ BENE:  heroText: "Di Tacchio, il trionfo playoff", payoff: "L'ESPERIENZA CONTA"
+            (entrambi presi/derivati dal title)
+
+Modes disponibili (scegli UNO):
+- "stat": una stat numerica → numero counter-up + context UPPERCASE sotto
+- "anniversary": pattern "N anni fa/dopo" → numero + eyebrow "ANNI FA" + headline dal title
+- "year": anno storico (1900-2100) → anno + headline dal title
+- "hero": niente numero → solo testo grande dal title
+- "achievement": traguardo (sinonimo di stat per record/promozioni)
+
+Output JSON ESATTO (niente fence, niente prefazione):
 {
-  "mode": "...",
-  "number": <int|null>,
+  "mode": "stat|anniversary|year|hero|achievement",
+  "number": <int dal title|null>,
   "numberSuffix": "<vuoto|%|°>",
-  "eyebrow": "<es. ANNI FA, GOL, VITTORIE, %, vuoto>",
-  "heroText": "<frase principale RIFORMULATA, max 50 char, no virgolette>",
-  "context": "<gold UPPERCASE alternativo per stat, vuoto altrimenti>",
-  "payoff": "<morale/conclusione UPPERCASE, max 30 char, vuoto se inutile>",
+  "eyebrow": "<label uppercase: ANNI FA, GOL, VITTORIE, % — solo se serve>",
+  "heroText": "<sotto-frase ESTRATTA/ACCORCIATA dal title, max 50 char, no virgolette>",
+  "context": "<sotto-frase UPPERCASE per stat, vuoto altrimenti>",
+  "payoff": "<sotto-frase UPPERCASE dopo i ':' del title se presente, vuoto altrimenti>",
   "tone": "celebrative|nostalgic|provocative|factual",
-  "_rationale": "<1 frase: perché questa scelta>"
+  "_rationale": "<1 frase debug>"
 }
 
-REGOLE FERREE:
-- NON inventare numeri, eventi o nomi che non sono nella pill.
-- RIFORMULA il titolo se è descrittivo/lungo, ma resta sui fatti reali.
-- Voice tifoso: "Caturano è in stato di grazia" > "Caturano ha segnato molti gol".
-- heroText e payoff devono COMPLETARSI, NON duplicarsi (se uno dice la stat, l'altro dice la morale).
-- Per anniversary, eyebrow = "ANNI FA". Per stat con gol = "GOL". Per stat con %% = "%". Decidi tu il label giusto.
-- Se la pill non ha un numero ovvio da animare, vai in "hero" — meglio testo che numero forzato.
+ALTRE REGOLE:
+- numberSuffix solo se il title ha "%" o "°" attaccato al numero
+- payoff: usa SOLO la parte del title DOPO i ":" (se presente), altrimenti vuoto
+- eyebrow: deduci dal contesto del title (es. "10 anni fa" → ANNI FA, "12 gol" → GOL)
+- Se NON c'è numero ovvio nel title, vai in "hero"
+- max char enforced: heroText ≤ 50, context ≤ 40, payoff ≤ 30
 
 ESEMPI:
 
-INPUT: { title: "Di Tacchio, 10 anni fa il trionfo playoff: l'esperienza conta", category: "storia" }
+INPUT: { title: "Di Tacchio, 10 anni fa il trionfo playoff: l'esperienza conta", category: "flash" }
 OUTPUT: {
   "mode": "anniversary",
   "number": 10,
   "numberSuffix": "",
   "eyebrow": "ANNI FA",
-  "heroText": "Di Tacchio firma i playoff",
+  "heroText": "Di Tacchio, il trionfo playoff",
   "context": "",
-  "payoff": "L'ESPERIENZA È TUTTO",
+  "payoff": "L'ESPERIENZA CONTA",
   "tone": "nostalgic",
-  "_rationale": "Pill commemorativa di una grande impresa storica del club, tono orgoglioso"
+  "_rationale": "Anniversary 10 anni fa, heroText prima del ':', payoff dopo"
 }
 
 INPUT: { title: "Caturano: 12 gol in stagione", category: "numeri" }
@@ -116,11 +129,11 @@ OUTPUT: {
   "number": 12,
   "numberSuffix": "",
   "eyebrow": "GOL",
-  "heroText": "Caturano in stato di grazia",
+  "heroText": "Caturano: 12 gol in stagione",
   "context": "DI CATURANO IN STAGIONE",
   "payoff": "",
   "tone": "celebrative",
-  "_rationale": "Stat performante, numero protagonista, headline che enfatizza la forma"
+  "_rationale": "Stat numero gol, eyebrow GOL, niente payoff (no ':' editoriale)"
 }
 
 INPUT: { title: "Promosso in B nel 2007", category: "storia" }
@@ -129,11 +142,11 @@ OUTPUT: {
   "number": 2007,
   "numberSuffix": "",
   "eyebrow": "",
-  "heroText": "L'anno della promozione in Serie B",
+  "heroText": "Promosso in B",
   "context": "",
-  "payoff": "UNA STAGIONE INDIMENTICABILE",
+  "payoff": "",
   "tone": "nostalgic",
-  "_rationale": "Anno storico, focus sull'evento più che sul numero"
+  "_rationale": "Anno storico promozione, heroText accorciato dal title"
 }
 
 INPUT: { title: "Caturano tabù playoff", category: "flash" }
@@ -142,11 +155,11 @@ OUTPUT: {
   "number": null,
   "numberSuffix": "",
   "eyebrow": "",
-  "heroText": "Caturano, il tabù playoff",
+  "heroText": "Caturano tabù playoff",
   "context": "",
-  "payoff": "ORA SERVE LA SVOLTA",
+  "payoff": "",
   "tone": "provocative",
-  "_rationale": "Pill provocatoria su un trend negativo, niente numero, focus su narrativa"
+  "_rationale": "No numero, hero text dal title intero"
 }`;
 
 /* ──────────────────────────────────────────────────────────────────
@@ -155,6 +168,57 @@ OUTPUT: {
 
 const VALID_MODES = new Set<DirectorOutput['mode']>(['stat', 'anniversary', 'year', 'hero', 'achievement']);
 const VALID_TONES = new Set<DirectorOutput['tone']>(['celebrative', 'nostalgic', 'provocative', 'factual']);
+
+/** Stopword italiane comuni — escluse dal calcolo overlap title↔output. */
+const STOPWORDS = new Set([
+  'il', 'lo', 'la', 'i', 'gli', 'le', 'un', 'una', 'uno',
+  'di', 'da', 'in', 'su', 'con', 'per', 'tra', 'fra', 'a', 'al', 'alla', 'allo',
+  'del', 'della', 'dello', 'dei', 'degli', 'delle',
+  'nel', 'nella', 'nello', 'nei', 'negli', 'nelle',
+  'è', 'e', 'o', 'ma', 'che', 'chi', 'come', 'non', 'si', 'se', 'ci', 'cui',
+  'più', 'meno', 'molto', 'poco', 'tutto', 'tutti', 'questa', 'questo', 'questi',
+  'sua', 'suo', 'sue', 'suoi', 'mia', 'mio', 'sua', 'loro', 'lui', 'lei',
+  'ho', 'hai', 'ha', 'abbiamo', 'avete', 'hanno', 'sono', 'sei', 'siamo', 'siete',
+]);
+
+/** Estrae token significativi (non stopword, ≥3 char). */
+function meaningfulTokens(s: string): Set<string> {
+  return new Set(
+    s.toLowerCase()
+      .replace(/[.,;:!?"'""«»()\[\]]/g, ' ')
+      .split(/\s+/)
+      .map(w => w.trim())
+      .filter(w => w.length >= 3 && !STOPWORDS.has(w))
+  );
+}
+
+/**
+ * Verifica grounding: heroText e payoff dell'LLM devono avere almeno il
+ * `minOverlapPct` di token significativi in comune col title.
+ * Ritorna true se l'output è "ancorato" al title (no hallucination).
+ */
+function isGroundedToTitle(
+  output: { heroText: string; payoff: string },
+  title: string,
+  minOverlapPct = 0.5,
+): { grounded: boolean; heroOverlap: number; payoffOverlap: number } {
+  const titleTokens = meaningfulTokens(title);
+  if (titleTokens.size === 0) return { grounded: true, heroOverlap: 1, payoffOverlap: 1 };
+
+  const heroTokens = meaningfulTokens(output.heroText);
+  const payoffTokens = meaningfulTokens(output.payoff);
+
+  const heroOverlap = heroTokens.size === 0 ? 1
+    : [...heroTokens].filter(t => titleTokens.has(t)).length / heroTokens.size;
+  const payoffOverlap = payoffTokens.size === 0 ? 1
+    : [...payoffTokens].filter(t => titleTokens.has(t)).length / payoffTokens.size;
+
+  return {
+    grounded: heroOverlap >= minOverlapPct && payoffOverlap >= minOverlapPct,
+    heroOverlap,
+    payoffOverlap,
+  };
+}
 
 /**
  * Genera il layout narrativo Story video per una pill.
@@ -175,7 +239,7 @@ Genera SOLO il JSON output, niente prefazione né code fence.`;
     model: GEN_MODEL,
     system: SYSTEM_PROMPT,
     jsonMode: true,
-    temperature: 0.5,
+    temperature: 0.2,  // bassa creatività → ridotta hallucination
     numPredict: 600,
     timeoutMs: 180_000,
   });
@@ -201,14 +265,30 @@ Genera SOLO il JSON output, niente prefazione né code fence.`;
   const number = typeof parsed.number === 'number' ? parsed.number
     : (parsed.number === null ? null : null);
 
+  const heroText = typeof parsed.heroText === 'string' ? parsed.heroText.trim() : title;
+  const payoff = typeof parsed.payoff === 'string' ? parsed.payoff.trim().toUpperCase() : '';
+
+  // ── Anti-hallucination grounding check ──
+  // heroText e payoff devono avere ≥50% di token significativi in comune
+  // col title. Se l'AI è andata fuori-tema (interpretato il content come
+  // fonte testuale), rifiutiamo e lanciamo errore → caller fa fallback regex.
+  const grounding = isGroundedToTitle({ heroText, payoff }, title, 0.5);
+  if (!grounding.grounded) {
+    throw new Error(
+      `directVideoLayout: ungrounded output (hero overlap ${(grounding.heroOverlap * 100).toFixed(0)}%, ` +
+      `payoff overlap ${(grounding.payoffOverlap * 100).toFixed(0)}% < 50%). ` +
+      `Title="${title}" heroText="${heroText}" payoff="${payoff}". Caller should fallback to regex.`
+    );
+  }
+
   return {
     mode,
     number,
     numberSuffix: typeof parsed.numberSuffix === 'string' ? parsed.numberSuffix : '',
     eyebrow: typeof parsed.eyebrow === 'string' ? parsed.eyebrow.trim().toUpperCase() : '',
-    heroText: typeof parsed.heroText === 'string' ? parsed.heroText.trim() : title,
+    heroText,
     context: typeof parsed.context === 'string' ? parsed.context.trim().toUpperCase() : '',
-    payoff: typeof parsed.payoff === 'string' ? parsed.payoff.trim().toUpperCase() : '',
+    payoff,
     tone,
     _rationale: typeof parsed._rationale === 'string' ? parsed._rationale : undefined,
     _llm_director_done: true,
