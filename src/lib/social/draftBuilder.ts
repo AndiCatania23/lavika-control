@@ -136,10 +136,12 @@ function buildJobRecipe(args: {
   /** Quando la sorgente è una pill, passa il payload stat per routare a
    *  PillStatVideo. Se omesso, fallback a MatchScorecardStory. */
   pillStatPayload?: {
+    mode?: 'stat' | 'anniversary' | 'year' | 'hero';
     number: number | null;
     numberSuffix: string;
     context: string;
     heroText: string;
+    eyebrow?: string;
     category: string | null;
   };
 }): JobRecipe {
@@ -148,7 +150,8 @@ function buildJobRecipe(args: {
   // Story video / Reel video → Remotion.
   // Routing:
   //   - Se è una pill (pillStatPayload presente) → PillStatVideo (Caso C
-  //     stat motion graphics: numero counter-up + contesto gold + bg nero).
+  //     stat motion graphics: numero counter-up + contesto gold + bg pill
+  //     image con vignette intenso, o nero se pill senza image).
   //   - Altrimenti (episode, manual) → MatchScorecardStory placeholder
   //     finché non implementiamo Caso A/B (citazione, gol).
   if (format === 'story_video' || format === 'reel') {
@@ -158,11 +161,17 @@ function buildJobRecipe(args: {
         recipe_params: {
           compositionId: 'PillStatVideo',
           inputProps: {
+            mode: pillStatPayload.mode ?? 'stat',
             number: pillStatPayload.number,
             numberSuffix: pillStatPayload.numberSuffix,
             context: pillStatPayload.context,
             heroText: pillStatPayload.heroText,
+            eyebrow: pillStatPayload.eyebrow ?? '',
             category: pillStatPayload.category ?? 'numeri',
+            // sourceUrl per pill = pill.image_url → background atmosphere.
+            // Composition lo opacizza + applica vignette per preservare
+            // il focus su numero/headline.
+            imageUrl: sourceUrl,
           },
         },
       };

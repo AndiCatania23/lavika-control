@@ -54,6 +54,13 @@ export const pillStatVideoSchema = z.object({
   numberSuffix: z.string().optional(),
   /** Categoria pill (numeri/storia/flash/rivali) — micro-tweak palette. */
   category: z.string().optional(),
+  /**
+   * URL immagine cover pill da usare come sfondo.
+   * Se presente: Img full-bleed + ken-burns + vignette intenso + tinta
+   * scura per non rubare focus al numero/headline.
+   * Se assente: fallback radial gradient nero (design originale).
+   */
+  imageUrl: z.string().url().optional(),
 });
 
 export type PillStatVideoProps = z.infer<typeof pillStatVideoSchema>;
@@ -68,7 +75,7 @@ export const defaultPillStatVideoProps: PillStatVideoProps = {
 };
 
 export const PillStatVideo: React.FC<PillStatVideoProps> = ({
-  mode = 'stat', number, context, heroText, eyebrow, numberSuffix, category,
+  mode = 'stat', number, context, heroText, eyebrow, numberSuffix, category, imageUrl,
 }) => {
   const frame = useCurrentFrame();
   const { fps, durationInFrames, width, height } = useVideoConfig();
@@ -165,18 +172,73 @@ export const PillStatVideo: React.FC<PillStatVideoProps> = ({
   const line1X = interpolate(linePhase, [0, 1], [-100, 100]);
   const line2X = interpolate(linePhase, [0, 1], [100, -100]);
 
-  /* ── Subtle vignette per profondità */
+  /* ── Subtle vignette per profondità (fallback se niente imageUrl) */
   const bgGradient = `radial-gradient(ellipse at center,
     rgba(20,20,20,1) 0%,
     rgba(8,8,8,1) 60%,
     rgba(0,0,0,1) 100%)`;
 
+  /* ── Ken-burns: scale 1.0 → 1.06 lineare lungo tutto il video (solo se c'è image) */
+  const kbScale = interpolate(frame, [0, durationInFrames], [1.0, 1.06]);
+
   return (
     <AbsoluteFill style={{
-      background: bgGradient,
+      background: imageUrl ? '#000' : bgGradient,
       fontFamily: FONT_BODY,
       overflow: 'hidden',
     }}>
+      {/* ─── HERO IMAGE full-bleed con ken-burns (se imageUrl presente).
+              L'immagine fa atmosphere, ma il numero/headline restano
+              protagonisti grazie alla vignette + tinta scura sopra. */}
+      {imageUrl && (
+        <AbsoluteFill style={{
+          transform: `scale(${kbScale})`,
+          transformOrigin: 'center 50%',
+        }}>
+          <Img
+            src={imageUrl}
+            style={{
+              width: '100%', height: '100%',
+              objectFit: 'cover', objectPosition: 'center center',
+            }}
+          />
+        </AbsoluteFill>
+      )}
+
+      {/* ─── Tinta scura uniforme (smorza colori e contrasto immagine).
+              Solo se c'è imageUrl — sul fondo nero puro è inutile. */}
+      {imageUrl && (
+        <AbsoluteFill style={{
+          background: 'rgba(0, 0, 0, 0.55)',
+        }} />
+      )}
+
+      {/* ─── Vignette intensa per leggibilità: bordi scuri, centro
+              leggermente trasparente. Sempre attiva — anche su nero
+              dà profondità — ma più marcata su imageUrl. */}
+      <AbsoluteFill style={{
+        background: imageUrl
+          ? `radial-gradient(ellipse at center,
+              rgba(0,0,0,0.15) 0%,
+              rgba(0,0,0,0.55) 55%,
+              rgba(0,0,0,0.85) 100%)`
+          : `radial-gradient(ellipse at center,
+              rgba(0,0,0,0) 0%,
+              rgba(0,0,0,0.4) 80%,
+              rgba(0,0,0,0.7) 100%)`,
+      }} />
+
+      {/* ─── Top + bottom darkener (per badge top + logo bottom leggibili) */}
+      {imageUrl && (
+        <AbsoluteFill style={{
+          background: `linear-gradient(180deg,
+            rgba(0,0,0,0.7) 0%,
+            rgba(0,0,0,0.0) 18%,
+            rgba(0,0,0,0.0) 78%,
+            rgba(0,0,0,0.75) 100%)`,
+        }} />
+      )}
+
       {/* ─── Gold accent lines: orizzontali sottili sopra/sotto, animate */}
       <div style={{
         position: 'absolute',
