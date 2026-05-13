@@ -20,6 +20,7 @@ import sharp from 'sharp';
 import path from 'path';
 import fs from 'fs';
 import { createCanvas, GlobalFonts } from '@napi-rs/canvas';
+import { detectQuoteAttribution } from './quoteDetection';
 
 /* ──────────────────────────────────────────────────────────────────
    Format catalog
@@ -51,6 +52,13 @@ interface FormatSpec {
   textBottomMargin: number;
   /** Line spacing between text lines (px between rectangles) */
   lineGap: number;
+  /**
+   * Attribution font size in pixels (used in quote layout mode).
+   * Tipicamente 45-55% di titleFontSize per gerarchia editoriale.
+   */
+  attributionFontSize: number;
+  /** Spacing (px) tra blocco quote e blocco attribution in quote mode. */
+  attributionGap: number;
 }
 
 const FORMAT_SPECS: Record<SocialFormat, FormatSpec> = {
@@ -60,6 +68,7 @@ const FORMAT_SPECS: Record<SocialFormat, FormatSpec> = {
     cropVerticalBias: 0.35,
     textPaddingX: 24, textPaddingY: 16,
     textBottomMargin: 48, lineGap: 8,
+    attributionFontSize: 44, attributionGap: 20,
   },
   ig_square_1_1: {
     width: 1080, height: 1080,
@@ -67,6 +76,7 @@ const FORMAT_SPECS: Record<SocialFormat, FormatSpec> = {
     cropVerticalBias: 0.4,
     textPaddingX: 24, textPaddingY: 14,
     textBottomMargin: 40, lineGap: 8,
+    attributionFontSize: 40, attributionGap: 18,
   },
   ig_story_9_16: {
     width: 1080, height: 1920,
@@ -75,6 +85,7 @@ const FORMAT_SPECS: Record<SocialFormat, FormatSpec> = {
     textPaddingX: 32, textPaddingY: 18,
     textBottomMargin: 220,  // safe-area UI Story (logo profilo, tap, swipe)
     lineGap: 10,
+    attributionFontSize: 52, attributionGap: 24,
   },
   fb_feed_4_5: {
     width: 1080, height: 1350,
@@ -82,6 +93,7 @@ const FORMAT_SPECS: Record<SocialFormat, FormatSpec> = {
     cropVerticalBias: 0.35,
     textPaddingX: 24, textPaddingY: 16,
     textBottomMargin: 48, lineGap: 8,
+    attributionFontSize: 44, attributionGap: 20,
   },
   fb_square_1_1: {
     width: 1080, height: 1080,
@@ -89,6 +101,7 @@ const FORMAT_SPECS: Record<SocialFormat, FormatSpec> = {
     cropVerticalBias: 0.4,
     textPaddingX: 24, textPaddingY: 14,
     textBottomMargin: 40, lineGap: 8,
+    attributionFontSize: 40, attributionGap: 18,
   },
   fb_story_9_16: {
     width: 1080, height: 1920,
@@ -97,8 +110,31 @@ const FORMAT_SPECS: Record<SocialFormat, FormatSpec> = {
     textPaddingX: 32, textPaddingY: 18,
     textBottomMargin: 220,
     lineGap: 10,
+    attributionFontSize: 52, attributionGap: 24,
   },
 };
+
+/* ──────────────────────────────────────────────────────────────────
+   Quote layout — colore accent per attribution
+
+   Gold "champion" sportivo classico. Coerente col brand book
+   LAVIKA che parla di "luce calda / golden hour / linea oro" e
+   con il logotype tight che ha una linea oro decorativa. Distinto
+   dal primary arancio Lavika (#e8701a, UI Control) per non
+   confondere brand UI con accent editoriale.
+   ────────────────────────────────────────────────────────────────── */
+
+const ATTRIBUTION_COLOR = '#FFC72C';
+
+/**
+ * Char totali permessi alla quote in quote mode = titleMaxTotalChars
+ * × QUOTE_MAX_CHARS_FACTOR. Più chars perché "Nome:" non occupa
+ * più spazio nel main slot.
+ */
+const QUOTE_MAX_CHARS_FACTOR = 1.4;
+
+/** Max righe per la quote (vs 3 del titolo standard). */
+const QUOTE_MAX_LINES = 4;
 
 /* ──────────────────────────────────────────────────────────────────
    Font registration via @napi-rs/canvas (Skia-based, reliable)
@@ -303,10 +339,17 @@ interface RenderedTextLine {
 
 /**
  * Render single-line text via @napi-rs/canvas (Skia, full TTF support via
- * GlobalFonts.registerFromPath). Returns RGBA PNG with WHITE text on
- * transparent background, sized to the text bounding box.
+ * GlobalFonts.registerFromPath). Returns RGBA PNG with text colored
+ * `color` on transparent background, sized to the text bounding box.
+ *
+ * Default color: bianco (#FFFFFF) per le righe titolo standard.
+ * In quote mode l'attribution passa ATTRIBUTION_COLOR (gold).
  */
-function renderTextLine(text: string, fontSize: number): RenderedTextLine {
+function renderTextLine(
+  text: string,
+  fontSize: number,
+  color: string = '#FFFFFF',
+): RenderedTextLine {
   ensureFontRegistered();
 
   // First pass: measure text with a temp canvas
@@ -323,11 +366,11 @@ function renderTextLine(text: string, fontSize: number): RenderedTextLine {
   const descent = metrics.actualBoundingBoxDescent || fontSize * 0.25;
   const textHeight = Math.ceil(ascent + descent);
 
-  // Second pass: actual canvas with exact dimensions, draw white text
+  // Second pass: actual canvas with exact dimensions, draw text in `color`
   const canvas = createCanvas(textWidth, textHeight);
   const ctx = canvas.getContext('2d');
   ctx.font = `${fontSize}px "${TITLE_FONT_FAMILY}"`;
-  ctx.fillStyle = '#FFFFFF';
+  ctx.fillStyle = color;
   ctx.textBaseline = 'alphabetic';
   ctx.fillText(text, 0, ascent);
 
@@ -336,6 +379,68 @@ function renderTextLine(text: string, fontSize: number): RenderedTextLine {
     textWidth,
     textHeight,
   };
+}
+
+/* ──────────────────────────────────────────────────────────────────
+   Composite block builder — rect nero + testo bianco-su-nero stile MLS
+   ────────────────────────────────────────────────────────────────── */
+
+/**
+ * Costruisce gli overlay composite (rect nero auto-sized + testo) per
+ * un set di righe già renderizzate, partendo da `startY`. Ritorna
+ * la lista composite + l'Y dopo l'ultimo rect (utile per posizionare
+ * blocchi successivi tipo attribution).
+ *
+ * Ogni riga produce DUE composite: rect nero opaco + PNG testo sopra,
+ * con padding e gap configurabili tramite spec.
+ */
+function buildLineComposites(
+  lines: RenderedTextLine[],
+  startY: number,
+  spec: FormatSpec,
+  lineGap: number,
+): { composites: sharp.OverlayOptions[]; endY: number } {
+  const composites: sharp.OverlayOptions[] = [];
+  let currentY = startY;
+
+  for (let i = 0; i < lines.length; i++) {
+    const { textPng, textWidth, textHeight } = lines[i];
+    const rectWidth = textWidth + spec.textPaddingX * 2;
+    const rectHeight = textHeight + spec.textPaddingY * 2;
+
+    const rectSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${rectWidth}" height="${rectHeight}"><rect width="${rectWidth}" height="${rectHeight}" fill="black"/></svg>`;
+    composites.push({
+      input: Buffer.from(rectSvg),
+      top: currentY,
+      left: 0,
+    });
+    composites.push({
+      input: textPng,
+      top: currentY + spec.textPaddingY,
+      left: spec.textPaddingX,
+    });
+
+    currentY += rectHeight;
+    if (i < lines.length - 1) currentY += lineGap;
+  }
+
+  return { composites, endY: currentY };
+}
+
+/**
+ * Altezza totale (px) del blocco prodotto da `buildLineComposites`
+ * con le stesse `lines` e `lineGap` — utile per calcolare il
+ * `startY` partendo dal margine inferiore.
+ */
+function measureLineBlockHeight(
+  lines: RenderedTextLine[],
+  spec: FormatSpec,
+  lineGap: number,
+): number {
+  if (lines.length === 0) return 0;
+  const rectHeights = lines.map(l => l.textHeight + spec.textPaddingY * 2);
+  const sum = rectHeights.reduce((a, b) => a + b, 0);
+  return sum + (lines.length - 1) * lineGap;
 }
 
 /* ──────────────────────────────────────────────────────────────────
@@ -430,54 +535,72 @@ export async function buildSocialAsset(opts: BuildAssetOpts): Promise<BuiltAsset
   }
 
   // 3. Build text overlay if title present
-  let title = opts.title?.trim();
+  const titleInput = opts.title?.trim();
   let renderedTitle: string | null = null;
   let renderedLines: string[] = [];
 
   let composed = cropped;
-  if (title && title.length > 0) {
-    title = truncate(title, spec.titleMaxTotalChars);
-    renderedTitle = title;
-    renderedLines = wrapTitle(title, spec.titleMaxCharsPerLine);
+  if (titleInput && titleInput.length > 0) {
+    // 3a. Quote detection — pattern editoriale `Nome: "frase"`
+    //
+    // Se matcha attiviamo il layout split: quote bianca grande +
+    // attribution gold piccola sotto (— RICCHIUTI). Altrimenti
+    // fallback al rendering standard (zero regressioni sul resto
+    // dei titoli pill tipo "Caturano tabù playoff" o "Storia: 5 numeri").
+    const quoteParts = detectQuoteAttribution(titleInput);
 
-    if (renderedLines.length > 0) {
-      // Render each line via @napi-rs/canvas (Skia, true Archivo Black)
-      const lineRenders = renderedLines.map(line => renderTextLine(line, spec.titleFontSize));
+    if (quoteParts) {
+      const quoteMaxChars = Math.round(spec.titleMaxTotalChars * QUOTE_MAX_CHARS_FACTOR);
+      const quoteText = truncate(quoteParts.quote, quoteMaxChars);
+      // Virgolette curly per dare il visual cue "questa è una citazione".
+      const renderedQuote = `“${quoteText}”`;
+      const quoteLines = wrapTitle(renderedQuote, spec.titleMaxCharsPerLine, QUOTE_MAX_LINES);
+      // Attribution: em-dash prefix + MAIUSCOLO (stile pull-quote editoriale).
+      const attributionText = `— ${quoteParts.attribution.toUpperCase()}`;
 
-      // Compute total block height and starting Y
-      const lineHeights = lineRenders.map(r => r.textHeight + spec.textPaddingY * 2);
-      const totalBlockH = lineHeights.reduce((sum, h) => sum + h, 0)
-        + (lineRenders.length - 1) * spec.lineGap;
-      const blockTopY = spec.height - spec.textBottomMargin - totalBlockH;
+      renderedTitle = `${renderedQuote} ${attributionText}`;
+      renderedLines = [...quoteLines, attributionText];
 
-      // Build composite layers: for each line, a black rect + white text
-      const composites: sharp.OverlayOptions[] = [];
-      let currentY = blockTopY;
+      if (quoteLines.length > 0) {
+        const quoteRenders = quoteLines.map(line =>
+          renderTextLine(line, spec.titleFontSize, '#FFFFFF'),
+        );
+        const attributionRender = renderTextLine(
+          attributionText,
+          spec.attributionFontSize,
+          ATTRIBUTION_COLOR,
+        );
 
-      for (let i = 0; i < lineRenders.length; i++) {
-        const { textPng, textWidth, textHeight } = lineRenders[i];
-        const rectWidth = textWidth + spec.textPaddingX * 2;
-        const rectHeight = textHeight + spec.textPaddingY * 2;
+        const quoteBlockH = measureLineBlockHeight(quoteRenders, spec, spec.lineGap);
+        const attrBlockH = measureLineBlockHeight([attributionRender], spec, spec.lineGap);
+        const totalBlockH = quoteBlockH + spec.attributionGap + attrBlockH;
 
-        // Black rect (full opaque)
-        const rectSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${rectWidth}" height="${rectHeight}"><rect width="${rectWidth}" height="${rectHeight}" fill="black"/></svg>`;
-        composites.push({
-          input: Buffer.from(rectSvg),
-          top: currentY,
-          left: 0,
-        });
+        const quoteTopY = spec.height - spec.textBottomMargin - totalBlockH;
+        const quoteBlock = buildLineComposites(quoteRenders, quoteTopY, spec, spec.lineGap);
 
-        // White text on top of rect, centered vertically inside it
-        composites.push({
-          input: textPng,
-          top: currentY + spec.textPaddingY,
-          left: spec.textPaddingX,
-        });
+        const attrTopY = quoteBlock.endY + spec.attributionGap;
+        const attrBlock = buildLineComposites([attributionRender], attrTopY, spec, spec.lineGap);
 
-        currentY += rectHeight + spec.lineGap;
+        composed = await sharp(cropped)
+          .composite([...quoteBlock.composites, ...attrBlock.composites])
+          .toBuffer();
       }
+    } else {
+      // 3b. Standard title flow (titolo non-quote)
+      const truncatedTitle = truncate(titleInput, spec.titleMaxTotalChars);
+      renderedTitle = truncatedTitle;
+      renderedLines = wrapTitle(truncatedTitle, spec.titleMaxCharsPerLine);
 
-      composed = await sharp(cropped).composite(composites).toBuffer();
+      if (renderedLines.length > 0) {
+        const lineRenders = renderedLines.map(line =>
+          renderTextLine(line, spec.titleFontSize),
+        );
+        const blockH = measureLineBlockHeight(lineRenders, spec, spec.lineGap);
+        const blockTopY = spec.height - spec.textBottomMargin - blockH;
+        const block = buildLineComposites(lineRenders, blockTopY, spec, spec.lineGap);
+
+        composed = await sharp(cropped).composite(block.composites).toBuffer();
+      }
     }
   }
 
