@@ -160,13 +160,20 @@ function colorForStyle(style: string, tone: string): string {
   return '#FFFFFF';
 }
 
+/**
+ * AUTO-FIT font size: il testo deve RIEMPIRE la larghezza schermo, non
+ * galleggiare piccolo al centro. Story top usano font massimi possibili.
+ * Larghezza utile: ~1000px (1080 - padding 40*2). Anton ~0.45 char-width.
+ */
 function fontSizeForStyle(style: string, textLength: number, isShortNumeric = false): number {
-  if (isShortNumeric) return 520;          // counter-up numero gigante
-  if (style === 'bold')  return textLength > 30 ? 88 : 120;
-  if (style === 'gold')  return textLength > 30 ? 64 : 80;
-  if (style === 'warning') return textLength > 30 ? 72 : 96;
-  if (style === 'glow')  return 110;
-  return 56;                                 // subtle
+  if (isShortNumeric) return 540;
+  if (textLength === 0) return 80;
+  if (textLength <= 16) return 220;
+  if (textLength <= 30) return 180;
+  if (textLength <= 50) return 150;
+  if (textLength <= 70) return 128;
+  if (textLength <= 100) return 110;
+  return 95;
 }
 
 function textShadowForStyle(style: string, tone: string): string {
@@ -295,7 +302,7 @@ const SceneTypeOn: React.FC<{ scene: z.infer<typeof sceneSchema>; tone: string }
   });
   return (
     <AbsoluteFill style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 70px',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 40px',
       opacity: fade,
     }}>
       <div style={{
@@ -306,7 +313,7 @@ const SceneTypeOn: React.FC<{ scene: z.infer<typeof sceneSchema>; tone: string }
         letterSpacing: -1,
         textShadow: pulseGlow(frame, fps, color, 1.1),
         textAlign: 'center',
-        maxWidth: 920,
+        maxWidth: 1000,
       }}>
         {tokens.map((t, ti) => {
           if (t.isSpace) {
@@ -375,7 +382,7 @@ const SceneRevealMask: React.FC<{ scene: z.infer<typeof sceneSchema>; tone: stri
   const color = colorForStyle(scene.style, tone);
   return (
     <AbsoluteFill style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 70px',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 40px',
     }}>
       <div style={{
         fontFamily: FONT_DISPLAY,
@@ -385,7 +392,7 @@ const SceneRevealMask: React.FC<{ scene: z.infer<typeof sceneSchema>; tone: stri
         letterSpacing: -1,
         textShadow: pulseGlow(frame, fps, color, 1.4),
         textAlign: 'center',
-        maxWidth: 920,
+        maxWidth: 1000,
         clipPath: `inset(0 ${100 - progress}% 0 0)`,
         opacity: fade,
       }}>
@@ -404,7 +411,7 @@ const SceneScaleIn: React.FC<{ scene: z.infer<typeof sceneSchema>; tone: string 
   const color = colorForStyle(scene.style, tone);
   return (
     <AbsoluteFill style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 70px',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 40px',
     }}>
       <div style={{
         fontFamily: FONT_DISPLAY,
@@ -414,7 +421,7 @@ const SceneScaleIn: React.FC<{ scene: z.infer<typeof sceneSchema>; tone: string 
         letterSpacing: -1,
         textShadow: pulseGlow(frame, fps, color, 1.5),
         textAlign: 'center',
-        maxWidth: 920,
+        maxWidth: 1000,
         transform: `scale(${0.6 + sp * 0.4}) translate(${shake.x}px, ${shake.y}px)`,
         opacity: sp * fade,
       }}>
@@ -432,7 +439,7 @@ const SceneSlideUp: React.FC<{ scene: z.infer<typeof sceneSchema>; tone: string 
   const color = colorForStyle(scene.style, tone);
   return (
     <AbsoluteFill style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 70px',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 40px',
     }}>
       <div style={{
         fontFamily: FONT_DISPLAY,
@@ -442,7 +449,7 @@ const SceneSlideUp: React.FC<{ scene: z.infer<typeof sceneSchema>; tone: string 
         letterSpacing: -1,
         textShadow: pulseGlow(frame, fps, color, 1.2),
         textAlign: 'center',
-        maxWidth: 920,
+        maxWidth: 1000,
         transform: `translateY(${(1 - sp) * 80}px)`,
         opacity: sp * fade,
       }}>
@@ -461,7 +468,7 @@ const SceneFadeIn: React.FC<{ scene: z.infer<typeof sceneSchema>; tone: string }
   const breath = 1 + Math.sin((frame / fps) * Math.PI * 1.2) * 0.015;
   return (
     <AbsoluteFill style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 70px',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 40px',
     }}>
       <div style={{
         fontFamily: FONT_DISPLAY,
@@ -471,7 +478,7 @@ const SceneFadeIn: React.FC<{ scene: z.infer<typeof sceneSchema>; tone: string }
         letterSpacing: -1,
         textShadow: pulseGlow(frame, fps, color, 1.0),
         textAlign: 'center',
-        maxWidth: 920,
+        maxWidth: 1000,
         opacity: fade,
         transform: `scale(${breath})`,
       }}>
@@ -490,7 +497,7 @@ const ScenePulseEmphasis: React.FC<{ scene: z.infer<typeof sceneSchema>; tone: s
   const color = colorForStyle(scene.style, tone);
   return (
     <AbsoluteFill style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 70px',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 40px',
     }}>
       <div style={{
         fontFamily: FONT_DISPLAY,
@@ -500,7 +507,7 @@ const ScenePulseEmphasis: React.FC<{ scene: z.infer<typeof sceneSchema>; tone: s
         letterSpacing: -1,
         textShadow: pulseGlow(frame, fps, color, 1.6),
         textAlign: 'center',
-        maxWidth: 920,
+        maxWidth: 1000,
         transform: `scale(${pulse * entry})`,
         opacity: entry * fade,
       }}>
