@@ -30,6 +30,8 @@ import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { buildSocialAsset } from '../../src/lib/social/assetBuilder';
 import { renderRemotionComposition } from '../../src/lib/social/remotionRenderer';
 import { directVideoLayout } from '../../src/lib/social/pillContentDirector';
+import { extractFactsFromPill } from '../../src/lib/social/pillFactExtractor';
+import { classifyNarrative, generateStoryboard, validateStoryboard } from '../../src/lib/social/pillStoryboardBuilder';
 
 /* ────────────────────────────── Config ────────────────────────────── */
 
@@ -129,14 +131,61 @@ async function runRecipe(recipe: string, params: Record<string, unknown>): Promi
       let finalInputProps = p.inputProps ?? {};
       let directorMeta: RecipeResult['llm_meta'] | undefined;
 
-      // ── Content Director: per le composition PillStatVideo, chiamiamo
-      //    Ollama gemma3 per capire la pill semanticamente e dirigere la
-      //    sua narrazione (mode, headline riformulata, payoff, tono).
-      //    L'LLM viene caricato per la call e SCARICATO subito dopo
-      //    (KEEP_ALIVE=0 + ollamaUnloadModel esplicito nel director's finally)
-      //    → la RAM del Mac torna libera tra job consecutivi.
-      //    Se LLM fallisce → fallback ai valori regex (già nei inputProps).
-      if (p.compositionId === 'PillStatVideo' && p.pillId) {
+      // ── AIDirectedStoryVideo: pipeline 3-step zero-API ──
+      //    1) extractFactsFromPill (LLM): facts strutturati dal title
+      //    2) classifyNarrative (deterministic): quote/anniversary/year/stat/narrative
+      //    3) generateStoryboard (LLM): scene[] con animazioni dichiarate
+      //    4) validateStoryboard (deterministic): grounding check + timing
+      //    Render: AIDirectedStoryVideo composition esegue scene-by-scene.
+      if (p.compositionId === 'AIDirectedStoryVideo' && p.pillId) {
+        try {
+          log('AI-Director-v2: fetching pill', { pillId: p.pillId });
+          const { data: pill } = await supabase
+            .from('pills')
+            .select('title, content, pill_category, image_url')
+            .eq('id', p.pillId)
+            .single<{ title: string; content: string | null; pill_category: string | null; image_url: string | null }>();
+          if (!pill) throw new Error('pill not found');
+
+          const t0 = Date.now();
+          log('AI-Director-v2: Step 1 extract facts');
+          const facts = await extractFactsFromPill({ title: pill.title, content: pill.content });
+          const t1 = Date.now();
+
+          log('AI-Director-v2: Step 2 classify');
+          const narrativeType = classifyNarrative(facts);
+
+          log('AI-Director-v2: Step 3 generate storyboard', { type: narrativeType });
+          const storyboard = await generateStoryboard({ facts, classification: narrativeType });
+          const t2 = Date.now();
+
+          const validation = validateStoryboard({ storyboard, facts, title: pill.title });
+          log('AI-Director-v2: Step 4 validate', {
+            extract_ms: t1 - t0,
+            storyboard_ms: t2 - t1,
+            grounding_pct: validation.grounding_pct,
+            total_duration: validation.total_duration,
+            warnings: validation.warnings,
+          });
+
+          finalInputProps = {
+            scenes: storyboard.scenes,
+            imageUrl: pill.image_url || undefined,
+            imageStrategy: storyboard.image_strategy,
+            tone: storyboard.tone,
+            category: pill.pill_category ?? 'storia',
+          } as Record<string, unknown>;
+          directorMeta = {
+            mode: storyboard.narrative_type,
+            tone: storyboard.tone,
+            shareability_score: storyboard.shareability_score,
+            shareability_factors: [],
+            rationale: storyboard._rationale,
+          };
+        } catch (e) {
+          log('AI-Director-v2 failed, using defaults', { err: (e as Error).message });
+        }
+      } else if (p.compositionId === 'PillStatVideo' && p.pillId) {
         try {
           log('content director: fetching pill (Ollama gemma3 LOADING)', { pillId: p.pillId });
           const { data: pill, error: pErr } = await supabase

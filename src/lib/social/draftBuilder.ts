@@ -159,10 +159,13 @@ function buildJobRecipe(args: {
   //     finché non implementiamo Caso A/B (citazione, gol).
   if (format === 'story_video' || format === 'reel') {
     if (pillStatPayload) {
+      // NEW (2026-05-13): per le pill usiamo AIDirectedStoryVideo (pipeline
+      // 3-step storyboard scene-by-scene). PillStatVideo resta come legacy
+      // fallback se il daemon non riesce a generare storyboard.
       return {
         recipe: 'remotion_render',
         recipe_params: {
-          compositionId: 'PillStatVideo',
+          compositionId: 'AIDirectedStoryVideo',
           inputProps: {
             mode: pillStatPayload.mode ?? 'stat',
             number: pillStatPayload.number,
