@@ -21,7 +21,7 @@ import { ollamaGenerate, ollamaUnloadModel, GEN_MODEL, safeJsonParse } from './c
 
 export interface DirectorOutput {
   /** Layout mode scelto dall'LLM in base alla semantica pill. */
-  mode: 'stat' | 'anniversary' | 'year' | 'hero' | 'achievement';
+  mode: 'stat' | 'anniversary' | 'year' | 'hero' | 'achievement' | 'quote';
   /** Numero principale da animare. NULL = mode hero, niente counter. */
   number: number | null;
   /** Suffisso inline ("%", "°"). Vuoto per la maggior parte dei casi. */
@@ -82,10 +82,14 @@ Esempio di errore da NON fare:
             (entrambi presi/derivati dal title)
 
 Modes disponibili (scegli UNO):
+- "quote": CITAZIONE diretta speaker → pattern title "Nome: 'frase'" o 'Nome: "frase"'.
+   Layout dedicato: virgolette decorative + quote text bianco + attribution speaker gold.
+   USA QUESTO quando il title ha pattern Nome:"..." (es. Ricchiuti: "Doppio risultato?").
+   eyebrow = nome speaker dal title (es. "RICCHIUTI"). heroText = quote text SENZA virgolette.
 - "stat": una stat numerica → numero counter-up + context UPPERCASE sotto
 - "anniversary": pattern "N anni fa/dopo" → numero + eyebrow "ANNI FA" + headline dal title
 - "year": anno storico (1900-2100) → anno + headline dal title
-- "hero": niente numero → solo testo grande dal title
+- "hero": niente numero, niente quote → solo testo grande dal title
 - "achievement": traguardo (sinonimo di stat per record/promozioni)
 
 Output JSON ESATTO (niente fence, niente prefazione):
@@ -109,6 +113,19 @@ ALTRE REGOLE:
 - max char enforced: heroText ≤ 50, context ≤ 40, payoff ≤ 30
 
 ESEMPI:
+
+INPUT: { title: "Ricchiuti: \\"Doppio risultato? Sconfitti se ci pensate!\\"", category: "oggi" }
+OUTPUT: {
+  "mode": "quote",
+  "number": null,
+  "numberSuffix": "",
+  "eyebrow": "RICCHIUTI",
+  "heroText": "Doppio risultato? Sconfitti se ci pensate!",
+  "context": "",
+  "payoff": "",
+  "tone": "provocative",
+  "_rationale": "Citazione diretta dello speaker Ricchiuti, layout quote con attribution"
+}
 
 INPUT: { title: "Di Tacchio, 10 anni fa il trionfo playoff: l'esperienza conta", category: "flash" }
 OUTPUT: {
@@ -166,7 +183,7 @@ OUTPUT: {
    Main entry — chiama Ollama, parsa, valida
    ────────────────────────────────────────────────────────────────── */
 
-const VALID_MODES = new Set<DirectorOutput['mode']>(['stat', 'anniversary', 'year', 'hero', 'achievement']);
+const VALID_MODES = new Set<DirectorOutput['mode']>(['stat', 'anniversary', 'year', 'hero', 'achievement', 'quote']);
 const VALID_TONES = new Set<DirectorOutput['tone']>(['celebrative', 'nostalgic', 'provocative', 'factual']);
 
 /** Stopword italiane comuni — escluse dal calcolo overlap title↔output. */

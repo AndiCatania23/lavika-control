@@ -40,8 +40,9 @@ export const pillStatVideoSchema = z.object({
    *  - anniversary numero + eyebrow "ANNI FA" gold + headline editoriale
    *  - year        anno pop-in + headline editoriale
    *  - hero        solo testo grande, niente numero
+   *  - quote       citazione speaker → virgolette decorative + testo + attribution
    */
-  mode: z.enum(['stat', 'anniversary', 'year', 'hero']).default('stat'),
+  mode: z.enum(['stat', 'anniversary', 'year', 'hero', 'quote']).default('stat'),
   /** Numero principale da animare. NULL in mode 'hero'. */
   number: z.number().nullable(),
   /** Testo contesto sotto il numero (mode 'stat'). Già uppercase. */
@@ -88,6 +89,8 @@ export const PillStatVideo: React.FC<PillStatVideoProps> = ({
   const { fps, durationInFrames, width, height } = useVideoConfig();
 
   const isStory = height / width > 1.5;
+  // Mode quote: niente numero, virgolette decorative + quote text + attribution
+  const isQuoteMode = mode === 'quote';
   // Per anniversary/year il numero è più piccolo per fare spazio alla headline editoriale.
   const isCompactNumber = mode === 'anniversary' || mode === 'year';
   // Se c'è un payoff, lasciamo più spazio sotto la headline alzando i blocchi.
@@ -292,38 +295,113 @@ export const PillStatVideo: React.FC<PillStatVideoProps> = ({
         opacity: 0.7,
       }} />
 
-      {/* ─── NUMBER MEGA centrato vertical (oppure hero text se mode='hero') */}
-      <div style={{
-        position: 'absolute',
-        top: POS.numberCenter,
-        left: 0,
-        right: 0,
-        textAlign: 'center',
-        transform: `translateY(-50%) scale(${numberScale * breathScale})`,
-        opacity: numberOpacity * outroOpacity,
-        fontFamily: FONT_DISPLAY,
-        color: '#FFFFFF',
-        textShadow: `0 8px 40px rgba(0,0,0,0.6), 0 0 80px ${ACCENT_GOLD}22`,
-        userSelect: 'none',
-        lineHeight: 0.9,
-        letterSpacing: -8,
-      }}>
-        {mode !== 'hero' && number !== null && displayedNumber !== null ? (
-          <span style={{ fontSize: POS.numberFontSize }}>
-            {displayedNumber}{numberSuffix ?? ''}
-          </span>
-        ) : (
-          <span style={{
-            fontSize: POS.heroTextFontSize,
-            lineHeight: 1.0,
-            letterSpacing: -4,
-            display: 'block',
-            padding: '0 80px',
+      {/* ─── MODE QUOTE: virgolette decorative gold gigante centrale +
+              quote text bianco grande sotto. Layout dedicato per le pill
+              "Speaker: 'frase'" (post-conferenza, dichiarazioni). */}
+      {isQuoteMode ? (
+        <>
+          {/* Virgola decorativa gold */}
+          <div style={{
+            position: 'absolute',
+            top: isStory ? '20%' : '18%',
+            left: 0,
+            right: 0,
+            textAlign: 'center',
+            opacity: numberOpacity * outroOpacity * 0.85,
+            fontFamily: FONT_DISPLAY,
+            color: ACCENT_GOLD,
+            fontSize: isStory ? 280 : 220,
+            lineHeight: 0.6,
+            letterSpacing: -20,
+            transform: `scale(${numberScale})`,
+            textShadow: `0 4px 30px ${ACCENT_GOLD}55, 0 0 60px rgba(0,0,0,0.7)`,
+            userSelect: 'none',
           }}>
-            {heroText ?? context}
-          </span>
-        )}
-      </div>
+            “
+          </div>
+          {/* Quote text bianco grande al centro */}
+          <div style={{
+            position: 'absolute',
+            top: isStory ? '46%' : '44%',
+            left: 0,
+            right: 0,
+            textAlign: 'center',
+            transform: `translateY(-50%) scale(${numberScale * breathScale})`,
+            opacity: numberOpacity * outroOpacity,
+            padding: '0 70px',
+          }}>
+            <div style={{
+              fontFamily: FONT_DISPLAY,
+              color: '#FFFFFF',
+              fontSize: isStory ? 88 : 64,
+              lineHeight: 1.05,
+              letterSpacing: -1,
+              textShadow: '0 6px 30px rgba(0,0,0,0.7), 0 2px 8px rgba(0,0,0,0.5)',
+              maxWidth: isStory ? 900 : 800,
+              margin: '0 auto',
+              userSelect: 'none',
+            }}>
+              {heroText}
+            </div>
+          </div>
+        </>
+      ) : (
+        /* ─── NUMBER MEGA centrato vertical (oppure hero text se mode='hero') */
+        <div style={{
+          position: 'absolute',
+          top: POS.numberCenter,
+          left: 0,
+          right: 0,
+          textAlign: 'center',
+          transform: `translateY(-50%) scale(${numberScale * breathScale})`,
+          opacity: numberOpacity * outroOpacity,
+          fontFamily: FONT_DISPLAY,
+          color: '#FFFFFF',
+          textShadow: `0 8px 40px rgba(0,0,0,0.6), 0 0 80px ${ACCENT_GOLD}22`,
+          userSelect: 'none',
+          lineHeight: 0.9,
+          letterSpacing: -8,
+        }}>
+          {mode !== 'hero' && number !== null && displayedNumber !== null ? (
+            <span style={{ fontSize: POS.numberFontSize }}>
+              {displayedNumber}{numberSuffix ?? ''}
+            </span>
+          ) : (
+            <span style={{
+              fontSize: POS.heroTextFontSize,
+              lineHeight: 1.0,
+              letterSpacing: -4,
+              display: 'block',
+              padding: '0 80px',
+            }}>
+              {heroText ?? context}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* ─── MODE QUOTE: attribution speaker sotto il quote text */}
+      {isQuoteMode && eyebrow && (
+        <div style={{
+          position: 'absolute',
+          top: isStory ? '74%' : '72%',
+          left: 0,
+          right: 0,
+          textAlign: 'center',
+          opacity: contextOpacity,
+          transform: `translateY(${contextY}px)`,
+        }}>
+          <div style={{
+            color: ACCENT_GOLD,
+            fontFamily: FONT_DISPLAY,
+            fontSize: isStory ? 44 : 36,
+            letterSpacing: 8,
+            textShadow: `0 4px 20px ${ACCENT_GOLD}44, 0 2px 8px rgba(0,0,0,0.7)`,
+          }}>
+            — {eyebrow}
+          </div>
+        </div>
+      )}
 
       {/* ─── EYEBROW gold sotto al numero (anniversary mode: "ANNI FA").
               Si attiva solo se eyebrow è valorizzato e non siamo in mode hero. */}

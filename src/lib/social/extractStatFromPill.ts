@@ -24,7 +24,7 @@
  *     → mode: 'hero', heroText: "Caturano tabù playoff"
  */
 
-export type PillStatMode = 'stat' | 'anniversary' | 'year' | 'hero';
+export type PillStatMode = 'stat' | 'anniversary' | 'year' | 'hero' | 'quote';
 
 export interface PillStatPayload {
   /** Layout mode scelto dal pattern del titolo. */
@@ -35,16 +35,23 @@ export interface PillStatPayload {
   numberSuffix: string;
   /** Contesto sotto il numero (stat mode), UPPERCASE. */
   context: string;
-  /** Hero text usato in anniversary/year/hero — la frase descrittiva. */
+  /**
+   * Hero text usato in anniversary/year/hero/quote — la frase descrittiva.
+   * Per mode='quote' contiene la CITAZIONE senza virgolette esterne
+   * (la composition aggiunge le virgolette decorative).
+   */
   heroText: string;
-  /** Eyebrow piccolo gold sotto al numero (anniversary mode: "ANNI FA"). */
+  /**
+   * Eyebrow piccolo gold sotto al numero/quote.
+   * Mode anniversary: "ANNI FA". Mode quote: il nome dello speaker
+   * (es. "— RICCHIUTI"). Vuoto per altri mode.
+   */
   eyebrow: string;
   /**
    * Payoff editoriale: la frase DOPO il `:` quando il titolo è una pill
    * narrativa con conclusione/morale. Renderizzato in gold UPPERCASE
    * sotto la headline (es. "L'ESPERIENZA CONTA").
-   * Vuoto per pill senza split editoriale (es. "Caturano: 12 gol" non
-   * è un editorial split, è speaker prefix → payoff resta vuoto).
+   * Vuoto per pill senza split editoriale.
    */
   payoff: string;
 }
@@ -58,6 +65,25 @@ interface PillLike {
 const NUMBER_REGEX = /(\d{1,4})(°|%)?/;
 /** Pattern "N anni fa" / "N anni dopo" / "da N anni" — case-insensitive. */
 const ANNIVERSARY_REGEX = /(\d{1,3})\s+anni\s+(?:fa|dopo)\b/i;
+
+/**
+ * Detection citazione "Nome: 'quote'" / "Nome: \"quote\"" (anche
+ * virgolette tipografiche). Prima 1-3 parole capitalizzate, poi `:`,
+ * poi una QUOTE TEXT racchiusa tra virgolette (presenza obbligatoria
+ * per ridurre falsi positivi su titoli `Nome: descrizione`).
+ *
+ * Catturati: 1=speaker, 2=quote text (senza virgolette).
+ *
+ * Match:
+ *   'Ricchiuti: "Doppio risultato?"'        → ["Ricchiuti", "Doppio risultato?"]
+ *   "Mister Toscano: \"Vinciamo\""           → ["Mister Toscano", "Vinciamo"]
+ *
+ * No match:
+ *   "Caturano: 12 gol in stagione"           (no virgolette)
+ *   "Catania-Crotone: la sfida"              (trattino)
+ */
+const QUOTE_REGEX =
+  /^([A-ZÀ-Ý][a-zà-ÿA-ZÀ-Ý'.]+(?:\s+[A-ZÀ-Ý][a-zà-ÿA-ZÀ-Ý'.]+){0,2}):\s*[""""'']\s*([^""""'']+?)\s*[""""''.!?]?\s*[""""'']?\s*$/;
 /** Numeri ≥ 1900 e ≤ 2100 sono trattati come anni storici. */
 function isHistoricalYear(n: number): boolean {
   return n >= 1900 && n <= 2100;
@@ -139,6 +165,24 @@ function splitEditorial(title: string): { mainTitle: string; payoff: string } {
 export function extractStatFromPill(pill: PillLike): PillStatPayload {
   const titleRaw = (pill.title ?? '').trim();
   const content = (pill.content ?? '').trim();
+
+  // ──── PRIORITÀ MASSIMA: detection quote "Nome: 'frase'" ────
+  // Pill citazioni sono frequenti (post-conference giocatore, dichiarazioni
+  // ex-Catania, ecc.). Layout dedicato con virgolette decorative + speaker.
+  const quoteMatch = titleRaw.match(QUOTE_REGEX);
+  if (quoteMatch) {
+    const speaker = quoteMatch[1].trim();
+    const quote = quoteMatch[2].trim();
+    return {
+      mode: 'quote',
+      number: null,
+      numberSuffix: '',
+      context: '',
+      heroText: quote,
+      eyebrow: speaker.toUpperCase(),
+      payoff: '',
+    };
+  }
 
   // ──── STEP 1: split editoriale ────
   // Distingue "Nome: ..." (speaker prefix → no payoff) da
