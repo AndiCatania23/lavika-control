@@ -32,6 +32,87 @@ const ACCENT_GOLD = '#FFC72C';
 const ACCENT_WARNING = '#FF4444';
 const WORDMARK_WHITE = 'brand/logo/lavika-wordmark-white.png';
 
+/* Overlap frame tra scene per cross-fade (no hard cut). */
+const SCENE_FADE_FRAMES = 12;
+
+/* ──────────────────────────────────────────────────────────────────
+   AMBIENT LAYERS — particles + glow + light flicker
+   Riempiono di "vita" lo schermo anche mentre il testo è statico.
+   ────────────────────────────────────────────────────────────────── */
+
+/** Particle field: ~40 dots gold che driftano orizzontalmente.
+    Genera atmosfera "stadium dust" continua per tutto il video. */
+const ParticleField: React.FC<{ color?: string; count?: number }> = ({
+  color = ACCENT_GOLD,
+  count = 40,
+}) => {
+  const frame = useCurrentFrame();
+  const { fps, durationInFrames, width, height } = useVideoConfig();
+  const tsec = frame / fps;
+  const dur = durationInFrames / fps;
+
+  const particles = Array.from({ length: count }, (_, i) => {
+    // Seed deterministic per particella
+    const seed = i * 137.508; // golden angle distribution
+    const baseX = ((Math.sin(seed) * 0.5 + 0.5) * width);
+    const baseY = ((Math.cos(seed * 1.7) * 0.5 + 0.5) * height);
+    const speed = 0.3 + (Math.sin(seed * 2.3) * 0.5 + 0.5) * 0.7; // 0.3-1.0
+    const size = 1 + (Math.sin(seed * 3.7) * 0.5 + 0.5) * 3;       // 1-4 px
+    // Posizione finale: drift orizzontale + leggera oscillazione vertical
+    const x = (baseX + tsec * speed * 40) % (width + 40) - 20;
+    const y = baseY + Math.sin(tsec * 1.2 + seed) * 8;
+    // Opacity pulse leggero
+    const opacity = 0.15 + Math.sin(tsec * 1.5 + seed) * 0.12;
+    // Fade-in iniziale + fade-out finale
+    const envelope = Math.min(
+      Math.min(1, tsec / 0.5),
+      Math.min(1, (dur - tsec) / 0.5)
+    );
+    return { x, y, size, opacity: opacity * envelope, key: i };
+  });
+
+  return (
+    <AbsoluteFill style={{ pointerEvents: 'none' }}>
+      {particles.map(p => (
+        <div key={p.key} style={{
+          position: 'absolute',
+          left: p.x, top: p.y,
+          width: p.size, height: p.size,
+          borderRadius: '50%',
+          background: color,
+          opacity: p.opacity,
+          filter: `blur(${p.size > 2 ? 1 : 0}px)`,
+          boxShadow: `0 0 ${p.size * 3}px ${color}`,
+        }} />
+      ))}
+    </AbsoluteFill>
+  );
+};
+
+/** Glow pulse: shadow box ondulante dietro al testo per "respiro". */
+function pulseGlow(frame: number, fps: number, color: string, intensity = 1): string {
+  const phase = Math.sin((frame / fps) * Math.PI * 1.4);
+  const blur = 30 + phase * 20 * intensity;
+  const spread = 8 + phase * 6 * intensity;
+  return `0 0 ${blur}px ${spread}px ${color}33, 0 6px 30px rgba(0,0,0,0.7)`;
+}
+
+/** Camera shake: micro tremolio sui frame iniziali per impact. */
+function cameraShake(frame: number, intensity = 2, durationFrames = 12): { x: number; y: number } {
+  if (frame > durationFrames) return { x: 0, y: 0 };
+  const decay = 1 - frame / durationFrames;
+  const seed1 = Math.sin(frame * 13.7) * intensity * decay;
+  const seed2 = Math.cos(frame * 17.3) * intensity * decay;
+  return { x: seed1, y: seed2 };
+}
+
+/** Scene envelope opacity per cross-fade (fade-in + fade-out). */
+function sceneOpacity(localFrame: number, duration: number): number {
+  const fadeIn = Math.min(1, localFrame / SCENE_FADE_FRAMES);
+  const fadeOut = Math.min(1, (duration - localFrame) / SCENE_FADE_FRAMES);
+  return Math.min(fadeIn, fadeOut);
+}
+
 const sceneSchema = z.object({
   id: z.string(),
   duration: z.number(),
@@ -116,20 +197,24 @@ const SceneCounterUp: React.FC<{ scene: z.infer<typeof sceneSchema>; tone: strin
     ? (counterProgress > 0.5 ? target : 0)
     : Math.round(target * counterProgress);
   const scale = 0.7 + counterProgress * 0.3;
-  const opacity = counterProgress;
+  const fadeOpacity = sceneOpacity(frame, scene.duration);
+  const opacity = counterProgress * fadeOpacity;
+  // Camera shake forte all'arrivo del numero finale (impact)
+  const shake = cameraShake(frame, 3, 14);
+  const color = colorForStyle(scene.style, tone);
   return (
     <AbsoluteFill style={{
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
       <div style={{
         fontFamily: FONT_DISPLAY,
-        color: colorForStyle(scene.style, tone),
+        color,
         fontSize: fontSizeForStyle(scene.style, scene.text.length, true),
         lineHeight: 0.9,
         letterSpacing: -8,
-        transform: `scale(${scale})`,
+        transform: `scale(${scale}) translate(${shake.x}px, ${shake.y}px)`,
         opacity,
-        textShadow: textShadowForStyle(scene.style, tone),
+        textShadow: pulseGlow(frame, fps, color, 1.5),
       }}>
         {displayed}
       </div>
@@ -141,20 +226,22 @@ const SceneEyebrowTag: React.FC<{ scene: z.infer<typeof sceneSchema>; tone: stri
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const sp = spring({ frame, fps, config: { damping: 16, stiffness: 110 }, durationInFrames: 20 });
+  const fade = sceneOpacity(frame, scene.duration);
+  const color = colorForStyle(scene.style, tone);
   return (
     <AbsoluteFill style={{
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
       <div style={{
         fontFamily: FONT_DISPLAY,
-        color: colorForStyle(scene.style, tone),
+        color,
         fontSize: 96,
         letterSpacing: 12,
         lineHeight: 1.1,
         textTransform: 'uppercase',
         transform: `translateY(${(1 - sp) * 20}px)`,
-        opacity: sp,
-        textShadow: textShadowForStyle(scene.style, tone),
+        opacity: sp * fade,
+        textShadow: pulseGlow(frame, fps, color, 1.2),
       }}>
         {scene.text}
       </div>
@@ -162,10 +249,11 @@ const SceneEyebrowTag: React.FC<{ scene: z.infer<typeof sceneSchema>; tone: stri
   );
 };
 
-const SceneAttribution: React.FC<{ scene: z.infer<typeof sceneSchema>; tone: string }> = ({ scene, tone }) => {
+const SceneAttribution: React.FC<{ scene: z.infer<typeof sceneSchema>; tone: string }> = ({ scene, tone: _tone }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const sp = spring({ frame, fps, config: { damping: 14, stiffness: 90 }, durationInFrames: 30 });
+  const fade = sceneOpacity(frame, scene.duration);
   return (
     <AbsoluteFill style={{
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 60px',
@@ -177,8 +265,8 @@ const SceneAttribution: React.FC<{ scene: z.infer<typeof sceneSchema>; tone: str
         letterSpacing: 8,
         textTransform: 'uppercase',
         transform: `translateX(${(1 - sp) * -30}px)`,
-        opacity: sp,
-        textShadow: textShadowForStyle(scene.style, tone),
+        opacity: sp * fade,
+        textShadow: pulseGlow(frame, fps, ACCENT_GOLD, 1.3),
         textAlign: 'center',
       }}>
         — {scene.text}
@@ -189,38 +277,44 @@ const SceneAttribution: React.FC<{ scene: z.infer<typeof sceneSchema>; tone: str
 
 const SceneTypeOn: React.FC<{ scene: z.infer<typeof sceneSchema>; tone: string }> = ({ scene, tone }) => {
   const frame = useCurrentFrame();
-  const words = scene.text.split(/\s+/);
-  // Mostra le parole una alla volta lungo i primi 80% della scene
-  const wordsToShow = Math.ceil(
-    interpolate(frame, [0, scene.duration * 0.7], [0, words.length], {
-      extrapolateLeft: 'clamp', extrapolateRight: 'clamp',
-    })
-  );
+  const { fps } = useVideoConfig();
+  const fade = sceneOpacity(frame, scene.duration);
+  const color = colorForStyle(scene.style, tone);
+  // LETTER-BY-LETTER reveal — più cinematografico di word-by-word
+  const chars = Array.from(scene.text);
+  const totalCharsAt = interpolate(frame, [0, scene.duration * 0.75], [0, chars.length], {
+    extrapolateLeft: 'clamp', extrapolateRight: 'clamp',
+  });
   return (
     <AbsoluteFill style={{
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 70px',
+      opacity: fade,
     }}>
       <div style={{
         fontFamily: FONT_DISPLAY,
-        color: colorForStyle(scene.style, tone),
+        color,
         fontSize: fontSizeForStyle(scene.style, scene.text.length),
         lineHeight: 1.1,
         letterSpacing: -1,
-        textShadow: textShadowForStyle(scene.style, tone),
+        textShadow: pulseGlow(frame, fps, color, 1.1),
         textAlign: 'center',
         maxWidth: 920,
       }}>
-        {words.map((w, i) => {
-          const isEmphasis = scene.emphasis && w.toLowerCase().includes(scene.emphasis.toLowerCase());
+        {chars.map((ch, i) => {
+          const charProgress = Math.max(0, Math.min(1, totalCharsAt - i));
+          // Cerca emphasis: highlight in gold le parole nel scene.emphasis
+          const wordsBefore = scene.text.slice(0, i).split(/\s+/);
+          const currentWord = wordsBefore[wordsBefore.length - 1] + (ch === ' ' ? '' : ch);
+          const isEmphasis = !!(scene.emphasis &&
+            currentWord.toLowerCase().includes(scene.emphasis.toLowerCase()));
           return (
             <span key={i} style={{
-              opacity: i < wordsToShow ? 1 : 0,
+              opacity: charProgress,
               color: isEmphasis ? ACCENT_GOLD : 'inherit',
-              transition: 'opacity 100ms',
-              marginRight: 12,
               display: 'inline-block',
+              transform: `translateY(${(1 - charProgress) * 12}px) scale(${0.85 + charProgress * 0.15})`,
             }}>
-              {w}
+              {ch === ' ' ? ' ' : ch}
             </span>
           );
         })}
@@ -229,10 +323,12 @@ const SceneTypeOn: React.FC<{ scene: z.infer<typeof sceneSchema>; tone: string }
   );
 };
 
-const SceneQuoteMarks: React.FC<{ scene: z.infer<typeof sceneSchema>; tone: string }> = ({ scene: _scene, tone: _tone }) => {
+const SceneQuoteMarks: React.FC<{ scene: z.infer<typeof sceneSchema>; tone: string }> = ({ scene, tone: _tone }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const sp = spring({ frame, fps, config: { damping: 12, stiffness: 70 }, durationInFrames: 25 });
+  const fade = sceneOpacity(frame, scene.duration);
+  const shake = cameraShake(frame, 2, 18);
   return (
     <AbsoluteFill style={{
       display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -243,9 +339,9 @@ const SceneQuoteMarks: React.FC<{ scene: z.infer<typeof sceneSchema>; tone: stri
         fontSize: 380,
         lineHeight: 0.6,
         letterSpacing: -20,
-        transform: `scale(${sp}) translateY(${(1 - sp) * 30}px)`,
-        opacity: sp * 0.95,
-        textShadow: `0 4px 30px ${ACCENT_GOLD}55, 0 0 60px rgba(0,0,0,0.7)`,
+        transform: `scale(${sp}) translate(${shake.x}px, ${(1 - sp) * 30 + shake.y}px)`,
+        opacity: sp * 0.95 * fade,
+        textShadow: pulseGlow(frame, fps, ACCENT_GOLD, 1.8),
       }}>
         “
       </div>
@@ -255,25 +351,27 @@ const SceneQuoteMarks: React.FC<{ scene: z.infer<typeof sceneSchema>; tone: stri
 
 const SceneRevealMask: React.FC<{ scene: z.infer<typeof sceneSchema>; tone: string }> = ({ scene, tone }) => {
   const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
   const progress = interpolate(frame, [0, scene.duration * 0.6], [0, 100], {
     extrapolateLeft: 'clamp', extrapolateRight: 'clamp',
   });
-  const opacity = interpolate(frame, [0, 10], [0, 1], { extrapolateRight: 'clamp' });
+  const fade = sceneOpacity(frame, scene.duration);
+  const color = colorForStyle(scene.style, tone);
   return (
     <AbsoluteFill style={{
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 70px',
     }}>
       <div style={{
         fontFamily: FONT_DISPLAY,
-        color: colorForStyle(scene.style, tone),
+        color,
         fontSize: fontSizeForStyle(scene.style, scene.text.length),
         lineHeight: 1.1,
         letterSpacing: -1,
-        textShadow: textShadowForStyle(scene.style, tone),
+        textShadow: pulseGlow(frame, fps, color, 1.4),
         textAlign: 'center',
         maxWidth: 920,
         clipPath: `inset(0 ${100 - progress}% 0 0)`,
-        opacity,
+        opacity: fade,
       }}>
         {scene.text}
       </div>
@@ -285,21 +383,24 @@ const SceneScaleIn: React.FC<{ scene: z.infer<typeof sceneSchema>; tone: string 
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const sp = spring({ frame, fps, config: { damping: 12, stiffness: 90 }, durationInFrames: 30 });
+  const fade = sceneOpacity(frame, scene.duration);
+  const shake = cameraShake(frame, 2, 12);
+  const color = colorForStyle(scene.style, tone);
   return (
     <AbsoluteFill style={{
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 70px',
     }}>
       <div style={{
         fontFamily: FONT_DISPLAY,
-        color: colorForStyle(scene.style, tone),
+        color,
         fontSize: fontSizeForStyle(scene.style, scene.text.length),
         lineHeight: 1.1,
         letterSpacing: -1,
-        textShadow: textShadowForStyle(scene.style, tone),
+        textShadow: pulseGlow(frame, fps, color, 1.5),
         textAlign: 'center',
         maxWidth: 920,
-        transform: `scale(${0.6 + sp * 0.4})`,
-        opacity: sp,
+        transform: `scale(${0.6 + sp * 0.4}) translate(${shake.x}px, ${shake.y}px)`,
+        opacity: sp * fade,
       }}>
         {scene.text}
       </div>
@@ -311,21 +412,23 @@ const SceneSlideUp: React.FC<{ scene: z.infer<typeof sceneSchema>; tone: string 
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const sp = spring({ frame, fps, config: { damping: 16, stiffness: 100 }, durationInFrames: 30 });
+  const fade = sceneOpacity(frame, scene.duration);
+  const color = colorForStyle(scene.style, tone);
   return (
     <AbsoluteFill style={{
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 70px',
     }}>
       <div style={{
         fontFamily: FONT_DISPLAY,
-        color: colorForStyle(scene.style, tone),
+        color,
         fontSize: fontSizeForStyle(scene.style, scene.text.length),
         lineHeight: 1.1,
         letterSpacing: -1,
-        textShadow: textShadowForStyle(scene.style, tone),
+        textShadow: pulseGlow(frame, fps, color, 1.2),
         textAlign: 'center',
         maxWidth: 920,
         transform: `translateY(${(1 - sp) * 80}px)`,
-        opacity: sp,
+        opacity: sp * fade,
       }}>
         {scene.text}
       </div>
@@ -335,21 +438,26 @@ const SceneSlideUp: React.FC<{ scene: z.infer<typeof sceneSchema>; tone: string 
 
 const SceneFadeIn: React.FC<{ scene: z.infer<typeof sceneSchema>; tone: string }> = ({ scene, tone }) => {
   const frame = useCurrentFrame();
-  const opacity = interpolate(frame, [0, 20], [0, 1], { extrapolateRight: 'clamp' });
+  const { fps } = useVideoConfig();
+  const fade = sceneOpacity(frame, scene.duration);
+  const color = colorForStyle(scene.style, tone);
+  // Subtle scale-breath durante hold per non sembrare statico
+  const breath = 1 + Math.sin((frame / fps) * Math.PI * 1.2) * 0.015;
   return (
     <AbsoluteFill style={{
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 70px',
     }}>
       <div style={{
         fontFamily: FONT_DISPLAY,
-        color: colorForStyle(scene.style, tone),
+        color,
         fontSize: fontSizeForStyle(scene.style, scene.text.length),
         lineHeight: 1.1,
         letterSpacing: -1,
-        textShadow: textShadowForStyle(scene.style, tone),
+        textShadow: pulseGlow(frame, fps, color, 1.0),
         textAlign: 'center',
         maxWidth: 920,
-        opacity,
+        opacity: fade,
+        transform: `scale(${breath})`,
       }}>
         {scene.text}
       </div>
@@ -362,21 +470,23 @@ const ScenePulseEmphasis: React.FC<{ scene: z.infer<typeof sceneSchema>; tone: s
   const { fps } = useVideoConfig();
   const entry = spring({ frame, fps, config: { damping: 16, stiffness: 110 }, durationInFrames: 20 });
   const pulse = 1 + Math.sin((frame / fps) * Math.PI * 3) * 0.04;
+  const fade = sceneOpacity(frame, scene.duration);
+  const color = colorForStyle(scene.style, tone);
   return (
     <AbsoluteFill style={{
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 70px',
     }}>
       <div style={{
         fontFamily: FONT_DISPLAY,
-        color: colorForStyle(scene.style, tone),
+        color,
         fontSize: fontSizeForStyle(scene.style, scene.text.length),
         lineHeight: 1.1,
         letterSpacing: -1,
-        textShadow: textShadowForStyle(scene.style, tone),
+        textShadow: pulseGlow(frame, fps, color, 1.6),
         textAlign: 'center',
         maxWidth: 920,
         transform: `scale(${pulse * entry})`,
-        opacity: entry,
+        opacity: entry * fade,
       }}>
         {scene.text}
       </div>
@@ -459,13 +569,18 @@ export const AIDirectedStoryVideo: React.FC<AIDirectedStoryVideoProps> = ({
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
 
-  // Calcola offset cumulativo per ogni scene
+  // Calcola offset cumulativo per ogni scene CON cross-fade overlap.
+  // Ogni scene comincia SCENE_FADE_FRAMES prima della fine precedente
+  // → cross-fade graduale invece di hard cut.
   let offset = 0;
-  const sceneOffsets = scenes.map(s => {
-    const start = offset;
-    offset += s.duration;
-    return { ...s, start };
+  const sceneOffsets = scenes.map((s, i) => {
+    const start = i === 0 ? 0 : offset - SCENE_FADE_FRAMES;
+    offset = start + s.duration;
+    return { ...s, start, extendedDuration: s.duration + SCENE_FADE_FRAMES };
   });
+
+  // Particle field color in base al tone
+  const particleColor = tone === 'provocative' ? ACCENT_WARNING : ACCENT_GOLD;
 
   // Wordmark fade-in negli ultimi 30 frame
   const wordmarkOpacity = interpolate(frame, [durationInFrames - 40, durationInFrames - 10], [0, 0.92], {
@@ -476,6 +591,9 @@ export const AIDirectedStoryVideo: React.FC<AIDirectedStoryVideoProps> = ({
     <AbsoluteFill style={{ fontFamily: FONT_BODY, overflow: 'hidden' }}>
       {/* Background */}
       <BackgroundLayer imageUrl={imageUrl} strategy={imageStrategy} />
+
+      {/* Particle field globale — drift gold per atmosfera dinamica continua */}
+      <ParticleField color={particleColor} count={45} />
 
       {/* Badge top: CATEGORIA · LAVIKA SPORT */}
       <div style={{

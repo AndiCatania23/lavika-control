@@ -112,6 +112,8 @@ Stili disponibili (scegli per scena):
 - "glow": glow effect per emozione
 
 Durata scene: 30=1s, 60=2s, 90=3s. Total deve essere ≈ 240 (8s).
+DURATA MINIMA PER SCENA CON TESTO: 50 frame (1.67s) per essere leggibile.
+Scene "fade-in" finale può essere min 40 frame. Niente scene < 30 frame mai.
 
 Output JSON ESATTO (niente fence):
 {
@@ -209,7 +211,7 @@ export async function generateStoryboard(args: {
       const obj = s as unknown as Record<string, unknown>;
       return {
         id: typeof obj.id === 'string' ? obj.id : `s${i + 1}`,
-        duration: typeof obj.duration === 'number' ? Math.max(15, Math.min(150, obj.duration)) : 60,
+        duration: typeof obj.duration === 'number' ? Math.max(40, Math.min(150, obj.duration)) : 60,
         anim: validAnims.has(obj.anim as SceneAnim) ? (obj.anim as SceneAnim) : ('fade-in' as SceneAnim),
         style: validStyles.has(obj.style as SceneStyle) ? (obj.style as SceneStyle) : ('subtle' as SceneStyle),
         text: typeof obj.text === 'string' ? obj.text : '',
