@@ -142,6 +142,7 @@ function buildJobRecipe(args: {
     context: string;
     heroText: string;
     eyebrow?: string;
+    payoff?: string;
     category: string | null;
   };
 }): JobRecipe {
@@ -167,6 +168,7 @@ function buildJobRecipe(args: {
             context: pillStatPayload.context,
             heroText: pillStatPayload.heroText,
             eyebrow: pillStatPayload.eyebrow ?? '',
+            payoff: pillStatPayload.payoff ?? '',
             category: pillStatPayload.category ?? 'numeri',
             // sourceUrl per pill = pill.image_url → background atmosphere.
             // Composition lo opacizza + applica vignette per preservare

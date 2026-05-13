@@ -39,6 +39,14 @@ export interface PillStatPayload {
   heroText: string;
   /** Eyebrow piccolo gold sotto al numero (anniversary mode: "ANNI FA"). */
   eyebrow: string;
+  /**
+   * Payoff editoriale: la frase DOPO il `:` quando il titolo è una pill
+   * narrativa con conclusione/morale. Renderizzato in gold UPPERCASE
+   * sotto la headline (es. "L'ESPERIENZA CONTA").
+   * Vuoto per pill senza split editoriale (es. "Caturano: 12 gol" non
+   * è un editorial split, è speaker prefix → payoff resta vuoto).
+   */
+  payoff: string;
 }
 
 interface PillLike {
@@ -70,11 +78,11 @@ function cleanText(raw: string, opts: { uppercase?: boolean } = {}): string {
   return opts.uppercase ? cleaned.toUpperCase() : cleaned;
 }
 
-/** Trunca al primo `:` o `.` o `?` per ottenere la "headline editoriale". */
+/** Trunca al primo `.` `?` `!` per ottenere la "headline editoriale". */
 function takeHeadline(raw: string, max = 50): string {
   const trimmed = raw.trim();
   // Prendi tutto fino al primo separatore forte se entro `max` caratteri
-  const match = trimmed.match(/^(.{8,50}?)[:.?!]/);
+  const match = trimmed.match(/^(.{8,50}?)[.?!]/);
   if (match) return match[1].trim();
   // Altrimenti taglia all'ultimo spazio prima di max
   if (trimmed.length <= max) return trimmed;
@@ -82,34 +90,84 @@ function takeHeadline(raw: string, max = 50): string {
   return cut > 8 ? trimmed.slice(0, cut).trim() : trimmed.slice(0, max).trim();
 }
 
+/**
+ * Split editoriale del titolo su `:` distinguendo due pattern:
+ *
+ *   - Speaker prefix ("Caturano: ..." / "Mister Toscano: ...")
+ *     → la parte prima del `:` è 1-2 parole capitalizzate (un nome).
+ *     → Il `:` è solo attribution, NON un break editoriale.
+ *     → mainTitle = intero titolo, payoff = ''
+ *
+ *   - Editorial split ("Frase lunga: morale finale")
+ *     → la parte prima del `:` è una frase (>2 parole o non capitalizzata).
+ *     → Il `:` separa hook (fact) da payoff (commento/morale).
+ *     → mainTitle = prima parte, payoff = seconda parte
+ *
+ * Esempi:
+ *   "Caturano: 12 gol"                   → main="Caturano: 12 gol",   payoff=""
+ *   "Mister Toscano: pareggio prezioso"  → main="Mister Toscano: ...", payoff=""
+ *   "Di Tacchio, 10 anni fa il trionfo playoff: l'esperienza conta"
+ *     → main="Di Tacchio, 10 anni fa il trionfo playoff",
+ *       payoff="l'esperienza conta"
+ */
+function splitEditorial(title: string): { mainTitle: string; payoff: string } {
+  const colonIdx = title.indexOf(':');
+  if (colonIdx <= 0) return { mainTitle: title, payoff: '' };
+
+  const before = title.slice(0, colonIdx).trim();
+  const after = title.slice(colonIdx + 1).trim();
+
+  // Niente payoff: dopo i `:` non c'è abbastanza testo per essere un break.
+  if (after.length < 5) return { mainTitle: title, payoff: '' };
+
+  // Speaker prefix detection: 1-2 parole, ciascuna inizia con maiuscola,
+  // niente trattini (per filtrare "Catania-Crotone"). Coerente con pattern
+  // di quoteDetection.ts (asset image).
+  const beforeWords = before.split(/\s+/);
+  const isSpeakerPrefix =
+    beforeWords.length <= 2 &&
+    !before.includes('-') &&
+    beforeWords.every(w => /^[A-ZÀ-Ý]/.test(w) && w.length >= 2);
+
+  if (isSpeakerPrefix) {
+    return { mainTitle: title, payoff: '' };
+  }
+
+  return { mainTitle: before, payoff: after };
+}
+
 export function extractStatFromPill(pill: PillLike): PillStatPayload {
-  const title = (pill.title ?? '').trim();
+  const titleRaw = (pill.title ?? '').trim();
   const content = (pill.content ?? '').trim();
 
+  // ──── STEP 1: split editoriale ────
+  // Distingue "Nome: ..." (speaker prefix → no payoff) da
+  // "Frase lunga: morale" (editorial split → main + payoff)
+  const { mainTitle, payoff: rawPayoff } = splitEditorial(titleRaw);
+  const payoff = rawPayoff ? cleanText(rawPayoff, { uppercase: true }) : '';
+
   // ──── MODE 1: anniversary ("N anni fa") ────
-  // Priorità massima: questo pattern semantico è troppo specifico per
-  // essere gestito dal counter-up generico (mostrare solo "10" senza
-  // contesto temporale è incomprensibile).
-  const annMatch = title.match(ANNIVERSARY_REGEX) ?? content.match(ANNIVERSARY_REGEX);
+  // Priorità massima: pattern semantico troppo specifico per il counter-up
+  // generico (mostrare solo "10" senza contesto temporale è incomprensibile).
+  const annMatch = mainTitle.match(ANNIVERSARY_REGEX) ?? content.match(ANNIVERSARY_REGEX);
   if (annMatch) {
     const number = parseInt(annMatch[1], 10);
-    const sourceStr = title.match(ANNIVERSARY_REGEX) ? title : content;
-    // Rimuovi tutto il pattern "N anni fa/dopo" + virgole orfane circostanti
+    const sourceStr = mainTitle.match(ANNIVERSARY_REGEX) ? mainTitle : content;
     const withoutPattern = sourceStr.replace(ANNIVERSARY_REGEX, ' ').replace(/\s+,\s+/g, ', ');
-    // Headline = parte editoriale principale (prima del `:` se presente)
     const headline = cleanText(takeHeadline(withoutPattern));
     return {
       mode: 'anniversary',
       number,
       numberSuffix: '',
       context: '',
-      heroText: headline || title,
+      heroText: headline || mainTitle,
       eyebrow: 'ANNI FA',
+      payoff,
     };
   }
 
   // ──── Cerca un numero generico per stat/year ────
-  const numMatch = title.match(NUMBER_REGEX) ?? content.match(NUMBER_REGEX);
+  const numMatch = mainTitle.match(NUMBER_REGEX) ?? content.match(NUMBER_REGEX);
 
   if (!numMatch) {
     // ──── MODE 4: hero (nessun numero estraibile) ────
@@ -117,29 +175,30 @@ export function extractStatFromPill(pill: PillLike): PillStatPayload {
       mode: 'hero',
       number: null,
       numberSuffix: '',
-      context: cleanText(title, { uppercase: true }),
-      heroText: title,
+      context: cleanText(mainTitle, { uppercase: true }),
+      heroText: mainTitle,
       eyebrow: '',
+      payoff,
     };
   }
 
   const numberStr = numMatch[1];
   const suffix = numMatch[2] ?? '';
   const number = parseInt(numberStr, 10);
-  const sourceStr = title.match(NUMBER_REGEX) ? title : content;
+  const sourceStr = mainTitle.match(NUMBER_REGEX) ? mainTitle : content;
   const withoutNumber = sourceStr.replace(NUMBER_REGEX, ' ').trim();
 
   if (isHistoricalYear(number)) {
     // ──── MODE 2: year (anno storico tipo 2007) ────
-    // Mostriamo l'anno + heroText editoriale invece di context grezzo.
     const headline = cleanText(takeHeadline(withoutNumber));
     return {
       mode: 'year',
       number,
       numberSuffix: '',
       context: '',
-      heroText: headline || title,
+      heroText: headline || mainTitle,
       eyebrow: '',
+      payoff,
     };
   }
 
@@ -149,8 +208,9 @@ export function extractStatFromPill(pill: PillLike): PillStatPayload {
     mode: 'stat',
     number,
     numberSuffix: suffix,
-    context: context || cleanText(title, { uppercase: true }),
-    heroText: title,
+    context: context || cleanText(mainTitle, { uppercase: true }),
+    heroText: mainTitle,
     eyebrow: '',
+    payoff,
   };
 }

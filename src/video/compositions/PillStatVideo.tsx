@@ -50,6 +50,12 @@ export const pillStatVideoSchema = z.object({
   heroText: z.string().optional(),
   /** Eyebrow sotto al numero (mode anniversary: "ANNI FA"). */
   eyebrow: z.string().optional(),
+  /**
+   * Payoff editoriale UPPERCASE — la frase DOPO il `:` quando il titolo
+   * è un editorial split (es. "L'ESPERIENZA CONTA"). Renderizzato in
+   * gold sotto la headline come "morale" della pill. Empty stringa OK.
+   */
+  payoff: z.string().optional(),
   /** Suffisso inline del numero (es. "%", "°"). */
   numberSuffix: z.string().optional(),
   /** Categoria pill (numeri/storia/flash/rivali) — micro-tweak palette. */
@@ -71,11 +77,12 @@ export const defaultPillStatVideoProps: PillStatVideoProps = {
   context: 'GOL DI CATURANO IN STAGIONE',
   numberSuffix: '',
   eyebrow: '',
+  payoff: '',
   category: 'numeri',
 };
 
 export const PillStatVideo: React.FC<PillStatVideoProps> = ({
-  mode = 'stat', number, context, heroText, eyebrow, numberSuffix, category, imageUrl,
+  mode = 'stat', number, context, heroText, eyebrow, payoff, numberSuffix, category, imageUrl,
 }) => {
   const frame = useCurrentFrame();
   const { fps, durationInFrames, width, height } = useVideoConfig();
@@ -83,6 +90,8 @@ export const PillStatVideo: React.FC<PillStatVideoProps> = ({
   const isStory = height / width > 1.5;
   // Per anniversary/year il numero è più piccolo per fare spazio alla headline editoriale.
   const isCompactNumber = mode === 'anniversary' || mode === 'year';
+  // Se c'è un payoff, lasciamo più spazio sotto la headline alzando i blocchi.
+  const hasPayoff = !!(payoff && payoff.length > 0);
   const POS = isStory
     ? {
         numberFontSize: isCompactNumber ? 380 : (number !== null && number >= 1000 ? 380 : 520),
@@ -95,9 +104,13 @@ export const PillStatVideo: React.FC<PillStatVideoProps> = ({
         eyebrowLetterSpacing: 10,
         wordmarkBottom: 140,
         wordmarkWidth: 240,
-        numberCenter: isCompactNumber ? '34%' : '42%',
-        contextTop: '60%',
+        numberCenter: isCompactNumber ? (hasPayoff ? '30%' : '34%') : '42%',
+        contextTop: hasPayoff ? '56%' : '60%',
         eyebrowOffset: 30,
+        payoffTop: '74%',
+        payoffFontSize: 40,
+        payoffLetterSpacing: 5,
+        payoffMaxWidth: 820,
       }
     : {
         numberFontSize: isCompactNumber ? 280 : (number !== null && number >= 1000 ? 280 : 380),
@@ -110,9 +123,13 @@ export const PillStatVideo: React.FC<PillStatVideoProps> = ({
         eyebrowLetterSpacing: 8,
         wordmarkBottom: 80,
         wordmarkWidth: 180,
-        numberCenter: isCompactNumber ? '32%' : '38%',
-        contextTop: '60%',
+        numberCenter: isCompactNumber ? (hasPayoff ? '28%' : '32%') : '38%',
+        contextTop: hasPayoff ? '54%' : '60%',
         eyebrowOffset: 24,
+        payoffTop: '74%',
+        payoffFontSize: 32,
+        payoffLetterSpacing: 4,
+        payoffMaxWidth: 720,
       };
 
   /* ── Number animation timeline ──
@@ -374,6 +391,34 @@ export const PillStatVideo: React.FC<PillStatVideoProps> = ({
           </div>
         ) : null}
       </div>
+
+      {/* ─── PAYOFF editoriale (la "morale" dopo i `:` del titolo).
+              Renderizzato in gold UPPERCASE sotto la headline.
+              Visivamente è il "punch line" che chiude la pill. */}
+      {payoff && payoff.length > 0 && (
+        <div style={{
+          position: 'absolute',
+          top: POS.payoffTop,
+          left: 0,
+          right: 0,
+          textAlign: 'center',
+          opacity: contextOpacity,
+          padding: '0 80px',
+        }}>
+          <div style={{
+            color: ACCENT_GOLD,
+            fontFamily: FONT_DISPLAY,
+            fontSize: POS.payoffFontSize,
+            letterSpacing: POS.payoffLetterSpacing,
+            lineHeight: 1.18,
+            maxWidth: POS.payoffMaxWidth,
+            margin: '0 auto',
+            textShadow: `0 4px 20px ${ACCENT_GOLD}44, 0 2px 8px rgba(0,0,0,0.7)`,
+          }}>
+            {payoff}
+          </div>
+        </div>
+      )}
 
       {/* ─── Category badge piccolo top (es. "NUMERI · LAVIKA SPORT") */}
       <div style={{
