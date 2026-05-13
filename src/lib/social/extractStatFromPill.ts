@@ -79,23 +79,30 @@ const ANNIVERSARY_REGEX = /(\d{1,3})\s+anni\s+(?:fa|dopo)\b/i;
 const NUMBER_WITH_UNIT_REGEX = /(\d{1,4})(?:°|%)?\s+(gol|reti|anni|vittorie|sconfitte|pareggi|partite|presenze|minuti|punti|posti?|posizion[ei]|spettatori|tifosi|titoli|coppe|trofei|trionfi|cartellini|assist|tiri|cross|falli|corner|rigori|stagion[ei])\b/i;
 
 /**
- * Detection citazione "Nome: 'quote'" / "Nome: \"quote\"" (anche
- * virgolette tipografiche). Prima 1-3 parole capitalizzate, poi `:`,
- * poi una QUOTE TEXT racchiusa tra virgolette (presenza obbligatoria
- * per ridurre falsi positivi su titoli `Nome: descrizione`).
+ * Detection citazione speaker. Accetta:
+ *   - Nomi singoli o composti (1-3 parole, prima capitalizzata)
+ *   - Pattern "Speaker verbo:" (es. "Gasparin avverte:", "Toscano dichiara:")
+ *   - Virgolette curly ("..." ""... '...'), straight ("..." '...'), e
+ *     guillemet italiane formali («...»)
  *
- * Catturati: 1=speaker, 2=quote text (senza virgolette).
+ * Catturati: 1=speaker, 2=quote text (senza virgolette esterne).
  *
  * Match:
- *   'Ricchiuti: "Doppio risultato?"'        → ["Ricchiuti", "Doppio risultato?"]
- *   "Mister Toscano: \"Vinciamo\""           → ["Mister Toscano", "Vinciamo"]
+ *   'Ricchiuti: "Doppio risultato?"'                    → ["Ricchiuti", "Doppio risultato?"]
+ *   "Mister Toscano: \"Vinciamo\""                       → ["Mister Toscano", "Vinciamo"]
+ *   'Gasparin avverte: «Catania favorito, tallone...»'   → ["Gasparin avverte", "Catania favorito, tallone..."]
+ *   'Toscano dichiara: "Forza ragazzi"'                  → ["Toscano dichiara", "Forza ragazzi"]
  *
  * No match:
- *   "Caturano: 12 gol in stagione"           (no virgolette)
- *   "Catania-Crotone: la sfida"              (trattino)
+ *   "Caturano: 12 gol in stagione"           (no virgolette → stat)
+ *   "Catania-Crotone: la sfida"              (trattino, no virgolette → editorial split)
  */
-const QUOTE_REGEX =
-  /^([A-ZÀ-Ý][a-zà-ÿA-ZÀ-Ý'.]+(?:\s+[A-ZÀ-Ý][a-zà-ÿA-ZÀ-Ý'.]+){0,2}):\s*[""""'']\s*([^""""'']+?)\s*[""""''.!?]?\s*[""""'']?\s*$/;
+// Char class virgolette: straight " ' + curly U+201C/D/B/9 + guillemet U+00AB/BB
+const QUOTE_OPEN = '"“”„‘’«';
+const QUOTE_CLOSE = '"“”„‘’»';
+const QUOTE_REGEX = new RegExp(
+  `^([A-ZÀ-Ý][a-zA-ZÀ-ÿ'.]+(?:\\s+[a-zA-ZÀ-ÿ'.]+){0,3}):\\s*[${QUOTE_OPEN}]\\s*([^${QUOTE_CLOSE}]+?)\\s*[.!?]?\\s*[${QUOTE_CLOSE}]\\s*$`
+);
 /** Numeri ≥ 1900 e ≤ 2100 sono trattati come anni storici. */
 function isHistoricalYear(n: number): boolean {
   return n >= 1900 && n <= 2100;
@@ -183,8 +190,20 @@ export function extractStatFromPill(pill: PillLike): PillStatPayload {
   // ex-Catania, ecc.). Layout dedicato con virgolette decorative + speaker.
   const quoteMatch = titleRaw.match(QUOTE_REGEX);
   if (quoteMatch) {
-    const speaker = quoteMatch[1].trim();
+    let speaker = quoteMatch[1].trim();
     const quote = quoteMatch[2].trim();
+    // Cleanup speaker: se pattern "Nome verbo" (es. "Gasparin avverte",
+    // "Toscano dichiara"), rimuovi il verbo finale (parola lowercase) per
+    // ottenere attribution pulita "— GASPARIN" invece di "— GASPARIN AVVERTE".
+    // Conserva invece "Mister Toscano", "De Luca" (entrambe capitalizzate).
+    const speakerWords = speaker.split(/\s+/);
+    if (speakerWords.length >= 2) {
+      const last = speakerWords[speakerWords.length - 1];
+      // Se inizia lowercase → è un verbo (avverte/dichiara/commenta/etc), drop
+      if (/^[a-zà-ÿ]/.test(last)) {
+        speaker = speakerWords.slice(0, -1).join(' ');
+      }
+    }
     return {
       mode: 'quote',
       number: null,

@@ -154,27 +154,44 @@ async function runRecipe(recipe: string, params: Record<string, unknown>): Promi
               content: pill.content,
               pill_category: pill.pill_category,
             });
+            // ── Regex pattern STRONG (quote, anniversary) sono AUTHORITATIVE ──
+            // gemma3:12b ha tendenza a non riconoscere bene questi pattern
+            // (es. mette "hero" invece di "quote" su "Gasparin avverte: «...»").
+            // Quando il regex ha già identificato un pattern strong, il regex
+            // VINCE sul mode/heroText/eyebrow. L'LLM contribuisce solo con
+            // shareability score / tone / payoff (per anniversary) / rationale.
+            const regexMode = finalInputProps.mode as string | undefined;
+            const isStrongPattern = regexMode === 'quote' || regexMode === 'anniversary';
+            const finalMode = isStrongPattern
+              ? regexMode!
+              : (director.mode === 'achievement' ? 'stat' : director.mode);
+
             log('content director: done (Ollama UNLOADING in background)', {
               ms: Date.now() - t0,
-              mode: director.mode,
+              regex_mode: regexMode,
+              llm_mode: director.mode,
+              final_mode: finalMode,
+              authoritative: isStrongPattern ? 'regex' : 'llm',
               tone: director.tone,
               shareability: director.shareability_score,
               factors: director.shareability_factors,
               rationale: director._rationale,
             });
-            // Sovrascrive i campi semantici, preserva imageUrl + category.
-            // shareability_score/factors NON vanno nei inputProps (la
-            // composition non li usa) ma vengono propagati a asset_meta
-            // tramite il job result-meta path. Salviamoli su closure scope.
+
             finalInputProps = {
               ...finalInputProps,
-              mode: director.mode === 'achievement' ? 'stat' : director.mode,
-              number: director.number,
-              numberSuffix: director.numberSuffix,
-              eyebrow: director.eyebrow,
-              heroText: director.heroText,
-              context: director.context,
-              payoff: director.payoff,
+              mode: finalMode,
+              // Per pattern strong (quote/anniversary) il regex pre-fill vince
+              // su number/eyebrow/heroText/context/payoff. Per stat/hero/year
+              // l'LLM è authoritative.
+              number: isStrongPattern ? finalInputProps.number : director.number,
+              numberSuffix: isStrongPattern ? finalInputProps.numberSuffix : director.numberSuffix,
+              eyebrow: isStrongPattern ? finalInputProps.eyebrow : director.eyebrow,
+              heroText: isStrongPattern ? finalInputProps.heroText : director.heroText,
+              context: isStrongPattern ? finalInputProps.context : director.context,
+              // Payoff: LLM può raffinarlo per anniversary (es. punteggiatura);
+              // per quote resta sempre vuoto (no payoff visivo nel quote layout)
+              payoff: regexMode === 'quote' ? '' : (director.payoff || finalInputProps.payoff),
               _llm_director_done: true,
               _llm_tone: director.tone,
               _llm_shareability_score: director.shareability_score,
