@@ -136,7 +136,7 @@ function buildJobRecipe(args: {
   /** Quando la sorgente è una pill, passa il payload stat per routare a
    *  PillStatVideo. Se omesso, fallback a MatchScorecardStory. */
   pillStatPayload?: {
-    mode?: 'stat' | 'anniversary' | 'year' | 'hero';
+    mode?: 'stat' | 'anniversary' | 'year' | 'hero' | 'quote';
     number: number | null;
     numberSuffix: string;
     context: string;
