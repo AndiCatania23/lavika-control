@@ -34,6 +34,31 @@ export interface ExtractedFacts {
   teams: string[];
   /** Pattern temporale: "anniversary" se "N anni fa", "year" se anno storico, "" altrimenti. */
   time_pattern: 'anniversary' | 'year' | '';
+  /**
+   * Tone detection da keyword italiani sport (rilevazione deterministica).
+   * - 'provocative': Caos, Tegola, Stop, Ecatombe, Terremoto, Bomba, Subbuglio, Crisi
+   * - 'celebrative': Salva, Vittoria, Trionfo, Record, Top, Capolavoro, Esultanza
+   * - 'nostalgic': anni fa, ricorda, "addio", storia, leggenda
+   * - 'factual': default
+   */
+  tone_hint: 'provocative' | 'celebrative' | 'nostalgic' | 'factual';
+}
+
+/**
+ * Keyword italiane sport per tone detection deterministica.
+ * Triggered post-LLM extraction, indipendente dall'output AI.
+ */
+const TONE_KEYWORDS = {
+  provocative: /\b(caos|tegola|stop|ecatombe|terremoto|bomba|subbuglio|crisi|scandalo|sciagura|polemica|incubo|disastro|protesta|allarme|inguardabile|ammutinamento|esonero|esonerato|frenata|fallimento|penaliz|inciampa|sciolta|rischia|fragili|dramma|inatteso|inaspettat)/i,
+  celebrative: /\b(salva|vittoria|trionfo|record|top|capolavoro|esultanza|conquista|festa|gloria|impresa|stupore|magnifico|fantastico|perla|impeccabile|incantato|fortino|muro|imbattibile|maratona|cuori\s+pulsanti)/i,
+  nostalgic: /\b(anni\s+fa|ricorda|addio|leggenda|epoca|storia|memorie?|vintage|ricordando)/i,
+};
+
+function detectToneFromTitle(title: string): ExtractedFacts['tone_hint'] {
+  if (TONE_KEYWORDS.provocative.test(title)) return 'provocative';
+  if (TONE_KEYWORDS.celebrative.test(title)) return 'celebrative';
+  if (TONE_KEYWORDS.nostalgic.test(title))   return 'nostalgic';
+  return 'factual';
 }
 
 const EXTRACTION_PROMPT = `Sei un parser strutturato. Ricevi una pill (titolo notizia sportiva in italiano).
@@ -153,5 +178,8 @@ export async function extractFactsFromPill(args: {
       parsed.time_pattern === 'anniversary' || parsed.time_pattern === 'year'
         ? parsed.time_pattern
         : '',
+    // Tone detection deterministica via keyword italiani sport — NON dipende
+    // dall'LLM (l'LLM può sbagliare il tono, qui copriamo i pattern certi)
+    tone_hint: detectToneFromTitle(title),
   };
 }

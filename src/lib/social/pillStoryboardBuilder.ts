@@ -19,13 +19,20 @@ import type { ExtractedFacts } from './pillFactExtractor';
    Step 2: classification (deterministic)
    ────────────────────────────────────────────────────────────────── */
 
-export type NarrativeType = 'quote' | 'anniversary' | 'year' | 'stat' | 'narrative';
+export type NarrativeType = 'quote' | 'anniversary' | 'year' | 'stat' | 'news' | 'narrative';
 
 export function classifyNarrative(facts: ExtractedFacts): NarrativeType {
   if (facts.quote && facts.speaker) return 'quote';
   if (facts.time_pattern === 'anniversary') return 'anniversary';
   if (facts.time_pattern === 'year') return 'year';
   if (facts.number !== null) return 'stat';
+  // News editoriale: title con `:` separator hook/body OR title con keyword
+  // strong (Caos, Tegola, Stop, Salva, ecc.) → split editoriale dedicato
+  const hasEditorialSplit =
+    !!facts.secondary_phrase && facts.secondary_phrase.length >= 5;
+  const hasNewsKeyword =
+    facts.tone_hint === 'provocative' || facts.tone_hint === 'celebrative';
+  if (hasEditorialSplit || hasNewsKeyword) return 'news';
   return 'narrative';
 }
 
@@ -115,6 +122,30 @@ Durata scene: 30=1s, 60=2s, 90=3s. Total deve essere ≈ 240 (8s).
 DURATA MINIMA PER SCENA CON TESTO: 50 frame (1.67s) per essere leggibile.
 Scene "fade-in" finale può essere min 40 frame. Niente scene < 30 frame mai.
 
+PATTERN STORYBOARD PER NARRATIVE TYPE:
+
+• quote:    s1=quote-marks (40f) → s2=type-on quote main (120f) → s3=attribution speaker (60f) → s4=fade-in (40f)
+
+• stat:     s1=counter-up numero (60f) → s2=eyebrow-tag unità (60f) → s3=scale-in/reveal-mask payoff (80f) → s4=fade-in (40f)
+
+• anniversary: s1=counter-up N (60f) → s2=eyebrow-tag "ANNI FA" (50f) → s3=reveal-mask hero (90f) → s4=fade-in payoff (40f)
+
+• year:     s1=scale-in anno (70f) → s2=reveal-mask main_phrase (90f) → s3=slide-up/fade payoff (80f)
+
+• news:     PATTERN EDITORIAL HEADLINE — è il 50% delle pill, regia dedicata:
+            s1=scale-in HOOK UPPERCASE bold/warning (70f) →
+            s2=type-on body narrativo (110f) →
+            s3=pulse-emphasis o slide-up payoff (60f).
+            Per tone "provocative" usa style="warning". Per "celebrative" style="gold".
+
+• narrative: fallback hero text — usa type-on/reveal-mask 2 scene.
+
+TONO → STILE (importante!):
+- tone=provocative → style "warning" sulle scene principali (red accent #FF4444)
+- tone=celebrative → style "gold" (intensifica brand color)
+- tone=nostalgic → style "subtle" o "gold" tenue
+- tone=factual → default style appropriato per anim
+
 Output JSON ESATTO (niente fence):
 {
   "narrative_type": "<copia da input>",
@@ -144,7 +175,7 @@ OUTPUT:
   "_rationale": "Quote provocatoria, type-on per build up tension"
 }
 
-INPUT facts: {number:12, number_unit:"gol", main_phrase:"12 gol dalla panchina", secondary_phrase:"la forza nascosta del Catania", ...}
+INPUT facts: {number:12, number_unit:"gol", main_phrase:"12 gol dalla panchina", secondary_phrase:"la forza nascosta del Catania", tone_hint:"celebrative", ...}
 INPUT type: "stat"
 OUTPUT:
 {
@@ -159,6 +190,38 @@ OUTPUT:
   "image_strategy": "ken-burns-zoom-out",
   "shareability_score": 8,
   "_rationale": "Stat sorprendente, counter-up sul numero protagonista, payoff con reveal mask"
+}
+
+INPUT facts: {main_phrase:"Tegola inaspettata", secondary_phrase:"Donnarumma rischia i primi playoff", tone_hint:"provocative", people:["Donnarumma"], ...}
+INPUT type: "news"
+OUTPUT:
+{
+  "narrative_type": "news",
+  "scenes": [
+    {"id":"s1","duration":70,"anim":"scale-in","style":"warning","text":"TEGOLA INASPETTATA"},
+    {"id":"s2","duration":110,"anim":"type-on","style":"bold","text":"Donnarumma rischia i primi playoff","emphasis":"Donnarumma"},
+    {"id":"s3","duration":60,"anim":"pulse-emphasis","style":"warning","text":"PRIMI PLAYOFF A RISCHIO"}
+  ],
+  "tone": "provocative",
+  "image_strategy": "static-darken",
+  "shareability_score": 8,
+  "_rationale": "News provocative: hook in red warning per drama, body type-on per build-up, pulse finale per emphasis"
+}
+
+INPUT facts: {main_phrase:"Caturano salva il Catania", secondary_phrase:"pareggio prezioso contro l'Atalanta U23", tone_hint:"celebrative", people:["Caturano"], ...}
+INPUT type: "news"
+OUTPUT:
+{
+  "narrative_type": "news",
+  "scenes": [
+    {"id":"s1","duration":70,"anim":"scale-in","style":"gold","text":"CATURANO SALVA"},
+    {"id":"s2","duration":110,"anim":"type-on","style":"bold","text":"pareggio prezioso contro l'Atalanta U23","emphasis":"prezioso"},
+    {"id":"s3","duration":60,"anim":"pulse-emphasis","style":"gold","text":"PUNTO D'ORO"}
+  ],
+  "tone": "celebrative",
+  "image_strategy": "ken-burns-zoom-out",
+  "shareability_score": 8,
+  "_rationale": "News celebrative gol decisivo: hook bold gold, body con emphasis su 'prezioso', payoff celebrativo"
 }
 
 Output SOLO JSON. Componi storyboard per i facts qui sotto.`;
