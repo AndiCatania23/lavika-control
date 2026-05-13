@@ -8,6 +8,7 @@ import {
   Instagram, Facebook, Music2, RefreshCw, AlertTriangle,
 } from 'lucide-react';
 import { splitEditorialTitle, needsHeadlineWarning, HEADLINE_SOFT_MAX } from '@/lib/social/headlineSplit';
+import { EpisodePickerSheet } from '@/components/social/EpisodePickerSheet';
 
 /* ────────────────────────────────────────────────────────────────────
    Types
@@ -79,7 +80,6 @@ const PLATFORMS: PlatformDef[] = [
    ──────────────────────────────────────────────────────────────────── */
 
 interface SourcePill { id: string; title: string; type: string; image_url: string | null; }
-interface SourceEp   { id: string; title: string | null; format_id: string; thumbnail_url: string | null; }
 
 function ComposerInner() {
   const params = useSearchParams();
@@ -94,7 +94,6 @@ function ComposerInner() {
   const [sourceId, setSourceId] = useState<string>(initialPillId ?? initialEpisodeId ?? '');
 
   const [pills,    setPills]    = useState<SourcePill[]>([]);
-  const [episodes, setEpisodes] = useState<SourceEp[]>([]);
   const [loadingSources, setLoadingSources] = useState(false);
 
   const [generating, setGenerating] = useState(false);
@@ -112,14 +111,14 @@ function ComposerInner() {
   const toggleCell = (p: Platform, f: Format) =>
     setSelected(prev => ({ ...prev, [cellKey(p, f)]: !prev[cellKey(p, f)] }));
 
-  // Load sources for picker
+  // Load pills lazy when picker source is "pill". Gli episodi sono caricati
+  // direttamente da <EpisodePickerSheet/> (bottom sheet mobile-first che
+  // gestisce filtri format, search, e thumbnail).
   useEffect(() => {
     if (sourceKind === 'pill' && pills.length === 0) {
       setLoadingSources(true);
-      // Lazy import to keep the bundle slim
       import('@/lib/data').then(({ getPills }) => getPills())
         .then(allPills => {
-          // Show only published or scheduled pills with an image (publishable)
           const filtered = allPills
             .filter(p => (p.status === 'published' || p.status === 'scheduled') && p.image_url)
             .slice(0, 30)
@@ -129,15 +128,7 @@ function ComposerInner() {
         .catch(() => setPills([]))
         .finally(() => setLoadingSources(false));
     }
-    if (sourceKind === 'episode' && episodes.length === 0) {
-      setLoadingSources(true);
-      fetch('/api/media/episodes?format_id=highlights&page=1&pageSize=20')
-        .then(r => r.ok ? r.json() : { items: [] })
-        .then((d: { items: SourceEp[] }) => setEpisodes(Array.isArray(d.items) ? d.items : []))
-        .catch(() => setEpisodes([]))
-        .finally(() => setLoadingSources(false));
-    }
-  }, [sourceKind, pills.length, episodes.length]);
+  }, [sourceKind, pills.length]);
 
   const selectedCount = useMemo(() => Object.values(selected).filter(Boolean).length, [selected]);
 
@@ -290,18 +281,21 @@ function ComposerInner() {
 
         {sourceKind !== 'manual' && (
           <div style={{ marginTop: 10 }}>
-            {loadingSources ? (
-              <div className="typ-caption" style={{ color: 'var(--text-muted)' }}>Carico…</div>
-            ) : sourceKind === 'pill' ? (
-              <select value={sourceId} onChange={e => setSourceId(e.target.value)} className="input w-full">
-                <option value="">— Seleziona pill —</option>
-                {pills.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
-              </select>
+            {sourceKind === 'pill' ? (
+              loadingSources ? (
+                <div className="typ-caption" style={{ color: 'var(--text-muted)' }}>Carico…</div>
+              ) : (
+                <select value={sourceId} onChange={e => setSourceId(e.target.value)} className="input w-full">
+                  <option value="">— Seleziona pill —</option>
+                  {pills.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
+                </select>
+              )
             ) : (
-              <select value={sourceId} onChange={e => setSourceId(e.target.value)} className="input w-full">
-                <option value="">— Seleziona episodio —</option>
-                {episodes.map(e => <option key={e.id} value={e.id}>{e.title || e.id}</option>)}
-              </select>
+              <EpisodePickerSheet
+                value={sourceId}
+                onChange={id => setSourceId(id)}
+                prefillId={initialEpisodeId ?? undefined}
+              />
             )}
           </div>
         )}
