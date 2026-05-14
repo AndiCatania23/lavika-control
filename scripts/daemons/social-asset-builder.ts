@@ -659,9 +659,19 @@ async function runRecipe(recipe: string, params: Record<string, unknown>): Promi
       const slidesContent = splitPillToCarousel({ title: pill.title, content: pill.content });
       const bgUrl = p.backgroundImageUrl ?? pill.image_url ?? undefined;
 
+      // isQuote: detect se la pill è una citazione. Due segnali:
+      // 1. pill_category esplicito = 'quote'
+      // 2. title contiene pattern citazione (es. `Caturano: "abbiamo lottato..."`
+      //    o `«frase» — Speaker`)
+      const titleRaw = pill.title ?? '';
+      const looksLikeQuotePattern = /["«»''""]|[A-Z][a-z]+\s*:\s*/.test(titleRaw);
+      const isQuote = pill.pill_category === 'quote' || looksLikeQuotePattern;
+
       log('pill_carousel: splitting + rendering', {
         slidesCount: slidesContent.length,
         hasBg: !!bgUrl,
+        isQuote,
+        category: pill.pill_category,
       });
 
       const renderedSlides: Array<{ buffer: Buffer; mime: string }> = [];
@@ -670,6 +680,7 @@ async function runRecipe(recipe: string, params: Record<string, unknown>): Promi
           slide,
           backgroundImageUrl: bgUrl,
           attribution: 'LAVIKA SPORT',
+          isQuote,
         });
         renderedSlides.push({ buffer, mime: 'image/png' });
         log('pill_carousel: slide rendered', {

@@ -46,6 +46,10 @@ export interface BuildSlideOptions {
   backgroundImageUrl?: string | null;
   /** Attribution sotto la quote. Default "LAVIKA SPORT". */
   attribution?: string;
+  /** Se la pill è una citazione, disegna il cerchio bianco con virgolette
+   *  sopra la quote. Per pill non-quote (stat, storia, flash, rivali)
+   *  non c'è icona quote (sarebbe fuori contesto). Default false. */
+  isQuote?: boolean;
 }
 
 /* ──────────────────────────────────────────────────────────────────
@@ -141,6 +145,44 @@ async function drawHeader(
     ctx.textBaseline = 'middle';
     ctx.fillText(`${slide.index}/${slide.total}`, badgeX, badgeY + 2);
   }
+}
+
+/**
+ * Frecce di navigazione laterali stile La Casa di C:
+ * - Slide 1 (prima): solo « a destra (indica "scorri avanti")
+ * - Slide N (ultima): solo » a sinistra (indica "torna indietro")
+ * - Slide intermedie: entrambe.
+ * Cerchio bianco semi-trasparente con freccia rossa Anton bold.
+ */
+function drawNavArrows(ctx: SKRSContext2D, slide: CarouselSlideContent): void {
+  if (slide.total <= 1) return;
+  const r = 32;
+  const y = SLIDE_HEIGHT / 2;
+  const showRight = slide.index < slide.total;
+  const showLeft = slide.index > 1;
+
+  const drawArrow = (cx: number, char: string) => {
+    // Disco bianco semi-trasparente con leggera ombra
+    ctx.shadowColor = 'rgba(0,0,0,0.45)';
+    ctx.shadowBlur = 14;
+    ctx.shadowOffsetY = 3;
+    ctx.fillStyle = 'rgba(255,255,255,0.92)';
+    ctx.beginPath();
+    ctx.arc(cx, y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetY = 0;
+    // Freccia rossa al centro
+    ctx.fillStyle = COLOR_RED;
+    ctx.font = `700 38px ${FONT_FAMILY}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(char, cx, y + 2);
+  };
+
+  if (showLeft) drawArrow(60, '‹');
+  if (showRight) drawArrow(SLIDE_WIDTH - 60, '›');
 }
 
 /** Centro: cerchio bianco con virgolette rosse */
@@ -304,7 +346,7 @@ function drawAttribution(ctx: SKRSContext2D, text: string): void {
 export async function buildCarouselSlide(opts: BuildSlideOptions): Promise<Buffer> {
   ensureFontRegistered();
 
-  const { slide, backgroundImageUrl, attribution = 'LAVIKA SPORT' } = opts;
+  const { slide, backgroundImageUrl, attribution = 'LAVIKA SPORT', isQuote = false } = opts;
 
   const canvas = createCanvas(SLIDE_WIDTH, SLIDE_HEIGHT);
   const ctx = canvas.getContext('2d');
@@ -320,21 +362,28 @@ export async function buildCarouselSlide(opts: BuildSlideOptions): Promise<Buffe
   // 3. Header
   await drawHeader(ctx, slide);
 
-  // 4. Quote icon centrale
-  drawQuoteIcon(ctx, SLIDE_WIDTH / 2, 480, 64);
+  // 4. Quote icon centrale — SOLO se la pill è una citazione (pill_category=quote).
+  //    Per pill di tipo numero/storia/flash/rivali, niente icona quote.
+  //    Se presente l'icona, il quote text scende di posizione (boxY +20).
+  if (isQuote) {
+    drawQuoteIcon(ctx, SLIDE_WIDTH / 2, 480, 64);
+  }
 
-  // 5. Quote text
+  // 5. Quote text — se non c'è icona, sale leggermente per centrarsi meglio
   drawQuote(
     ctx,
     slide.text,
     slide.keywords,
     /* boxX */ 80,
-    /* boxY */ 600,
+    /* boxY */ isQuote ? 600 : 460,
     /* boxWidth */ SLIDE_WIDTH - 160,
-    /* boxHeight */ 540,
+    /* boxHeight */ isQuote ? 540 : 680,
   );
 
-  // 6. Attribution
+  // 6. Frecce nav laterali (« indica "scorri")
+  drawNavArrows(ctx, slide);
+
+  // 7. Attribution
   drawAttribution(ctx, attribution);
 
   // PNG buffer via canvas, poi re-encode con Sharp per ottimizzazione

@@ -113,19 +113,21 @@ function chunkContent(content: string): string[] {
  */
 function extractKeywords(text: string): string[] {
   const keywords = new Set<string>();
-  // 1. UPPERCASE words 4+ char
-  const upperMatches = text.match(/\b[A-ZÀ-ÝÌÒÉÈ]{4,}\b/g) ?? [];
+  // 1. UPPERCASE words 4+ char (incluso accenti italiani: À Á È É Ì Ò Ù...)
+  //    Unicode \p{Lu} cattura tutte le lettere maiuscole, accentate o no.
+  const upperMatches = text.match(/\b\p{Lu}{4,}\b/gu) ?? [];
   for (const w of upperMatches) keywords.add(w.toLowerCase());
 
-  // 2. Capitalized nomi propri (4+ char) — pattern "Word" dopo space/inizio
-  const capMatches = text.match(/(?:^|\s)([A-ZÀ-Ý][a-zà-ý]{3,})\b/g) ?? [];
+  // 2. Capitalized nomi propri (4+ char): inizia con \p{Lu} + \p{Ll}+
+  //    Pattern "Word" dopo space/inizio o punteggiatura
+  const capMatches = text.match(/(?:^|[\s,;.!?:'"«])(\p{Lu}\p{Ll}{3,})\b/gu) ?? [];
   for (const m of capMatches) {
-    const w = m.trim();
+    const w = m.replace(/^[\s,;.!?:'"«]+/, '').trim();
     if (w.length >= 4) keywords.add(w.toLowerCase());
   }
 
   // 3. Numeri grossi o numeri+unità ("3000 tifosi", "14 volte")
-  const numWordMatches = text.match(/\b(\d{2,})\s+([a-zà-ý]+)\b/gi) ?? [];
+  const numWordMatches = text.match(/\b\d{2,}\s+\p{L}+\b/gu) ?? [];
   for (const m of numWordMatches) keywords.add(m.toLowerCase());
   const bigNumbers = text.match(/\b\d{3,}\b/g) ?? [];
   for (const n of bigNumbers) keywords.add(n);
@@ -133,7 +135,7 @@ function extractKeywords(text: string): string[] {
   // 4. Whitelist verbi/parole forti
   const lowerText = text.toLowerCase();
   for (const kw of HIGHLIGHT_KEYWORDS_LOWER) {
-    if (new RegExp(`\\b${kw}\\b`, 'i').test(lowerText)) keywords.add(kw);
+    if (new RegExp(`\\b${kw}\\b`, 'iu').test(lowerText)) keywords.add(kw);
   }
 
   // Limita a max 6 keyword per slide (troppe distraggono)

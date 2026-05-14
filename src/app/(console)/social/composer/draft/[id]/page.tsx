@@ -17,8 +17,10 @@ interface Variant {
   caption: string | null;
   hashtags: string[] | null;
   asset_url: string | null;
+  /** Array URLs per carousel multi-slide. NULL per asset single. */
+  asset_urls: string[] | null;
   asset_type: 'image' | 'video' | 'album' | null;
-  asset_meta: { width?: number; height?: number; mime?: string; recipe?: string } | null;
+  asset_meta: { width?: number; height?: number; mime?: string; recipe?: string; slides_count?: number } | null;
   scheduled_at: string | null;
   published_at: string | null;
   external_post_id: string | null;
@@ -221,6 +223,10 @@ function VariantCard({ variant, onChanged }: { variant: Variant; onChanged: () =
   const [publishing, setPublishing] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  /** Carousel slide navigation (per asset_urls multi-image) */
+  const [slideIdx, setSlideIdx] = useState(0);
+  const slides = variant.asset_urls && variant.asset_urls.length > 1 ? variant.asset_urls : null;
+  const displayedAssetUrl = slides ? slides[slideIdx] : variant.asset_url;
 
   const captionDirty = captionDraft !== (variant.caption ?? '');
 
@@ -299,13 +305,13 @@ function VariantCard({ variant, onChanged }: { variant: Variant; onChanged: () =
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           position: 'relative',
         }}>
-          {variant.asset_url && isImage && (
+          {displayedAssetUrl && isImage && (
             /* eslint-disable-next-line @next/next/no-img-element */
-            <img src={variant.asset_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            <img src={displayedAssetUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           )}
-          {variant.asset_url && isVideo && (
+          {displayedAssetUrl && isVideo && (
             <video
-              src={variant.asset_url}
+              src={displayedAssetUrl}
               controls
               muted
               playsInline
@@ -323,6 +329,75 @@ function VariantCard({ variant, onChanged }: { variant: Variant; onChanged: () =
               <AlertTriangle className="w-7 h-7" />
               <span className="typ-caption">Errore generazione</span>
             </div>
+          )}
+
+          {/* Carousel slide navigator — solo se asset_urls multi-slide */}
+          {slides && (
+            <>
+              {/* Frecce nav left/right */}
+              {slideIdx > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSlideIdx(slideIdx - 1)}
+                  aria-label="Slide precedente"
+                  style={{
+                    position: 'absolute',
+                    left: 8, top: '50%', transform: 'translateY(-50%)',
+                    width: 36, height: 36, borderRadius: '50%',
+                    background: 'rgba(255,255,255,0.92)',
+                    color: '#E40521', fontWeight: 700, fontSize: 18,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: 'pointer', border: 'none',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
+                  }}
+                >‹</button>
+              )}
+              {slideIdx < slides.length - 1 && (
+                <button
+                  type="button"
+                  onClick={() => setSlideIdx(slideIdx + 1)}
+                  aria-label="Slide successiva"
+                  style={{
+                    position: 'absolute',
+                    right: 8, top: '50%', transform: 'translateY(-50%)',
+                    width: 36, height: 36, borderRadius: '50%',
+                    background: 'rgba(255,255,255,0.92)',
+                    color: '#E40521', fontWeight: 700, fontSize: 18,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: 'pointer', border: 'none',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
+                  }}
+                >›</button>
+              )}
+              {/* Pagination dots in basso */}
+              <div style={{
+                position: 'absolute', bottom: 8, left: 0, right: 0,
+                display: 'flex', justifyContent: 'center', gap: 6,
+              }}>
+                {slides.map((_, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => setSlideIdx(i)}
+                    aria-label={`Slide ${i + 1}`}
+                    style={{
+                      width: 8, height: 8, borderRadius: '50%',
+                      background: i === slideIdx ? '#FFFFFF' : 'rgba(255,255,255,0.45)',
+                      border: 'none', padding: 0, cursor: 'pointer',
+                    }}
+                  />
+                ))}
+              </div>
+              {/* Counter top-right */}
+              <div style={{
+                position: 'absolute', top: 8, right: 8,
+                background: 'rgba(0,0,0,0.5)',
+                color: '#FFFFFF',
+                fontSize: 11, fontWeight: 600,
+                padding: '3px 8px', borderRadius: 10,
+                pointerEvents: 'none',
+              }}>{slideIdx + 1}/{slides.length}</div>
+            </>
           )}
         </div>
 
