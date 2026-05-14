@@ -83,6 +83,8 @@ export async function renderRemotionComposition(opts: RenderOpts): Promise<Rende
     composition: { ...composition, width: finalWidth, height: finalHeight },
     serveUrl,
     codec: 'h264',
+    audioCodec: 'aac',           // Include audio track (AAC compatibile IG/FB)
+    enforceAudioTrack: true,     // Forza traccia audio anche se composition non ha <Audio> (silent)
     outputLocation: outFile,
     inputProps,
     pixelFormat: 'yuv420p',

@@ -33,6 +33,11 @@ import { directVideoLayout } from '../../src/lib/social/pillContentDirector';
 import { extractFactsFromPill } from '../../src/lib/social/pillFactExtractor';
 import { classifyNarrative, generateStoryboard, validateStoryboard } from '../../src/lib/social/pillStoryboardBuilder';
 import { episodeToFacts, formatLabel as episodeFormatLabel } from '../../src/lib/social/episodeFactAdapter';
+import { selectQuoteFromSegments, durationSecondsToFrames, type WhisperSegment } from '../../src/lib/social/quoteEngine';
+import { whisperTranscribe } from '../../src/lib/social/whisperTranscribe';
+import { extractBestFaceFrame } from '../../src/lib/social/frameExtractor';
+import { cutAudioSegment, cutVideoSegment, generateWaveformPng } from '../../src/lib/social/ffmpegPipeline';
+import { resolveBestHlsVariant } from '../../src/lib/social/hlsVariant';
 
 /* ────────────────────────────── Config ────────────────────────────── */
 
@@ -324,6 +329,304 @@ async function runRecipe(recipe: string, params: Record<string, unknown>): Promi
         height:        p.height,
       });
       return { ...(video as RecipeResult), llm_meta: directorMeta };
+    }
+    case 'interview_story_video': {
+      /* ──────────────────────────────────────────────────────────────────
+         Story Video Fase 2 — match-reaction cinematic 3-scene.
+
+         Orchestrazione:
+         1. Fetch episode + match data dal DB
+         2. [TODO Whisper] Trascrivi audio → segments
+         3. selectQuoteFromSegments → quote + verb + start/end
+         4. [TODO OpenCV] Estrai face frame migliore dal video
+         5. [TODO FFmpeg] Cut audio segment + genera waveform PNG
+         6. Render Remotion InterviewStoryVideo
+
+         GRACEFUL FALLBACK: ogni step opzionale può fallire; la composition
+         renderizza comunque con default sani (placeholder face, waveform
+         animata, audio off). Il primo render produce già qualcosa di
+         significativo (intro VS + match data + episode mockup) anche se
+         Whisper/OpenCV/FFmpeg non sono ancora installati lato Mac.
+         ────────────────────────────────────────────────────────────────── */
+      const p = params as {
+        episodeId: string;
+        episodeFormat: string;
+        fallbackThumbnailUrl?: string;
+      };
+
+      log('interview_story_video: fetching episode', { episodeId: p.episodeId });
+      const { data: ep, error: epErr } = await supabase
+        .from('content_episodes')
+        .select(`id, title, format_id, thumbnail_url, hls_url, duration_secs, published_at,
+                 speaker:players!speaker_id(id, full_name),
+                 match:matches!match_id(id, kickoff_at, matchday, home_score, away_score, venue,
+                   home_team:teams!matches_home_team_id_fkey(normalized_name, short_name, logo_url),
+                   away_team:teams!matches_away_team_id_fkey(normalized_name, short_name, logo_url))`)
+        .eq('id', p.episodeId)
+        .single();
+
+      if (epErr || !ep) {
+        throw new Error(`interview_story_video: episode ${p.episodeId} not found: ${epErr?.message}`);
+      }
+      const videoUrl = (ep as { hls_url: string | null }).hls_url;
+      if (!videoUrl) {
+        log('interview_story_video: no hls_url, will run in graceful fallback mode');
+      }
+
+      // Build matchData dal join (fallback sicuro se match non collegato)
+      type EpMatch = {
+        home_score: number | null; away_score: number | null;
+        venue: string | null;
+        home_team: { normalized_name: string; short_name: string | null; logo_url: string | null } | null;
+        away_team: { normalized_name: string; short_name: string | null; logo_url: string | null } | null;
+      };
+      const m = (ep as { match: EpMatch | null }).match;
+      const matchData = m && m.home_team && m.away_team ? {
+        home: {
+          name: m.home_team.normalized_name,
+          shortName: m.home_team.short_name ?? undefined,
+          logoUrl: m.home_team.logo_url ?? undefined,
+        },
+        away: {
+          name: m.away_team.normalized_name,
+          shortName: m.away_team.short_name ?? undefined,
+          logoUrl: m.away_team.logo_url ?? undefined,
+        },
+        homeScore: m.home_score ?? 0,
+        awayScore: m.away_score ?? 0,
+        stadium: m.venue ?? undefined,
+        competition: 'Serie C',
+      } : {
+        // Fallback senza match: usa nome generico Catania vs avversario indeterminato
+        home: { name: 'CATANIA', shortName: 'CAT' },
+        away: { name: 'AVVERSARIO', shortName: 'AVV' },
+        homeScore: 0,
+        awayScore: 0,
+      };
+
+      const epTitle = (ep as { title: string }).title;
+
+      // ── Pipeline reale (Whisper + quote + face + audio + waveform) ──
+      // Ogni step degrada con grazia: se fallisce, log e si va avanti.
+      // La composition usa fallback sani per i campi optional mancanti.
+
+      let quote = epTitle;
+      let verbToHighlight: string | undefined;
+      let quoteDurationFrames = 240; // 8s default
+      let quoteClipUrl: string | undefined;
+      let faceFrameUrl: string | undefined;
+      let audioUrl: string | undefined;
+      let waveformPngUrl: string | undefined;
+      let segmentStart = 0;
+      let segmentEnd = 8;
+
+      if (videoUrl) {
+        // Step 2: Whisper transcribe — TRIM ai primi 180s.
+        // Reasoning: il quote killer in match-reaction/press-conference è quasi
+        // sempre nei primi 3 minuti (giocatore risponde alle prime domande
+        // "come va", "che partita è stata" → frase forte). Trim evita timeout
+        // su interviste lunghe 8-15 min (vedi caso Viali fallito).
+        // Caturano: quote a 53s, Toscano: quote a 162s, entrambi entro 180s.
+        const WHISPER_TRIM_SEC = 180;
+        log('interview_story_video: starting Whisper transcribe', {
+          model: 'large-v3', trimSec: WHISPER_TRIM_SEC,
+        });
+        const t0 = Date.now();
+        const transcript = await whisperTranscribe(videoUrl, { endSec: WHISPER_TRIM_SEC });
+        if (transcript) {
+          log('interview_story_video: Whisper done', {
+            ms: Date.now() - t0,
+            segments: transcript.segments.length,
+            language: transcript.language,
+            duration_s: transcript.duration,
+          });
+
+          // Step 3: quote selection (Ollama gemma3 + fallback regex)
+          const selected = await selectQuoteFromSegments(transcript.segments, { useLLM: true });
+          if (selected) {
+            quote = selected.quote;
+            verbToHighlight = selected.verbToHighlight;
+            // Padding HEAD + TAIL + estensione min 4s.
+            //
+            // HEAD (-700ms): parte il clip un attimo prima dell'inizio frase →
+            // vedi il personaggio respirare/iniziare a parlare naturalmente.
+            // Più cinematico, lascia anche all'animazione Anton del testo
+            // entrare senza essere già in sync con l'audio.
+            //
+            // TAIL (+500ms): Whisper segment.end è spesso prima della fine
+            // reale del fonema → tail extra per "metabolizzare" la frase.
+            //
+            // Se naturalDur padded < 4s → estendo il cut a 4s prendendo
+            // more video dopo la frase. No freeze frame, il giocatore
+            // continua il moto naturale.
+            //
+            // Cap superiore 12s per non sforare Story IG (totale ~15.5s).
+            const QUOTE_HEAD_PADDING_SEC = 0.7;
+            const QUOTE_TAIL_PADDING_SEC = 0.5;
+            const MIN_QUOTE_SEC = 4;
+            const MAX_QUOTE_SEC = 12;
+            const paddedStart = Math.max(0, selected.segmentStart - QUOTE_HEAD_PADDING_SEC);
+            const paddedEnd = selected.segmentEnd + QUOTE_TAIL_PADDING_SEC;
+            const naturalDur = paddedEnd - paddedStart;
+            const targetDur = Math.min(MAX_QUOTE_SEC, Math.max(naturalDur, MIN_QUOTE_SEC));
+            segmentStart = paddedStart;
+            segmentEnd = paddedStart + targetDur;
+            quoteDurationFrames = durationSecondsToFrames(segmentEnd - segmentStart);
+            log('interview_story_video: quote selected', {
+              source: selected.source,
+              verb: verbToHighlight,
+              start: segmentStart,
+              end: segmentEnd,
+              durFrames: quoteDurationFrames,
+              preview: quote.slice(0, 60),
+            });
+          } else {
+            // Quote engine ha scartato tutti i segment (filtri troppo strict).
+            // Fallback: usa titolo come quote MA spostiamo segmentStart a 15s
+            // per evitare di catturare l'audio della presentazione del
+            // giornalista nell'apertura del video.
+            log('interview_story_video: quote engine returned null, using title fallback + skip 15s');
+            segmentStart = 15;
+            segmentEnd = 23;
+          }
+        } else {
+          log('interview_story_video: Whisper transcribe failed/timeout, using title fallback');
+          // Euristica: la prima domanda del giornalista occupa ~15s ad apertura
+          // intervista. Senza Whisper non sappiamo dove inizia la risposta del
+          // giocatore → skip i primi 15s del video per evitare di catturare
+          // l'audio della domanda nel clip Scene 1.
+          segmentStart = 15;
+          segmentEnd = 23; // 8s di clip a partire da 15s
+        }
+
+        // Risolvi HLS master → variant 720p per i step visivi (clip + face).
+        // Whisper resta sull'URL originale (audio invariato).
+        // FFmpeg by default sceglie il primo variant elencato (spesso 360p
+        // per fast startup) — forziamo 720p per qualità Story decente.
+        const visualUrl = await resolveBestHlsVariant(videoUrl, 720);
+        if (visualUrl !== videoUrl) {
+          log('interview_story_video: resolved HLS variant for visuals', { visualUrl });
+        }
+
+        // Step 4a: video clip cut del segment del quote (NUOVO — visual key)
+        // Mostra il giocatore che parla nel video finale. L'audio è incluso
+        // nel clip MP4 stesso (no <Audio> separato necessario).
+        const clipCut = await cutVideoSegment(visualUrl, segmentStart, segmentEnd, {
+          jobId: p.episodeId,
+        });
+        if (clipCut) {
+          const clipKey = `social/_assets/${p.episodeId}/clip-${Date.now()}.mp4`;
+          quoteClipUrl = await uploadToR2(clipKey, clipCut.buffer, 'video/mp4');
+          log('interview_story_video: quote clip uploaded', {
+            durationSec: clipCut.durationSec,
+            kb: Math.round(clipCut.buffer.byteLength / 1024),
+            url: quoteClipUrl,
+          });
+        } else {
+          log('interview_story_video: video clip cut failed, falling back to face frame static');
+        }
+
+        // Step 4b: face frame extraction come fallback statico (solo se clip mancante)
+        const frameRes = await extractBestFaceFrame(visualUrl, {
+          jobId: p.episodeId,
+          startSec: segmentStart,
+          endSec: segmentEnd,
+          samples: 20,
+        });
+        if (frameRes) {
+          const faceKey = `social/_assets/${p.episodeId}/face-${Date.now()}.png`;
+          faceFrameUrl = await uploadToR2(faceKey, frameRes.buffer, 'image/png');
+          log('interview_story_video: face frame uploaded', {
+            faces: frameRes.info.faces_in_best,
+            score: frameRes.info.score,
+            fallback: frameRes.info.fallback_to_sharpness_only,
+            url: faceFrameUrl,
+          });
+        } else {
+          log('interview_story_video: face extraction failed, composition will use gradient fallback');
+        }
+
+        // Step 5: audio segment cut + waveform
+        const audioCut = await cutAudioSegment(videoUrl, segmentStart, segmentEnd, {
+          jobId: p.episodeId,
+        });
+        if (audioCut) {
+          const audioKey = `social/_assets/${p.episodeId}/audio-${Date.now()}.mp3`;
+          audioUrl = await uploadToR2(audioKey, audioCut.buffer, 'audio/mpeg');
+          log('interview_story_video: audio segment uploaded', {
+            durationSec: audioCut.durationSec,
+            kb: Math.round(audioCut.buffer.byteLength / 1024),
+            url: audioUrl,
+          });
+
+          // Step 6: waveform PNG dal buffer audio (no re-download)
+          const wave = await generateWaveformPng(audioCut.buffer, { jobId: p.episodeId });
+          if (wave) {
+            const waveKey = `social/_assets/${p.episodeId}/wave-${Date.now()}.png`;
+            waveformPngUrl = await uploadToR2(waveKey, wave, 'image/png');
+            log('interview_story_video: waveform uploaded', {
+              kb: Math.round(wave.byteLength / 1024),
+              url: waveformPngUrl,
+            });
+          }
+        } else {
+          log('interview_story_video: audio cut failed, no audio in final video');
+        }
+      } else {
+        log('interview_story_video: no video URL, skipping Whisper/OpenCV/FFmpeg pipeline');
+        // Fallback ultimo: usa titolo come pseudo-quote (logica originale)
+        const durationSecs = (ep as { duration_secs: number | null }).duration_secs ?? 480;
+        const pseudoSegments: WhisperSegment[] = [{
+          start: 0,
+          end: Math.min(durationSecs, 8),
+          text: epTitle,
+        }];
+        const selected = await selectQuoteFromSegments(pseudoSegments, { useLLM: false });
+        if (selected) {
+          quote = selected.quote;
+          verbToHighlight = selected.verbToHighlight;
+          quoteDurationFrames = durationSecondsToFrames(selected.segmentEnd - selected.segmentStart);
+        }
+      }
+
+      // Step 6: Render Remotion InterviewStoryVideo
+      const speakerName = (ep as { speaker: { full_name: string } | null }).speaker?.full_name;
+      const fmtLabel = p.episodeFormat === 'press-conference' ? 'Press Conference' : 'Match Reaction';
+      const fmtSubtitle = p.episodeFormat === 'press-conference' ? 'Conferenza stampa' : 'Interviste post partita';
+
+      const inputProps = {
+        matchData,
+        episodeFormat: p.episodeFormat as 'match-reaction' | 'press-conference',
+        quoteClipUrl,
+        faceFrameUrl,
+        quote,
+        verbToHighlight,
+        waveformPngUrl,
+        audioUrl,
+        quoteDurationFrames,
+        episodeForMockup: {
+          title: speakerName ? `${speakerName}` : epTitle.slice(0, 40),
+          thumbnailUrl: (ep as { thumbnail_url: string | null }).thumbnail_url ?? p.fallbackThumbnailUrl,
+          formatLabel: fmtLabel,
+          formatSubtitle: fmtSubtitle,
+          publishedRelative: 'oggi',
+        },
+      };
+
+      log('interview_story_video: rendering Remotion', {
+        compositionId: 'InterviewStoryVideo',
+        quoteDurationFrames,
+        hasQuoteClip: !!quoteClipUrl,
+        hasFaceFrame: !!faceFrameUrl,
+        hasAudio: !!audioUrl,
+        hasWaveform: !!waveformPngUrl,
+      });
+
+      const video = await renderRemotionComposition({
+        compositionId: 'InterviewStoryVideo',
+        inputProps,
+      });
+      return video as RecipeResult;
     }
     case 'ffmpeg_resize':
       throw new Error('ffmpeg_resize: NOT YET IMPLEMENTED');

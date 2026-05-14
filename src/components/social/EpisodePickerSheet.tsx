@@ -132,31 +132,75 @@ interface Props {
   prefillId?: string;
 }
 
+const PAGE_SIZE = 30;
+
 export function EpisodePickerSheet({ value, onChange, prefillId }: Props) {
   const [open, setOpen] = useState(false);
   const [episodes, setEpisodes] = useState<EpisodeOption[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [total, setTotal] = useState(0);
   const [filterFormat, setFilterFormat] = useState<string>('all');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<EpisodeOption | null>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
 
-  /* Load on first open OR when value/prefillId changes (per deep-link) */
+  /* Fetch helper — chiama API con pageNum + filterFormat correnti.
+   *  pageNum=1 sostituisce gli episodes, >1 li appende (infinite scroll). */
+  async function fetchPage(pageNum: number, formatId: string, replace: boolean) {
+    const params = new URLSearchParams({
+      page: String(pageNum),
+      pageSize: String(PAGE_SIZE),
+      active: 'true',
+    });
+    if (formatId !== 'all') params.set('format_id', formatId);
+    if (replace) setLoading(true); else setLoadingMore(true);
+    try {
+      const res = await fetch(`/api/media/episodes?${params.toString()}`);
+      const data = res.ok ? await res.json() : { items: [], total: 0 };
+      const items: EpisodeOption[] = Array.isArray(data.items) ? data.items : [];
+      setTotal(data.total ?? 0);
+      setEpisodes((prev) => (replace ? items : [...prev, ...items]));
+      setHasMore(items.length === PAGE_SIZE);
+      setPage(pageNum);
+    } catch {
+      if (replace) setEpisodes([]);
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+    }
+  }
+
+  /* Load iniziale + ricarica quando filterFormat cambia (sostituisce). */
   useEffect(() => {
-    if (episodes.length > 0) return;
     if (!open && !value && !prefillId) return;
-    setLoading(true);
-    // Carichiamo i 100 episodi più recenti (~1 mese di pubblicazione) attraverso
-    // tutti i format. Sufficiente per il composer; chi cerca un episodio vecchio
-    // usa la search.
-    fetch('/api/media/episodes?page=1&pageSize=100&active=true')
-      .then(r => (r.ok ? r.json() : { items: [] }))
-      .then((d: { items: EpisodeOption[] }) => {
-        setEpisodes(Array.isArray(d.items) ? d.items : []);
-      })
-      .catch(() => setEpisodes([]))
-      .finally(() => setLoading(false));
-  }, [open, value, prefillId, episodes.length]);
+    void fetchPage(1, filterFormat, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, value, prefillId, filterFormat]);
+
+  /* Infinite scroll: IntersectionObserver sul sentinel a fine lista.
+   *  Quando il sentinel entra nel viewport scrollable del sheet, carica pagina+1. */
+  useEffect(() => {
+    if (!open) return;
+    if (!hasMore || loading || loadingMore) return;
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          void fetchPage(page + 1, filterFormat, false);
+        }
+      },
+      { root: scrollContainerRef.current, rootMargin: '200px', threshold: 0 },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, hasMore, loading, loadingMore, page, filterFormat]);
 
   /* Resolve `selected` quando arriva l'id (sia da prop value sia da prefillId) */
   useEffect(() => {
@@ -423,8 +467,9 @@ export function EpisodePickerSheet({ value, onChange, prefillId }: Props) {
               </div>
             </div>
 
-            {/* Lista episodi (scrollable) */}
+            {/* Lista episodi (scrollable) — infinite scroll via IntersectionObserver */}
             <div
+              ref={scrollContainerRef}
               style={{
                 flex: 1,
                 overflowY: 'auto',
@@ -443,14 +488,46 @@ export function EpisodePickerSheet({ value, onChange, prefillId }: Props) {
                     : 'Nessun episodio disponibile.'}
                 </div>
               ) : (
-                filtered.map(ep => (
-                  <EpisodeRow
-                    key={ep.id}
-                    episode={ep}
-                    isSelected={selected?.id === ep.id}
-                    onPick={() => handlePick(ep)}
-                  />
-                ))
+                <>
+                  {filtered.map(ep => (
+                    <EpisodeRow
+                      key={ep.id}
+                      episode={ep}
+                      isSelected={selected?.id === ep.id}
+                      onPick={() => handlePick(ep)}
+                    />
+                  ))}
+
+                  {/* Sentinel + loader infinite scroll.
+                      Mostrato solo se hasMore + non filtrato da search (search
+                      è client-side: ha senso paginare solo la lista completa). */}
+                  {hasMore && !search.trim() && (
+                    <div
+                      ref={sentinelRef}
+                      className="typ-caption"
+                      style={{
+                        padding: 'var(--s4) var(--s2)',
+                        textAlign: 'center',
+                        color: 'var(--text-muted)',
+                      }}
+                    >
+                      {loadingMore ? 'Carico altri episodi…' : '↓ scorri per caricarne altri'}
+                    </div>
+                  )}
+
+                  {!hasMore && total > 0 && (
+                    <div
+                      className="typ-caption"
+                      style={{
+                        padding: 'var(--s4) var(--s2)',
+                        textAlign: 'center',
+                        color: 'var(--text-muted)',
+                      }}
+                    >
+                      Hai visto tutti gli episodi ({total})
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>

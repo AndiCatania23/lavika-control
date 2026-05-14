@@ -338,38 +338,77 @@ interface RenderedTextLine {
 }
 
 /**
+ * Floor di sicurezza per l'auto-shrink: non scendiamo mai sotto questa
+ * frazione del fontSize originale, anche se la riga non entra ancora.
+ * 0.70 = la riga più larga può rimpicciolirsi al 70% prima di accettare
+ * uno sforamento (preferiamo testo leggibile + warning vs crash + asset
+ * mancante). In pratica con Anton 108px → floor a ~75px, ancora display.
+ */
+const AUTO_SHRINK_FLOOR = 0.70;
+
+/**
  * Render single-line text via @napi-rs/canvas (Skia, full TTF support via
  * GlobalFonts.registerFromPath). Returns RGBA PNG with text colored
  * `color` on transparent background, sized to the text bounding box.
  *
  * Default color: bianco (#FFFFFF) per le righe titolo standard.
  * In quote mode l'attribution passa ATTRIBUTION_COLOR (gold).
+ *
+ * Se `maxRenderedWidth` è passato e la riga supera quel limite,
+ * il fontSize viene ridotto proporzionalmente (con floor a
+ * AUTO_SHRINK_FLOOR × fontSize) per evitare che la rect nera
+ * generata da `buildLineComposites` ecceda `spec.width` — caso
+ * che fa fallire Sharp con "Image to composite must have same
+ * dimensions or smaller". Tipico su Story 9:16 con titoli da
+ * 22 char a Anton 108px (es. "Caturano tabù playoff:").
  */
 function renderTextLine(
   text: string,
   fontSize: number,
   color: string = '#FFFFFF',
+  maxRenderedWidth?: number,
 ): RenderedTextLine {
   ensureFontRegistered();
 
-  // First pass: measure text with a temp canvas
+  // First pass: measure text at the requested fontSize.
   const measureCanvas = createCanvas(10, 10);
   const measureCtx = measureCanvas.getContext('2d');
   measureCtx.font = `${fontSize}px "${TITLE_FONT_FAMILY}"`;
-  const metrics = measureCtx.measureText(text);
+  let metrics = measureCtx.measureText(text);
+  let effectiveFontSize = fontSize;
+
+  // Auto-shrink se richiesto e la misura sfora il vincolo.
+  if (maxRenderedWidth && metrics.width > maxRenderedWidth) {
+    // Scale lineare (Anton/Skia: width(fontSize) ≈ linear in fontSize).
+    // Margine 0.99 per assorbire arrotondamenti di Math.ceil sotto.
+    const scale = (maxRenderedWidth / metrics.width) * 0.99;
+    const floor = fontSize * AUTO_SHRINK_FLOOR;
+    effectiveFontSize = Math.max(floor, fontSize * scale);
+    measureCtx.font = `${effectiveFontSize}px "${TITLE_FONT_FAMILY}"`;
+    metrics = measureCtx.measureText(text);
+    if (metrics.width > maxRenderedWidth) {
+      // Anche al floor sfora → loggiamo ma proseguiamo. Il chiamante
+      // potrà clippare la rect a spec.width prima del composite Sharp.
+      console.warn(
+        `[assetBuilder] Riga "${text}" sfora maxRenderedWidth ` +
+        `(${Math.ceil(metrics.width)}px > ${maxRenderedWidth}px) ` +
+        `anche al floor ${Math.round(effectiveFontSize)}px.`,
+      );
+    }
+  }
 
   const textWidth = Math.ceil(metrics.width);
   // Use actual ascent + descent for vertical sizing (more reliable than
   // estimating from fontSize alone, especially for Archivo Black's
   // generous metrics).
-  const ascent  = metrics.actualBoundingBoxAscent  || fontSize * 0.85;
-  const descent = metrics.actualBoundingBoxDescent || fontSize * 0.25;
+  const ascent  = metrics.actualBoundingBoxAscent  || effectiveFontSize * 0.85;
+  const descent = metrics.actualBoundingBoxDescent || effectiveFontSize * 0.25;
   const textHeight = Math.ceil(ascent + descent);
 
-  // Second pass: actual canvas with exact dimensions, draw text in `color`
+  // Second pass: actual canvas with exact dimensions, draw text in `color`.
   const canvas = createCanvas(textWidth, textHeight);
   const ctx = canvas.getContext('2d');
-  ctx.font = `${fontSize}px "${TITLE_FONT_FAMILY}"`;
+  ctx.font = `${effectiveFontSize}px "${TITLE_FONT_FAMILY}"`;
   ctx.fillStyle = color;
   ctx.textBaseline = 'alphabetic';
   ctx.fillText(text, 0, ascent);
@@ -562,13 +601,17 @@ export async function buildSocialAsset(opts: BuildAssetOpts): Promise<BuiltAsset
       renderedLines = [...quoteLines, attributionText];
 
       if (quoteLines.length > 0) {
+        // Vincolo larghezza per ogni riga: rect = textWidth + paddingX*2
+        // deve restare ≤ spec.width, quindi textWidth ≤ spec.width - paddingX*2.
+        const maxTextWidth = spec.width - spec.textPaddingX * 2;
         const quoteRenders = quoteLines.map(line =>
-          renderTextLine(line, spec.titleFontSize, '#FFFFFF'),
+          renderTextLine(line, spec.titleFontSize, '#FFFFFF', maxTextWidth),
         );
         const attributionRender = renderTextLine(
           attributionText,
           spec.attributionFontSize,
           ATTRIBUTION_COLOR,
+          maxTextWidth,
         );
 
         const quoteBlockH = measureLineBlockHeight(quoteRenders, spec, spec.lineGap);
@@ -592,8 +635,9 @@ export async function buildSocialAsset(opts: BuildAssetOpts): Promise<BuiltAsset
       renderedLines = wrapTitle(truncatedTitle, spec.titleMaxCharsPerLine);
 
       if (renderedLines.length > 0) {
+        const maxTextWidth = spec.width - spec.textPaddingX * 2;
         const lineRenders = renderedLines.map(line =>
-          renderTextLine(line, spec.titleFontSize),
+          renderTextLine(line, spec.titleFontSize, '#FFFFFF', maxTextWidth),
         );
         const blockH = measureLineBlockHeight(lineRenders, spec, spec.lineGap);
         const blockTopY = spec.height - spec.textBottomMargin - blockH;

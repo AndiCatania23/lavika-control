@@ -4,9 +4,9 @@
     {
       "name": "next-dev",
       "runtimeExecutable": "/opt/homebrew/bin/node",
-      "runtimeArgs": ["node_modules/.bin/next", "dev", "--webpack"],
-      "port": 3000,
-      "autoPort": true
+      "runtimeArgs": ["node_modules/.bin/next", "dev", "--webpack", "-p", "3011"],
+      "port": 3011,
+      "autoPort": false
     }
   ]
 }

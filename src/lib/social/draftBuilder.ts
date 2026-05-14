@@ -150,18 +150,37 @@ function buildJobRecipe(args: {
   /** Episode source: alternativa a pillId. Daemon usa adapter
    *  episodeToFacts + stesso pipeline storyboard. */
   episodeId?: string;
+  /** Format dell'episodio (content_episodes.format_id) — usato per scegliere
+   *  composition dedicata. Es. 'match-reaction' → InterviewStoryVideo. */
+  episodeFormat?: string;
 }): JobRecipe {
-  const { format, socialFormat, sourceUrl, title, pillStatPayload, pillId, episodeId } = args;
+  const { format, socialFormat, sourceUrl, title, pillStatPayload, pillId, episodeId, episodeFormat } = args;
 
   // Story video / Reel video → Remotion.
   // Routing:
-  //   - Se è una pill (pillStatPayload presente) → PillStatVideo (Caso C
-  //     stat motion graphics: numero counter-up + contesto gold + bg pill
-  //     image con vignette intenso, o nero se pill senza image).
-  //   - Altrimenti (episode, manual) → MatchScorecardStory placeholder
-  //     finché non implementiamo Caso A/B (citazione, gol).
+  //   - match-reaction / press-conference → InterviewStoryVideo (Fase 2,
+  //     3-scene cinematic con Whisper quote + face frame + audio originale).
+  //     Recipe DEDICATA `interview_story_video` (non remotion_render diretto)
+  //     perché il daemon deve orchestrare frame extractor + Whisper + quote
+  //     engine + waveform PRIMA di chiamare il renderer.
+  //   - Pill (pillStatPayload) → AIDirectedStoryVideo (Caso C stat).
+  //   - Altri episode → AIDirectedStoryVideo card promo (Fase 1).
+  //   - Fallback → MatchScorecardStory.
   if (format === 'story_video' || format === 'reel') {
-    // Episode → AIDirectedStoryVideo pipeline (daemon usa episodeToFacts adapter)
+    // Match-reaction / press-conference → pipeline cinematic Fase 2
+    if (episodeId && (episodeFormat === 'match-reaction' || episodeFormat === 'press-conference')) {
+      return {
+        recipe: 'interview_story_video',
+        recipe_params: {
+          episodeId,
+          episodeFormat,
+          // sourceUrl qui = thumbnail; daemon recupera video reale dal DB
+          // (content_episodes.hls_url) per frame extraction + audio.
+          fallbackThumbnailUrl: sourceUrl,
+        },
+      };
+    }
+    // Episode generico → AIDirectedStoryVideo card promo Fase 1
     if (episodeId) {
       return {
         recipe: 'remotion_render',
@@ -407,8 +426,13 @@ export async function buildDraftFromEpisode(opts: {
     .single<EpisodeRow>();
 
   if (eErr || !ep) throw new Error(`Episode non trovato: ${opts.episodeId}`);
-  if (!ep.thumbnail_url) {
-    throw new Error('Episode non ha thumbnail_url — impossibile generare asset');
+  // thumbnail_url serve solo per asset image (sharp_text_overlay).
+  // story_video / reel usano hls_url server-side → thumbnail opzionale.
+  const needsThumbnail = opts.variants.some(
+    (v) => v.format !== 'story_video' && v.format !== 'reel',
+  );
+  if (needsThumbnail && !ep.thumbnail_url) {
+    throw new Error('Episode non ha thumbnail_url — impossibile generare asset image');
   }
 
   const epTitle = ep.title || ep.id;
@@ -457,10 +481,13 @@ export async function buildDraftFromEpisode(opts: {
     const jobRecipe = buildJobRecipe({
       format: v.format,
       socialFormat,
-      sourceUrl: ep.thumbnail_url,
+      // thumbnail può essere null per format video — il daemon usa hls_url internamente
+      sourceUrl: ep.thumbnail_url ?? '',
       title: epTitle,
       // story_video/reel → daemon usa episodeToFacts adapter + storyboard AI
       episodeId: opts.episodeId,
+      // Format episodio per routing (match-reaction → InterviewStoryVideo Fase 2)
+      episodeFormat: ep.format_id,
     });
     const { data: job, error: jErr } = await supabaseServer
       .from('social_asset_jobs')
