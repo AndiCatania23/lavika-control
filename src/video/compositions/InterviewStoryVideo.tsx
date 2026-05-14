@@ -1057,18 +1057,19 @@ const CTAMockup: React.FC<{
       </div>
 
       {/* iPhone 15 Pro Titanium mockup + home LAVIKA renderizzata viva.
-       *  Posizionato in alto (allineato top) per lasciare più spazio
-       *  verticale ai testi CTA sotto. */}
+       *  Posizione: tra top labels (LAVIKA + MATCH REACTION) e i testi CTA
+       *  bottom ("Scarica l'App"). paddingTop 320 garantisce gap ~60px
+       *  dal top label e ~410px dal CTA. */}
       <AbsoluteFill
         style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'flex-start',
-          paddingTop: 220,
+          paddingTop: 320,
         }}
       >
         <IPhone15ProMockup
-          width={460}
+          width={440}
           tiltDeg={-5}
           scale={0.94 + sp * 0.06}
           opacity={sp}
