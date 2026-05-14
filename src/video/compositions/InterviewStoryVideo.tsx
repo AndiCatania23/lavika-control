@@ -864,9 +864,129 @@ const QuoteCore: React.FC<{
 };
 
 /* ──────────────────────────────────────────────────────────────────
+   Store Badges — SVG inline (look brand-coerente Apple/Google)
+   ────────────────────────────────────────────────────────────────── */
+
+const BADGE_HEIGHT = 88;
+const BADGE_RADIUS = 14;
+const BADGE_BG = '#000000';
+const BADGE_BORDER = 'rgba(255,255,255,0.9)';
+
+const AppStoreBadge: React.FC = () => (
+  <div
+    style={{
+      height: BADGE_HEIGHT,
+      paddingLeft: 18,
+      paddingRight: 22,
+      borderRadius: BADGE_RADIUS,
+      background: BADGE_BG,
+      border: `1.5px solid ${BADGE_BORDER}`,
+      display: 'flex',
+      alignItems: 'center',
+      gap: 14,
+      boxShadow: '0 6px 24px rgba(0,0,0,0.5)',
+    }}
+  >
+    {/* Apple logo */}
+    <svg width="36" height="44" viewBox="0 0 384 444" fill="#FFFFFF">
+      <path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z"/>
+    </svg>
+    {/* Caption + Wordmark */}
+    <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+      <span style={{
+        fontFamily: FONT_BODY,
+        color: '#FFFFFF',
+        fontSize: 14,
+        lineHeight: 1.1,
+        opacity: 0.92,
+        letterSpacing: 0.3,
+      }}>
+        Scarica su
+      </span>
+      <span style={{
+        fontFamily: FONT_BODY,
+        color: '#FFFFFF',
+        fontSize: 26,
+        lineHeight: 1.05,
+        fontWeight: 600,
+        letterSpacing: -0.3,
+        marginTop: 2,
+      }}>
+        App Store
+      </span>
+    </div>
+  </div>
+);
+
+const GooglePlayBadge: React.FC = () => (
+  <div
+    style={{
+      height: BADGE_HEIGHT,
+      paddingLeft: 18,
+      paddingRight: 22,
+      borderRadius: BADGE_RADIUS,
+      background: BADGE_BG,
+      border: `1.5px solid ${BADGE_BORDER}`,
+      display: 'flex',
+      alignItems: 'center',
+      gap: 14,
+      boxShadow: '0 6px 24px rgba(0,0,0,0.5)',
+    }}
+  >
+    {/* Google Play triangle — 4 colored quadrants */}
+    <svg width="36" height="42" viewBox="0 0 512 555" style={{ flexShrink: 0 }}>
+      <defs>
+        <linearGradient id="gp-grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#00A1FF" />
+          <stop offset="100%" stopColor="#00E1FF" />
+        </linearGradient>
+        <linearGradient id="gp-grad2" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor="#FFCE00" />
+          <stop offset="100%" stopColor="#FFEA00" />
+        </linearGradient>
+        <linearGradient id="gp-grad3" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#FF3A44" />
+          <stop offset="100%" stopColor="#C31162" />
+        </linearGradient>
+        <linearGradient id="gp-grad4" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor="#00F076" />
+          <stop offset="100%" stopColor="#00C66D" />
+        </linearGradient>
+      </defs>
+      {/* 4 triangle wedges — Google Play official 4-color logo */}
+      <path d="M14 14 v520 L274 274 Z" fill="url(#gp-grad1)" />
+      <path d="M14 14 L370 200 L274 274 Z" fill="url(#gp-grad2)" />
+      <path d="M370 200 L498 277 L370 354 L274 274 Z" fill="url(#gp-grad3)" />
+      <path d="M14 534 L274 274 L370 354 Z" fill="url(#gp-grad4)" />
+    </svg>
+    <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+      <span style={{
+        fontFamily: FONT_BODY,
+        color: '#FFFFFF',
+        fontSize: 14,
+        lineHeight: 1.1,
+        opacity: 0.92,
+        letterSpacing: 0.3,
+      }}>
+        Disponibile su
+      </span>
+      <span style={{
+        fontFamily: FONT_BODY,
+        color: '#FFFFFF',
+        fontSize: 26,
+        lineHeight: 1.05,
+        fontWeight: 600,
+        letterSpacing: -0.3,
+        marginTop: 2,
+      }}>
+        Google Play
+      </span>
+    </div>
+  </div>
+);
+
+/* ──────────────────────────────────────────────────────────────────
    SCENE 2 — CTAMockup (iPhone 15 Pro Titanium + store badges)
-   PLACEHOLDER per ora: iPhone come rettangolo arrotondato.
-   Sostituire con <IPhone15ProMockup> + <LavikaHomeMockup> nei prossimi step.
    ────────────────────────────────────────────────────────────────── */
 
 const CTAMockup: React.FC<{
@@ -994,32 +1114,17 @@ const CTAMockup: React.FC<{
           La puntata completa è <span style={{ color: COLOR_RED }}>LIVE</span>
         </div>
 
-        {/* Store badges placeholder text-only — TODO sostituire con asset PNG */}
+        {/* Store badges — SVG inline, look ufficiale brand-coerente */}
         <div
           style={{
             display: 'flex',
             justifyContent: 'center',
-            gap: 20,
+            gap: 30,
+            alignItems: 'center',
           }}
         >
-          {['App Store', 'Google Play'].map((s) => (
-            <div
-              key={s}
-              style={{
-                background: '#1a1a1c',
-                border: '1px solid rgba(255,255,255,0.2)',
-                borderRadius: 10,
-                padding: '12px 22px',
-                fontFamily: FONT_BODY,
-                color: COLOR_WHITE,
-                fontSize: 14,
-                fontWeight: 600,
-                letterSpacing: 0.5,
-              }}
-            >
-              {s}
-            </div>
-          ))}
+          <AppStoreBadge />
+          <GooglePlayBadge />
         </div>
       </div>
     </AbsoluteFill>
