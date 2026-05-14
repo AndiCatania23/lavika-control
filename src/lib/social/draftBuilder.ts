@@ -123,7 +123,7 @@ async function enqueueCaptionJob(args: {
    ────────────────────────────────────────────────────────────────── */
 
 interface JobRecipe {
-  recipe: 'sharp_text_overlay' | 'remotion_render';
+  recipe: 'sharp_text_overlay' | 'remotion_render' | 'interview_story_video';
   recipe_params: Record<string, unknown>;
 }
 
