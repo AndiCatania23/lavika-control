@@ -1013,123 +1013,129 @@ const CTAMockup: React.FC<{
       <LightStreaks intensity={1.0} />
       <ParticleField color={COLOR_RED} count={25} />
 
-      {/* Top: LAVIKA + MATCH REACTION eyebrow */}
+      {/* Layout flex column: top labels + iPhone center + CTA bottom.
+       *  Il middle ha flex:1 → iPhone si centra automaticamente nello
+       *  spazio rimanente tra top e bottom = simmetria perfetta. */}
       <div
         style={{
           position: 'absolute',
-          top: 140,
-          left: 0,
-          right: 0,
-          textAlign: 'center',
-          opacity: sp,
-          transform: `translateY(${(1 - sp) * -20}px)`,
-        }}
-      >
-        <Img
-          src={staticFile(WORDMARK_WHITE)}
-          style={{ width: 200, height: 'auto', display: 'inline-block' }}
-        />
-        <div
-          style={{
-            fontFamily: FONT_DISPLAY,
-            color: COLOR_WHITE,
-            fontSize: 36,
-            letterSpacing: 8,
-            textTransform: 'uppercase',
-            marginTop: 14,
-          }}
-        >
-          Match <span style={{ color: COLOR_RED }}>Reaction</span>
-        </div>
-        <div
-          style={{
-            fontFamily: FONT_DISPLAY,
-            color: COLOR_WHITE,
-            fontSize: 18,
-            letterSpacing: 5,
-            opacity: 0.65,
-            textTransform: 'uppercase',
-            marginTop: 6,
-          }}
-        >
-          Interviste post partita
-        </div>
-      </div>
-
-      {/* iPhone 15 Pro Titanium mockup + home LAVIKA renderizzata viva.
-       *  Posizione: tra top labels (LAVIKA + MATCH REACTION) e i testi CTA
-       *  bottom ("Scarica l'App"). paddingTop 320 garantisce gap ~60px
-       *  dal top label e ~410px dal CTA. */}
-      <AbsoluteFill
-        style={{
+          inset: 0,
+          padding: '120px 30px 100px',
           display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'flex-start',
-          paddingTop: 320,
+          flexDirection: 'column',
         }}
       >
-        <IPhone15ProMockup
-          width={440}
-          tiltDeg={-5}
-          scale={0.94 + sp * 0.06}
-          opacity={sp}
-        >
-          <LavikaHomeMockup episodeInFocus={episodeForMockup} />
-        </IPhone15ProMockup>
-      </AbsoluteFill>
-
-      {/* Bottom: SCARICA L'APP + store badges — testi BIG mobile-friendly */}
-      <div
-        style={{
-          position: 'absolute',
-          bottom: 100,
-          left: 0,
-          right: 0,
-          textAlign: 'center',
-          opacity: sp,
-          transform: `translateY(${(1 - sp) * 20}px)`,
-        }}
-      >
+        {/* TOP: LAVIKA wordmark + MATCH REACTION + INTERVISTE POST PARTITA
+            Mobile-friendly: tutto +60% più grande. */}
         <div
           style={{
-            fontFamily: FONT_DISPLAY,
-            color: COLOR_WHITE,
-            fontSize: 78,
-            letterSpacing: 8,
-            textTransform: 'uppercase',
-            marginBottom: 20,
-            textShadow: '0 4px 20px rgba(0,0,0,0.85)',
-            lineHeight: 1,
+            textAlign: 'center',
+            opacity: sp,
+            transform: `translateY(${(1 - sp) * -20}px)`,
           }}
         >
-          Scarica l'App
-        </div>
-        <div
-          style={{
-            fontFamily: FONT_DISPLAY,
-            color: COLOR_WHITE,
-            fontSize: 36,
-            letterSpacing: 6,
-            textTransform: 'uppercase',
-            opacity: 0.95,
-            marginBottom: 38,
-            textShadow: '0 2px 10px rgba(0,0,0,0.7)',
-          }}
-        >
-          La puntata completa è <span style={{ color: COLOR_RED }}>LIVE</span>
+          <Img
+            src={staticFile(WORDMARK_WHITE)}
+            style={{ width: 320, height: 'auto', display: 'inline-block' }}
+          />
+          <div
+            style={{
+              fontFamily: FONT_DISPLAY,
+              color: COLOR_WHITE,
+              fontSize: 56,
+              letterSpacing: 10,
+              textTransform: 'uppercase',
+              marginTop: 18,
+              lineHeight: 1,
+              textShadow: '0 2px 12px rgba(0,0,0,0.85)',
+            }}
+          >
+            Match <span style={{ color: COLOR_RED }}>Reaction</span>
+          </div>
+          <div
+            style={{
+              fontFamily: FONT_DISPLAY,
+              color: COLOR_WHITE,
+              fontSize: 28,
+              letterSpacing: 7,
+              opacity: 0.88,
+              textTransform: 'uppercase',
+              marginTop: 10,
+              textShadow: '0 2px 10px rgba(0,0,0,0.75)',
+            }}
+          >
+            Interviste post partita
+          </div>
         </div>
 
-        {/* Store badges — SVG inline, look ufficiale brand-coerente */}
+        {/* MIDDLE: iPhone centrato verticalmente nello spazio rimanente */}
         <div
           style={{
+            flex: 1,
             display: 'flex',
-            justifyContent: 'center',
-            gap: 30,
             alignItems: 'center',
+            justifyContent: 'center',
           }}
         >
-          <AppStoreBadge />
-          <GooglePlayBadge />
+          <IPhone15ProMockup
+            width={440}
+            tiltDeg={-5}
+            scale={0.94 + sp * 0.06}
+            opacity={sp}
+          >
+            <LavikaHomeMockup episodeInFocus={episodeForMockup} />
+          </IPhone15ProMockup>
+        </div>
+
+        {/* BOTTOM: SCARICA L'APP + LIVE + badges */}
+        <div
+          style={{
+            textAlign: 'center',
+            opacity: sp,
+            transform: `translateY(${(1 - sp) * 20}px)`,
+          }}
+        >
+          <div
+            style={{
+              fontFamily: FONT_DISPLAY,
+              color: COLOR_WHITE,
+              fontSize: 78,
+              letterSpacing: 8,
+              textTransform: 'uppercase',
+              marginBottom: 20,
+              textShadow: '0 4px 20px rgba(0,0,0,0.85)',
+              lineHeight: 1,
+            }}
+          >
+            Scarica l'App
+          </div>
+          <div
+            style={{
+              fontFamily: FONT_DISPLAY,
+              color: COLOR_WHITE,
+              fontSize: 36,
+              letterSpacing: 6,
+              textTransform: 'uppercase',
+              opacity: 0.95,
+              marginBottom: 32,
+              textShadow: '0 2px 10px rgba(0,0,0,0.7)',
+            }}
+          >
+            La puntata completa è <span style={{ color: COLOR_RED }}>LIVE</span>
+          </div>
+
+          {/* Store badges — SVG inline, look ufficiale brand-coerente */}
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'center',
+              gap: 30,
+              alignItems: 'center',
+            }}
+          >
+            <AppStoreBadge />
+            <GooglePlayBadge />
+          </div>
         </div>
       </div>
     </AbsoluteFill>
