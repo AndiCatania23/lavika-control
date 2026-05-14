@@ -1056,17 +1056,19 @@ const CTAMockup: React.FC<{
         </div>
       </div>
 
-      {/* iPhone 15 Pro Titanium mockup + home LAVIKA renderizzata viva */}
+      {/* iPhone 15 Pro Titanium mockup + home LAVIKA renderizzata viva.
+       *  Posizionato in alto (allineato top) per lasciare più spazio
+       *  verticale ai testi CTA sotto. */}
       <AbsoluteFill
         style={{
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'center',
-          marginTop: 60,
+          justifyContent: 'flex-start',
+          paddingTop: 220,
         }}
       >
         <IPhone15ProMockup
-          width={520}
+          width={460}
           tiltDeg={-5}
           scale={0.94 + sp * 0.06}
           opacity={sp}
@@ -1075,11 +1077,11 @@ const CTAMockup: React.FC<{
         </IPhone15ProMockup>
       </AbsoluteFill>
 
-      {/* Bottom: SCARICA L'APP + store badges */}
+      {/* Bottom: SCARICA L'APP + store badges — testi BIG mobile-friendly */}
       <div
         style={{
           position: 'absolute',
-          bottom: 140,
+          bottom: 100,
           left: 0,
           right: 0,
           textAlign: 'center',
@@ -1091,11 +1093,12 @@ const CTAMockup: React.FC<{
           style={{
             fontFamily: FONT_DISPLAY,
             color: COLOR_WHITE,
-            fontSize: 44,
-            letterSpacing: 6,
+            fontSize: 78,
+            letterSpacing: 8,
             textTransform: 'uppercase',
-            marginBottom: 12,
-            textShadow: '0 4px 20px rgba(0,0,0,0.8)',
+            marginBottom: 20,
+            textShadow: '0 4px 20px rgba(0,0,0,0.85)',
+            lineHeight: 1,
           }}
         >
           Scarica l'App
@@ -1104,11 +1107,12 @@ const CTAMockup: React.FC<{
           style={{
             fontFamily: FONT_DISPLAY,
             color: COLOR_WHITE,
-            fontSize: 22,
-            letterSpacing: 5,
+            fontSize: 36,
+            letterSpacing: 6,
             textTransform: 'uppercase',
-            opacity: 0.85,
-            marginBottom: 28,
+            opacity: 0.95,
+            marginBottom: 38,
+            textShadow: '0 2px 10px rgba(0,0,0,0.7)',
           }}
         >
           La puntata completa è <span style={{ color: COLOR_RED }}>LIVE</span>
