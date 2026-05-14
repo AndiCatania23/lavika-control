@@ -22,9 +22,13 @@ import type { CarouselSlideContent } from './pillCarouselSplitter';
 const SLIDE_WIDTH = 1080;
 const SLIDE_HEIGHT = 1350;
 
-const COLOR_RED = '#E40521';
+const COLOR_RED = '#E40521';        // brand puro — usato solo per cerchi/badge/icone
 const COLOR_RED_DARK = '#8a0314';
 const COLOR_WHITE = '#FFFFFF';
+// Accent per keyword highlight nel testo: rosso coral più chiaro/morbido
+// (su nero scuro è LEGGIBILE ma non urla come #E40521 saturatissimo).
+// Identità rossa LAVIKA mantenuta ma in versione "editoriale".
+const COLOR_ACCENT = '#FF7A85';
 
 const FONT_FAMILY = 'Anton';
 const FONT_PATH = path.join(process.cwd(), 'public', 'fonts', 'Anton-Regular.ttf');
@@ -79,27 +83,30 @@ async function drawBackgroundCover(
   }
 }
 
-/** Applica overlay duotone rosso + darken. Mantiene riconoscibilità del bg. */
-function applyDuotoneOverlay(ctx: SKRSContext2D): void {
-  // Layer 1: tinta rossa semi-trasparente
-  ctx.fillStyle = 'rgba(228, 5, 33, 0.32)';
+/** Applica solo darken globale (NO tinta rossa, foto pulita).
+ *  Stile La Casa di C: foto riconoscibile, darken uniforme per leggibilità,
+ *  no overlay colorato che "urla" o sovrappone la foto. */
+function applyDarkOverlay(ctx: SKRSContext2D): void {
+  // Layer 1: darken globale uniforme per leggibilità testo
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.58)';
   ctx.fillRect(0, 0, SLIDE_WIDTH, SLIDE_HEIGHT);
-  // Layer 2: darken globale per leggibilità testo
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-  ctx.fillRect(0, 0, SLIDE_WIDTH, SLIDE_HEIGHT);
-  // Layer 3: gradient bottom più scuro per attribution
-  const grad = ctx.createLinearGradient(0, SLIDE_HEIGHT * 0.5, 0, SLIDE_HEIGHT);
+  // Layer 2: gradient bottom sottile per attribution (no più aggressivo)
+  const grad = ctx.createLinearGradient(0, SLIDE_HEIGHT * 0.7, 0, SLIDE_HEIGHT);
   grad.addColorStop(0, 'rgba(0,0,0,0)');
-  grad.addColorStop(1, 'rgba(0,0,0,0.85)');
+  grad.addColorStop(1, 'rgba(0,0,0,0.55)');
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, SLIDE_WIDTH, SLIDE_HEIGHT);
 }
 
-/** Fallback BG: gradient rosso-nero quando manca pill image. */
+/** Fallback BG: gradient nero quasi puro con leggero shift rossiccio.
+ *  Mantiene il "feeling" brand senza saturare di bordeaux. */
 function drawFallbackBackground(ctx: SKRSContext2D): void {
-  const grad = ctx.createLinearGradient(0, 0, SLIDE_WIDTH, SLIDE_HEIGHT);
-  grad.addColorStop(0, COLOR_RED_DARK);
-  grad.addColorStop(0.55, '#1a0508');
+  const grad = ctx.createRadialGradient(
+    SLIDE_WIDTH / 2, SLIDE_HEIGHT * 0.35, 100,
+    SLIDE_WIDTH / 2, SLIDE_HEIGHT / 2, SLIDE_HEIGHT,
+  );
+  grad.addColorStop(0, '#1f0a0e');
+  grad.addColorStop(0.5, '#0e0608');
   grad.addColorStop(1, '#000000');
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, SLIDE_WIDTH, SLIDE_HEIGHT);
@@ -185,11 +192,13 @@ function drawNavArrows(ctx: SKRSContext2D, slide: CarouselSlideContent): void {
   if (showRight) drawArrow(SLIDE_WIDTH - 60, '›');
 }
 
-/** Centro: cerchio bianco con virgolette rosse */
+/** Centro: cerchio bianco con virgolette grosse rosse.
+ *  Disegnate come 2 "gocce" SVG-style per essere indipendenti dal font.
+ *  Stile La Casa di C: 2 virgolette close (right) accostate. */
 function drawQuoteIcon(ctx: SKRSContext2D, centerX: number, centerY: number, radius: number): void {
   // Disco bianco con leggera ombra
-  ctx.shadowColor = 'rgba(0,0,0,0.5)';
-  ctx.shadowBlur = 16;
+  ctx.shadowColor = 'rgba(0,0,0,0.45)';
+  ctx.shadowBlur = 18;
   ctx.shadowOffsetY = 4;
   ctx.fillStyle = COLOR_WHITE;
   ctx.beginPath();
@@ -198,13 +207,31 @@ function drawQuoteIcon(ctx: SKRSContext2D, centerX: number, centerY: number, rad
   ctx.shadowColor = 'transparent';
   ctx.shadowBlur = 0;
   ctx.shadowOffsetY = 0;
-  // Virgolette doppie ,,
-  ctx.fillStyle = COLOR_RED;
-  ctx.font = `700 ${radius * 1.5}px ${FONT_FAMILY}`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'alphabetic';
-  // Caratteri close-quote U+201D ”
-  ctx.fillText('„', centerX, centerY + radius * 0.45);
+
+  // Disegno 2 virgolette "drop" rosse, leggermente inclinate, a sx e dx
+  // del centro. Path geometrico — indipendente da font.
+  const drawDrop = (cx: number, cy: number, size: number) => {
+    ctx.fillStyle = COLOR_RED;
+    ctx.beginPath();
+    // Forma a "goccia" con angolo: head rotondo in alto, coda in basso
+    ctx.moveTo(cx + size * 0.5, cy - size * 0.6);
+    ctx.bezierCurveTo(
+      cx + size * 0.8, cy - size * 0.6,
+      cx + size * 0.8, cy,
+      cx + size * 0.4, cy + size * 0.7,
+    );
+    ctx.lineTo(cx - size * 0.05, cy + size * 0.7);
+    ctx.bezierCurveTo(
+      cx + size * 0.25, cy + size * 0.1,
+      cx + size * 0.05, cy - size * 0.2,
+      cx - size * 0.15, cy - size * 0.6,
+    );
+    ctx.closePath();
+    ctx.fill();
+  };
+  const dropSize = radius * 0.5;
+  drawDrop(centerX - dropSize * 0.55, centerY, dropSize);
+  drawDrop(centerX + dropSize * 0.45, centerY, dropSize);
 }
 
 /* ──────────────────────────────────────────────────────────────────
@@ -241,10 +268,10 @@ function drawQuote(
   boxX: number, boxY: number, boxWidth: number, boxHeight: number,
 ): void {
   const tokens = tokenizeWithKeywords(text.toUpperCase(), keywords);
-  // Trova font size ottimale (binary search)
-  let fontSize = 72;
-  const minFont = 36;
-  const maxFont = 92;
+  // Trova font size ottimale (binary search). Range più alto per testo
+  // big editoriale stile La Casa di C, occupa ~75% larghezza slide.
+  const minFont = 50;
+  const maxFont = 110;
   let bestFit: { fontSize: number; lines: WordToken[][] } | null = null;
 
   for (let fs = maxFont; fs >= minFont; fs -= 2) {
@@ -263,7 +290,7 @@ function drawQuote(
         lineWidth = widthWithToken;
       }
     }
-    const totalHeight = lines.length * fs * 1.08;
+    const totalHeight = lines.length * fs * 1.18;  // line-height respirante
     if (totalHeight <= boxHeight) {
       bestFit = { fontSize: fs, lines };
       break;
@@ -291,7 +318,7 @@ function drawQuote(
 
   const { fontSize: fs, lines } = bestFit;
   ctx.font = `700 ${fs}px ${FONT_FAMILY}`;
-  const lineHeight = fs * 1.08;
+  const lineHeight = fs * 1.18;  // più respirante (era 1.08)
   const totalHeight = lines.length * lineHeight;
   // Center verticale dentro il box
   const startY = boxY + (boxHeight - totalHeight) / 2 + fs;
@@ -315,7 +342,7 @@ function drawQuote(
     const y = startY + lineIdx * lineHeight;
     for (let i = 0; i < line.length; i++) {
       const tok = line[i];
-      ctx.fillStyle = tok.isKeyword ? COLOR_RED : COLOR_WHITE;
+      ctx.fillStyle = tok.isKeyword ? COLOR_ACCENT : COLOR_WHITE;
       ctx.fillText(tok.text, x, y);
       x += ctx.measureText(tok.text).width;
       if (i < line.length - 1) x += spaceWidth;
@@ -356,8 +383,8 @@ export async function buildCarouselSlide(opts: BuildSlideOptions): Promise<Buffe
   if (backgroundImageUrl) hasBg = await drawBackgroundCover(ctx, backgroundImageUrl);
   if (!hasBg) drawFallbackBackground(ctx);
 
-  // 2. Duotone + darken overlay
-  if (hasBg) applyDuotoneOverlay(ctx);
+  // 2. Darken overlay (no duotone — foto pulita, stile La Casa di C)
+  if (hasBg) applyDarkOverlay(ctx);
 
   // 3. Header
   await drawHeader(ctx, slide);
@@ -369,15 +396,16 @@ export async function buildCarouselSlide(opts: BuildSlideOptions): Promise<Buffe
     drawQuoteIcon(ctx, SLIDE_WIDTH / 2, 480, 64);
   }
 
-  // 5. Quote text — se non c'è icona, sale leggermente per centrarsi meglio
+  // 5. Quote text — boxX 140 (lascia 140px ai bordi per le frecce nav
+  //    laterali r=32 a x=60), boxWidth 800. Evita overlap testo/frecce.
   drawQuote(
     ctx,
     slide.text,
     slide.keywords,
-    /* boxX */ 80,
-    /* boxY */ isQuote ? 600 : 460,
-    /* boxWidth */ SLIDE_WIDTH - 160,
-    /* boxHeight */ isQuote ? 540 : 680,
+    /* boxX */ 140,
+    /* boxY */ isQuote ? 600 : 380,
+    /* boxWidth */ SLIDE_WIDTH - 280,
+    /* boxHeight */ isQuote ? 580 : 800,
   );
 
   // 6. Frecce nav laterali (« indica "scorri")

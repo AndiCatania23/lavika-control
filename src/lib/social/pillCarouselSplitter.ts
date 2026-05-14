@@ -54,6 +54,31 @@ const HIGHLIGHT_KEYWORDS_LOWER: ReadonlyArray<string> = [
 
 const HIGHLIGHT_SET = new Set(HIGHLIGHT_KEYWORDS_LOWER);
 
+/** Parole comuni italiane da NON highlightare anche se matchano altri pattern.
+ *  Determinanti, dimostrativi, pronomi, articoli, congiunzioni, ausiliari. */
+const STOPWORDS = new Set<string>([
+  'questa', 'questo', 'queste', 'questi', 'quella', 'quello', 'quelle', 'quegli',
+  'molto', 'molta', 'molti', 'molte', 'tanto', 'tanta', 'tanti', 'tante',
+  'tutta', 'tutto', 'tutte', 'tutti', 'ogni',
+  'deve', 'devo', 'devi', 'dobbiamo', 'dovete', 'devono',
+  'sono', 'siamo', 'siete', 'sei',
+  // Ausiliari "avere" — banali, non meritano highlight
+  'abbiamo', 'avete', 'hanno', 'avere', 'avuto', 'avuta', 'avuti', 'avute',
+  'fare', 'fatto', 'fatta', 'fatti', 'fatte',
+  'altro', 'altra', 'altri', 'altre',
+  'oggi', 'ieri', 'domani', 'sempre', 'mai',
+  'però', 'anche', 'sopra', 'sotto', 'come', 'cosa', 'dove', 'quando',
+  'quindi', 'allora', 'prima', 'dopo', 'mentre',
+  'nostro', 'nostra', 'nostri', 'nostre',
+  'vostro', 'vostra', 'vostri', 'vostre',
+  // Verbi banali da NON highlightare (anche se in whitelist sopra)
+  'arrivare', 'arrivato', 'arrivano', 'arrivai',
+]);
+
+/** Numero MAX keyword per slide. Troppe distraggono e l'occhio non sa
+ *  più dove guardare. Casa di C usa 2-3 keyword per slide. */
+const MAX_KEYWORDS_PER_SLIDE = 3;
+
 /**
  * Pulisce il testo: rimuove emoji, hashtag, normalizza whitespace.
  * Mantiene punteggiatura per lo split successivo.
@@ -112,34 +137,52 @@ function chunkContent(content: string): string[] {
  * - verbi/parole forti dalla whitelist
  */
 function extractKeywords(text: string): string[] {
-  const keywords = new Set<string>();
-  // 1. UPPERCASE words 4+ char (incluso accenti italiani: À Á È É Ì Ò Ù...)
-  //    Unicode \p{Lu} cattura tutte le lettere maiuscole, accentate o no.
-  const upperMatches = text.match(/\b\p{Lu}{4,}\b/gu) ?? [];
-  for (const w of upperMatches) keywords.add(w.toLowerCase());
+  /* Strategia: priorità ordinata + cap MAX_KEYWORDS_PER_SLIDE.
+     1. Numeri+unità ("3000 tifosi", "14 volte") — sempre punchy
+     2. Numeri grossi (3+ cifre) — stat di impatto
+     3. Verbi/parole forti dalla whitelist (lottare, vincere, gol, playoff…)
+     4. UPPERCASE words 4+ char (sigle: SERIE A, GP, IBM)
+     5. Capitalized nomi propri 5+ char (Pelligra, Catania, Champions)
+     SKIP STOPWORDS sempre.
+     CAP a 3 keyword per slide totali. */
+  const ordered: string[] = [];
+  const seen = new Set<string>();
 
-  // 2. Capitalized nomi propri (4+ char): inizia con \p{Lu} + \p{Ll}+
-  //    Pattern "Word" dopo space/inizio o punteggiatura
-  const capMatches = text.match(/(?:^|[\s,;.!?:'"«])(\p{Lu}\p{Ll}{3,})\b/gu) ?? [];
-  for (const m of capMatches) {
-    const w = m.replace(/^[\s,;.!?:'"«]+/, '').trim();
-    if (w.length >= 4) keywords.add(w.toLowerCase());
-  }
+  const add = (kw: string) => {
+    const k = kw.toLowerCase().trim();
+    if (!k || seen.has(k) || STOPWORDS.has(k)) return;
+    if (ordered.length >= MAX_KEYWORDS_PER_SLIDE) return;
+    ordered.push(k);
+    seen.add(k);
+  };
 
-  // 3. Numeri grossi o numeri+unità ("3000 tifosi", "14 volte")
-  const numWordMatches = text.match(/\b\d{2,}\s+\p{L}+\b/gu) ?? [];
-  for (const m of numWordMatches) keywords.add(m.toLowerCase());
+  // 1. Numeri+unità (max punchiness)
+  const numWordMatches = text.match(/\b\d{2,}\s+\p{L}{3,}\b/gu) ?? [];
+  for (const m of numWordMatches) add(m);
+
+  // 2. Numeri grossi standalone
   const bigNumbers = text.match(/\b\d{3,}\b/g) ?? [];
-  for (const n of bigNumbers) keywords.add(n);
+  for (const n of bigNumbers) add(n);
 
-  // 4. Whitelist verbi/parole forti
+  // 3. Whitelist verbi/parole forti (filtrati da STOPWORDS)
   const lowerText = text.toLowerCase();
   for (const kw of HIGHLIGHT_KEYWORDS_LOWER) {
-    if (new RegExp(`\\b${kw}\\b`, 'iu').test(lowerText)) keywords.add(kw);
+    if (new RegExp(`\\b${kw}\\b`, 'iu').test(lowerText)) add(kw);
   }
 
-  // Limita a max 6 keyword per slide (troppe distraggono)
-  return [...keywords].slice(0, 6);
+  // 4. UPPERCASE 4+ char (probabili sigle es. "SERIE A", "VAR", "IBM")
+  const upperMatches = text.match(/\b\p{Lu}{4,}\b/gu) ?? [];
+  for (const w of upperMatches) add(w);
+
+  // 5. Nomi propri capitalized 5+ char (Pelligra, Catania, Toscano,
+  //    Champions). 5+ char esclude "Anna", "Luca" troppo corti.
+  const capMatches = text.match(/(?:^|[\s,;.!?:'"«])(\p{Lu}\p{Ll}{4,})\b/gu) ?? [];
+  for (const m of capMatches) {
+    const w = m.replace(/^[\s,;.!?:'"«]+/, '').trim();
+    if (w.length >= 5) add(w);
+  }
+
+  return ordered;
 }
 
 export interface SplitOptions {
