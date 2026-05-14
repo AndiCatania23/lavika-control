@@ -43,7 +43,7 @@ const PLATFORMS: PlatformDef[] = [
     enabled: true,
     formats: [
       { id: 'feed_post',   label: 'Feed Post',     aspect: '4:5',  type: 'image' },
-      { id: 'carousel',    label: 'Carousel',      aspect: '1:1',  type: 'album' },
+      { id: 'carousel',    label: 'Carousel',      aspect: '4:5',  type: 'album' },
       { id: 'story',       label: 'Story (Image)', aspect: '9:16', type: 'image' },
       { id: 'story_video', label: 'Story (Video)', aspect: '9:16', type: 'video' },
       { id: 'reel',        label: 'Reel',          aspect: '9:16', type: 'video' },
@@ -57,6 +57,7 @@ const PLATFORMS: PlatformDef[] = [
     enabled: true,
     formats: [
       { id: 'feed_post',   label: 'Feed Post',     aspect: '4:5',  type: 'image' },
+      { id: 'carousel',    label: 'Carousel',      aspect: '4:5',  type: 'album' },
       { id: 'story',       label: 'Story (Image)', aspect: '9:16', type: 'image' },
       { id: 'story_video', label: 'Story (Video)', aspect: '9:16', type: 'video' },
       { id: 'reel',        label: 'Reel',          aspect: '9:16', type: 'video' },
