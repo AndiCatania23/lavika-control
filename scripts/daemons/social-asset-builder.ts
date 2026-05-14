@@ -38,6 +38,8 @@ import { whisperTranscribe } from '../../src/lib/social/whisperTranscribe';
 import { extractBestFaceFrame } from '../../src/lib/social/frameExtractor';
 import { cutAudioSegment, cutVideoSegment, generateWaveformPng } from '../../src/lib/social/ffmpegPipeline';
 import { resolveBestHlsVariant } from '../../src/lib/social/hlsVariant';
+import { splitPillToCarousel } from '../../src/lib/social/pillCarouselSplitter';
+import { buildCarouselSlide } from '../../src/lib/social/carouselSlideBuilder';
 
 /* ────────────────────────────── Config ────────────────────────────── */
 
@@ -109,6 +111,10 @@ interface RecipeResult {
     shareability_factors?: string[];
     rationale?: string;
   };
+  /** Multi-slide output (carousel pill). Quando popolato, processJob fa
+   *  upload R2 di ogni slide e popola social_variants.asset_urls TEXT[].
+   *  buffer/mime principali = primary asset (slides[0]). */
+  slides?: Array<{ buffer: Buffer; mime: string }>;
 }
 
 async function runRecipe(recipe: string, params: Record<string, unknown>): Promise<RecipeResult> {
@@ -628,6 +634,65 @@ async function runRecipe(recipe: string, params: Record<string, unknown>): Promi
       });
       return video as RecipeResult;
     }
+    case 'pill_carousel': {
+      /* ──────────────────────────────────────────────────────────────────
+         Pill Carousel — render N slide PNG 1080×1350 stile La Casa di C
+         palette LAVIKA rosso. Split pill.content in chunk + keyword.
+         Output: array di slides, processJob fa upload R2 per ognuno.
+         ────────────────────────────────────────────────────────────────── */
+      const p = params as {
+        pillId: string;
+        backgroundImageUrl?: string;
+      };
+
+      log('pill_carousel: fetching pill', { pillId: p.pillId });
+      const { data: pill, error: pErr } = await supabase
+        .from('pills')
+        .select('title, content, pill_category, image_url')
+        .eq('id', p.pillId)
+        .single<{ title: string; content: string | null; pill_category: string | null; image_url: string | null }>();
+
+      if (pErr || !pill) {
+        throw new Error(`pill_carousel: pill ${p.pillId} not found: ${pErr?.message}`);
+      }
+
+      const slidesContent = splitPillToCarousel({ title: pill.title, content: pill.content });
+      const bgUrl = p.backgroundImageUrl ?? pill.image_url ?? undefined;
+
+      log('pill_carousel: splitting + rendering', {
+        slidesCount: slidesContent.length,
+        hasBg: !!bgUrl,
+      });
+
+      const renderedSlides: Array<{ buffer: Buffer; mime: string }> = [];
+      for (const slide of slidesContent) {
+        const buffer = await buildCarouselSlide({
+          slide,
+          backgroundImageUrl: bgUrl,
+          attribution: 'LAVIKA SPORT',
+        });
+        renderedSlides.push({ buffer, mime: 'image/png' });
+        log('pill_carousel: slide rendered', {
+          index: slide.index,
+          total: slide.total,
+          kb: Math.round(buffer.byteLength / 1024),
+        });
+      }
+
+      // Primary asset = slide 1 (per backward compat asset_url single-image).
+      // processJob legge `slides` e fa upload multi-key + popola asset_urls.
+      const primary = renderedSlides[0];
+      return {
+        buffer: primary.buffer,
+        mime: primary.mime,
+        width: 1080,
+        height: 1350,
+        format: '1080x1350-carousel',
+        renderedTitle: pill.title,
+        renderedLines: slidesContent.map((s) => s.text),
+        slides: renderedSlides,
+      };
+    }
     case 'ffmpeg_resize':
       throw new Error('ffmpeg_resize: NOT YET IMPLEMENTED');
     default:
@@ -653,16 +718,37 @@ async function processJob(job: QueueJob): Promise<void> {
     // 1. Run recipe → produces { buffer, mime, width, height, format, ... }
     const asset = await runRecipe(job.recipe, job.recipe_params || {});
 
-    // 2. Upload to R2 with deterministic key
+    // 2. Upload to R2 with deterministic key.
+    // Carousel multi-slide: upload tutte le slide e popola asset_urls TEXT[].
     const ext = asset.mime === 'image/jpeg' ? 'jpg' : asset.mime === 'image/png' ? 'png' : asset.mime === 'video/mp4' ? 'mp4' : 'bin';
-    const key = `social/${job.variant_id}/${job.recipe}-${asset.format || 'asset'}.${ext}`;
-    const url = await uploadToR2(key, asset.buffer, asset.mime);
+    const baseKey = `social/${job.variant_id}/${job.recipe}-${asset.format || 'asset'}`;
+    let url: string;
+    let assetUrls: string[] | null = null;
+
+    if (asset.slides && asset.slides.length > 1) {
+      // Multi-slide: upload ciascuna come slide-N.ext
+      const urls: string[] = [];
+      for (let i = 0; i < asset.slides.length; i++) {
+        const s = asset.slides[i];
+        const sExt = s.mime === 'image/jpeg' ? 'jpg' : s.mime === 'image/png' ? 'png' : 'bin';
+        const sKey = `${baseKey}-slide-${i + 1}.${sExt}`;
+        const sUrl = await uploadToR2(sKey, s.buffer, s.mime);
+        urls.push(sUrl);
+      }
+      url = urls[0];          // primary asset = slide 1
+      assetUrls = urls;        // full array per carousel
+    } else {
+      // Single asset (path classico)
+      const key = `${baseKey}.${ext}`;
+      url = await uploadToR2(key, asset.buffer, asset.mime);
+    }
 
     // 3. Update social_variants.asset_url + asset_meta + status='asset_ready'
     const { error: vErr } = await supabase
       .from('social_variants')
       .update({
         asset_url: url,
+        asset_urls: assetUrls,
         asset_type: asset.mime?.startsWith('image/') ? 'image' : asset.mime?.startsWith('video/') ? 'video' : null,
         asset_meta: {
           width: asset.width,
@@ -673,6 +759,7 @@ async function processJob(job: QueueJob): Promise<void> {
           recipe: job.recipe,
           built_at: new Date().toISOString(),
           built_by: WORKER_ID,
+          slides_count: assetUrls?.length ?? 1,
           // LLM Content Director output (solo PillStatVideo + pill source).
           // Usato dal SMM Night Brief per identificare pill ad alto
           // "sends per reach" potential (IG 2026 ranking signal #1 Mosseri).

@@ -123,7 +123,7 @@ async function enqueueCaptionJob(args: {
    ────────────────────────────────────────────────────────────────── */
 
 interface JobRecipe {
-  recipe: 'sharp_text_overlay' | 'remotion_render' | 'interview_story_video';
+  recipe: 'sharp_text_overlay' | 'remotion_render' | 'interview_story_video' | 'pill_carousel';
   recipe_params: Record<string, unknown>;
 }
 
@@ -166,6 +166,20 @@ function buildJobRecipe(args: {
   //   - Pill (pillStatPayload) → AIDirectedStoryVideo (Caso C stat).
   //   - Altri episode → AIDirectedStoryVideo card promo (Fase 1).
   //   - Fallback → MatchScorecardStory.
+  // Carousel pill → recipe DEDICATA `pill_carousel`. Genera N slide 1080×1350
+  // (Sharp + canvas) e popola social_variants.asset_urls TEXT[]. Funziona solo
+  // se è una pill (per ora — futuro: anche per episode con highlight).
+  if (format === 'carousel' && pillId) {
+    return {
+      recipe: 'pill_carousel',
+      recipe_params: {
+        pillId,
+        // sourceUrl = pill.image_url → bg con duotone rosso. Se null, fallback gradient.
+        backgroundImageUrl: sourceUrl || undefined,
+      },
+    };
+  }
+
   if (format === 'story_video' || format === 'reel') {
     // Match-reaction / press-conference → pipeline cinematic Fase 2
     if (episodeId && (episodeFormat === 'match-reaction' || episodeFormat === 'press-conference')) {
