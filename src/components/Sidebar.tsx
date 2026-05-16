@@ -18,7 +18,6 @@ import {
   Bell,
   Flag,
   Megaphone,
-  BarChart3,
 } from 'lucide-react';
 
 type NavItem = {
@@ -36,12 +35,6 @@ const NAV: NavItem[] = [
     label: 'Oggi',
     icon: LayoutDashboard,
     match: ['/dashboard', '/analytics'],
-  },
-  {
-    href: '/insights',
-    label: 'Insights',
-    icon: BarChart3,
-    match: ['/insights'],
   },
   {
     href: '/pills',

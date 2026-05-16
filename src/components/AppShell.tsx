@@ -92,10 +92,11 @@ const AREAS: NavArea[] = [
   },
   {
     key: 'utenti', href: '/users', label: 'Utenti', icon: Users,
-    matchPrefixes: ['/users', '/sessions'],
+    matchPrefixes: ['/users', '/sessions', '/insights'],
     subItems: [
       { href: '/users',    label: 'Utenti' },
       { href: '/sessions', label: 'Sessioni' },
+      { href: '/insights', label: 'Insights' },
     ],
   },
   {
