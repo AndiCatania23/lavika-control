@@ -31,10 +31,17 @@
 import { createGunzip } from 'node:zlib';
 import { pipeline } from 'node:stream/promises';
 import { Readable } from 'node:stream';
+import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { dirname } from 'node:path';
 import { createClient } from '@supabase/supabase-js';
 import { generateAscToken } from './asc-jwt.mjs';
 
 const ASC_BASE = 'https://api.appstoreconnect.apple.com';
+
+// Cache locale del request_id ASC (Apple non permette GET collection su
+// analyticsReportRequests → riusiamo l'ID generato al primo run).
+const REQUEST_ID_CACHE = `${homedir()}/LAVIKA-SPORT/config/asc-report-request-id.txt`;
 
 function todayMinusDays(days) {
   const d = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
@@ -69,21 +76,38 @@ async function ascFetch(path, token, options = {}) {
 
 /**
  * Step 1: Crea (o riusa) una analytics report request ONE_TIME_SNAPSHOT
- * per l'app. Apple ne permette pochissime per app, quindi prima cerchiamo
- * se esiste gia' una request attiva.
+ * per l'app. Apple NON permette GET collection su analyticsReportRequests
+ * (errore "operation not allowed"), quindi cachiamo l'ID localmente su file
+ * dopo il primo POST e lo riusiamo nei run successivi.
+ *
+ * Se il file cache contiene un ID valido → GET_INSTANCE per verificare che
+ * sia ancora attivo. Se 404/410 → ricrea.
  */
 async function getOrCreateReportRequest(token, appId) {
-  // Cerca request esistente non revoked
-  const list = await ascFetch(
-    `/v1/apps/${appId}/analyticsReportRequests?filter[accessType]=ONE_TIME_SNAPSHOT&limit=10`,
-    token,
-  );
-  const active = (list.data || []).find((r) => r.attributes?.stoppedDueToInactivity !== true);
-  if (active) {
-    log(`Reusing existing report request ${active.id}`);
-    return active.id;
+  // 1) Prova a riusare ID cachato su file
+  let cachedId = null;
+  try {
+    cachedId = (await readFile(REQUEST_ID_CACHE, 'utf8')).trim();
+  } catch {
+    // file non esiste = first run
   }
 
+  if (cachedId) {
+    try {
+      const existing = await ascFetch(
+        `/v1/analyticsReportRequests/${cachedId}`,
+        token,
+      );
+      if (existing.data?.id) {
+        log(`Reusing cached report request ${cachedId}`);
+        return cachedId;
+      }
+    } catch (err) {
+      log(`Cached request ${cachedId} non valido (${err.message.slice(0, 80)}). Ricreo.`);
+    }
+  }
+
+  // 2) Crea nuova request ONE_TIME_SNAPSHOT
   log('Creating new ONE_TIME_SNAPSHOT report request...');
   const created = await ascFetch('/v1/analyticsReportRequests', token, {
     method: 'POST',
@@ -97,7 +121,19 @@ async function getOrCreateReportRequest(token, appId) {
       },
     }),
   });
-  return created.data.id;
+
+  const newId = created.data.id;
+
+  // 3) Cache su file per il prossimo run
+  try {
+    await mkdir(dirname(REQUEST_ID_CACHE), { recursive: true });
+    await writeFile(REQUEST_ID_CACHE, newId, { mode: 0o600 });
+    log(`Cached request ${newId} in ${REQUEST_ID_CACHE}`);
+  } catch (err) {
+    log(`Warning: cache write failed (${err.message}). Ricreera' nuovo ID al prossimo run.`);
+  }
+
+  return newId;
 }
 
 async function listReports(token, requestId, category) {
