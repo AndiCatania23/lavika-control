@@ -3,7 +3,7 @@
  * Vedi docs/social-engine/02-anti-hallucination-pipeline.md
  */
 
-export type PillCategory = 'numeri' | 'flash' | 'rivali' | 'storia' | 'numero' | 'contesto' | 'oggi';
+export type PillCategory = 'numeri' | 'flash' | 'rivali' | 'storia';
 
 export type Platform = 'instagram' | 'facebook';
 

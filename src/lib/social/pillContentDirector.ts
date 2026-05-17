@@ -160,7 +160,7 @@ ALTRE REGOLE:
 
 ESEMPI:
 
-INPUT: { title: "Ricchiuti: \\"Doppio risultato? Sconfitti se ci pensate!\\"", category: "oggi" }
+INPUT: { title: "Ricchiuti: \\"Doppio risultato? Sconfitti se ci pensate!\\"", category: "flash" }
 OUTPUT: {
   "mode": "quote",
   "number": null,
