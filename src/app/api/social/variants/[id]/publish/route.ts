@@ -4,6 +4,7 @@ import {
   publishFbPhotoPost, publishIgPhotoPost,
   publishIgStoryPhoto, publishIgStoryVideo,
   publishFbStoryPhoto, publishFbStoryVideo,
+  publishIgCarouselPost, publishFbCarouselPost,
 } from '@/lib/meta/publisher';
 import { MetaApiError } from '@/lib/meta/client';
 import { rewriteToPublicBase, MEDIA_PUBLIC_BASE_URL } from '@/lib/r2MediaClient';
@@ -63,7 +64,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     .single();
 
   if (vErr || !variant) return NextResponse.json({ error: `Variant non trovata: ${id}` }, { status: 404 });
-  if (!variant.asset_url) return NextResponse.json({ error: 'asset_url mancante — asset non ancora generato' }, { status: 400 });
+  // Carousel usa asset_urls[] (>=2 slide). Altri format usano asset_url singolo.
+  const isCarousel = variant.format === 'carousel';
+  if (isCarousel) {
+    if (!Array.isArray(variant.asset_urls) || variant.asset_urls.length < 2) {
+      return NextResponse.json({ error: 'asset_urls mancanti o <2 slide — carousel non ancora generato' }, { status: 400 });
+    }
+  } else if (!variant.asset_url) {
+    return NextResponse.json({ error: 'asset_url mancante — asset non ancora generato' }, { status: 400 });
+  }
 
   const allowedStatus = ['asset_ready', 'scheduled', 'failed'];
   if (!allowedStatus.includes(variant.status)) {
@@ -81,14 +90,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     let result: { id: string; permalink?: string; external_post_url?: string };
 
     // Costruisci URL trusted per Meta: custom domain R2 (preferito) o proxy Vercel (fallback)
-    const publicAssetUrl = getPublicAssetUrl(req, id, variant.asset_url);
+    // Per carousel rewriteToPublicBase è idempotente sulle URL già su custom domain.
+    const publicAssetUrl = isCarousel ? '' : getPublicAssetUrl(req, id, variant.asset_url);
+    const publicAssetUrls: string[] = isCarousel
+      ? (variant.asset_urls as string[]).map((u) => rewriteToPublicBase(u) ?? u)
+      : [];
 
     /* Routing platform × format. Format è quello selezionato nel Composer:
          feed_post  → Feed (foto)
          story      → Story 24h (foto)
          story_video → Story 24h (video)
          reel       → Reel feed permanente (video) — TBD
-         carousel   → Album foto — TBD
+         carousel   → Album foto multi-slide (IG + FB)
        Riferimento: src/app/(console)/social/composer/page.tsx PLATFORMS array.
        Per il fix del bug "ogni cosa va al Feed" (2026-04-30) il routing
        per 'story' va a publishIgStoryPhoto / publishFbStoryPhoto (NON a
@@ -106,8 +119,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       } else if (fmt === 'feed_post') {
         const r = await publishIgPhotoPost({ imageUrl: publicAssetUrl, caption });
         result = { id: r.id, permalink: r.permalink };
+      } else if (fmt === 'carousel') {
+        const r = await publishIgCarouselPost({ imageUrls: publicAssetUrls, caption });
+        result = { id: r.id, permalink: r.permalink };
       } else {
-        throw new Error(`Format '${fmt}' su Instagram non ancora supportato (TODO: reel, carousel)`);
+        throw new Error(`Format '${fmt}' su Instagram non ancora supportato (TODO: reel)`);
       }
     } else if (variant.platform === 'facebook') {
       if (fmt === 'story_video') {
@@ -118,6 +134,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         result = { id: r.post_id ?? r.id, permalink: r.permalink_url };
       } else if (fmt === 'feed_post') {
         const r = await publishFbPhotoPost({ imageUrl: publicAssetUrl, caption });
+        result = { id: r.post_id ?? r.id, permalink: r.permalink_url };
+      } else if (fmt === 'carousel') {
+        const r = await publishFbCarouselPost({ imageUrls: publicAssetUrls, caption });
         result = { id: r.post_id ?? r.id, permalink: r.permalink_url };
       } else {
         throw new Error(`Format '${fmt}' su Facebook non ancora supportato (TODO: reel)`);

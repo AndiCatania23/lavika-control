@@ -169,6 +169,127 @@ export async function publishIgPhotoPost(opts: {
 }
 
 /* ──────────────────────────────────────────────────────────────────
+   Instagram — Carousel (album foto, 2-10 slide)
+
+   Flow:
+     1. Crea child container per ogni slide (image_url + is_carousel_item=true)
+     2. Wait FINISHED per ognuno
+     3. Crea parent container (media_type=CAROUSEL + children=id1,id2,…)
+     4. Wait parent FINISHED
+     5. Publish parent
+   Limiti: 2-10 slide. JPEG/PNG. Aspect 4:5 / 1:1 / 1.91:1 (1080×1350 OK).
+   ────────────────────────────────────────────────────────────────── */
+
+export async function publishIgCarouselPost(opts: {
+  imageUrls: string[];      // 2-10, JPEG/PNG, HTTPS pubblico
+  caption?: string;
+}): Promise<IgPostResult> {
+  const cfg = getMetaConfig();
+  if (!cfg) throw new Error('Meta env vars not configured');
+  if (opts.imageUrls.length < 2 || opts.imageUrls.length > 10) {
+    throw new Error(`IG Carousel richiede 2-10 slide (ricevute ${opts.imageUrls.length})`);
+  }
+
+  // Step 1: child containers (in parallelo)
+  const childContainers = await Promise.all(
+    opts.imageUrls.map(url =>
+      metaPost<{ id: string }>(`/${cfg.igBusinessId}/media`, {
+        image_url: url,
+        is_carousel_item: 'true',
+      })
+    )
+  );
+  const childIds = childContainers.map(c => c.id);
+
+  // Step 2: attendi che ogni child sia FINISHED (parallelo)
+  await Promise.all(childIds.map(id => waitForIgContainerReady(id)));
+
+  // Step 3: parent container CAROUSEL
+  const parent = await metaPost<{ id: string }>(
+    `/${cfg.igBusinessId}/media`,
+    {
+      media_type: 'CAROUSEL',
+      children: childIds.join(','),
+      caption: opts.caption ?? '',
+    }
+  );
+  const parentId = parent.id;
+
+  // Step 4: attendi parent
+  await waitForIgContainerReady(parentId);
+
+  // Step 5: publish
+  const published = await metaPost<{ id: string }>(
+    `/${cfg.igBusinessId}/media_publish`,
+    { creation_id: parentId }
+  );
+
+  let permalink: string | undefined;
+  try {
+    const meta = await metaGet<{ permalink?: string }>(
+      `/${published.id}?fields=permalink`
+    );
+    permalink = meta.permalink;
+  } catch { /* ignore */ }
+
+  return { id: published.id, containerId: parentId, permalink };
+}
+
+/* ──────────────────────────────────────────────────────────────────
+   Facebook Page — Carousel (multi-photo feed post)
+
+   Flow:
+     1. Upload unpublished di ogni foto su /{page-id}/photos (published=false)
+        → ottieni photo_id per ognuna.
+     2. POST /{page-id}/feed con message=caption + attached_media=[{media_fbid}, …]
+   ────────────────────────────────────────────────────────────────── */
+
+export async function publishFbCarouselPost(opts: {
+  imageUrls: string[];
+  caption?: string;
+}): Promise<FbPostResult> {
+  const cfg = getMetaConfig();
+  if (!cfg) throw new Error('Meta env vars not configured');
+  if (opts.imageUrls.length < 2) {
+    throw new Error(`FB Carousel richiede almeno 2 foto (ricevute ${opts.imageUrls.length})`);
+  }
+
+  // Step 1: upload unpublished (parallelo)
+  const photos = await Promise.all(
+    opts.imageUrls.map(url =>
+      metaPost<{ id: string }>(`/${cfg.pageId}/photos`, {
+        url,
+        published: 'false',
+      })
+    )
+  );
+  const photoIds = photos.map(p => p.id);
+
+  // Step 2: feed post con attached_media
+  const attached_media = JSON.stringify(
+    photoIds.map(id => ({ media_fbid: id }))
+  );
+  const post = await metaPost<{ id: string }>(
+    `/${cfg.pageId}/feed`,
+    {
+      message: opts.caption ?? '',
+      attached_media,
+    }
+  );
+  // post.id format: "{pageId}_{postId}" — è anche il post_id
+
+  let permalink_url: string | undefined;
+  try {
+    const meta = await metaGet<{ permalink_url?: string }>(
+      `/${post.id}?fields=permalink_url`
+    );
+    permalink_url = meta.permalink_url;
+  } catch { /* ignore */ }
+
+  return { id: post.id, post_id: post.id, permalink_url };
+}
+
+/* ──────────────────────────────────────────────────────────────────
    Instagram — Story Photo (2-step, media_type=STORIES)
    Sparisce dopo 24h. Stessa API del Photo post Feed ma con
    media_type=STORIES. JPEG/PNG only (no WebP).
