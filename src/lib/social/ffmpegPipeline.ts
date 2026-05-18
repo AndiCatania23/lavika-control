@@ -17,21 +17,37 @@ import { readFile, unlink } from 'node:fs/promises';
 
 const FFMPEG_BIN = process.env.FFMPEG_BIN ?? 'ffmpeg';
 
-function runFfmpeg(args: string[], timeoutMs: number): Promise<boolean> {
+interface FfmpegResult {
+  ok: boolean;
+  /** stderr tail (ultimi ~2KB) — usato per debug quando ok=false. */
+  stderr: string;
+  /** Exit code o null se killed per timeout/error. */
+  exitCode: number | null;
+}
+
+function runFfmpeg(args: string[], timeoutMs: number): Promise<FfmpegResult> {
   return new Promise((resolve) => {
     const proc = spawn(FFMPEG_BIN, args, { stdio: ['ignore', 'ignore', 'pipe'] });
+    let stderrBuf = '';
+    const STDERR_MAX = 2048;
+    proc.stderr?.on('data', (d) => {
+      stderrBuf += d.toString();
+      if (stderrBuf.length > STDERR_MAX) {
+        stderrBuf = stderrBuf.slice(-STDERR_MAX);
+      }
+    });
     let settled = false;
-    const settle = (ok: boolean) => {
+    const settle = (r: FfmpegResult) => {
       if (!settled) {
         settled = true;
-        resolve(ok);
+        resolve(r);
       }
     };
-    proc.on('close', (code) => settle(code === 0));
-    proc.on('error', () => settle(false));
+    proc.on('close', (code) => settle({ ok: code === 0, stderr: stderrBuf.trim(), exitCode: code }));
+    proc.on('error', (err) => settle({ ok: false, stderr: `spawn error: ${err.message}`, exitCode: null }));
     const timer = setTimeout(() => {
       proc.kill('SIGKILL');
-      settle(false);
+      settle({ ok: false, stderr: `timeout after ${timeoutMs}ms`, exitCode: null });
     }, timeoutMs);
     proc.on('close', () => clearTimeout(timer));
   });
@@ -70,8 +86,9 @@ export async function cutAudioSegment(
     outputPath,
   ];
 
-  const ok = await runFfmpeg(args, opts.timeoutMs ?? 60_000);
-  if (!ok) {
+  const result = await runFfmpeg(args, opts.timeoutMs ?? 60_000);
+  if (!result.ok) {
+    console.error(`[ffmpeg cutAudioSegment] failed (exit=${result.exitCode}): ${result.stderr}`);
     await unlink(outputPath).catch(() => {});
     return null;
   }
@@ -128,8 +145,9 @@ export async function cutVideoSegment(
     outputPath,
   ];
 
-  const ok = await runFfmpeg(args, opts.timeoutMs ?? 120_000);
-  if (!ok) {
+  const result = await runFfmpeg(args, opts.timeoutMs ?? 120_000);
+  if (!result.ok) {
+    console.error(`[ffmpeg cutVideoSegment] failed (exit=${result.exitCode}): ${result.stderr}`);
     await unlink(outputPath).catch(() => {});
     return null;
   }
@@ -202,10 +220,11 @@ export async function generateWaveformPng(
     outputPath,
   ];
 
-  const ok = await runFfmpeg(args, opts.timeoutMs ?? 30_000);
+  const result = await runFfmpeg(args, opts.timeoutMs ?? 30_000);
 
   if (cleanupInput) await unlink(inputPath).catch(() => {});
-  if (!ok) {
+  if (!result.ok) {
+    console.error(`[ffmpeg generateWaveformPng] failed (exit=${result.exitCode}): ${result.stderr}`);
     await unlink(outputPath).catch(() => {});
     return null;
   }

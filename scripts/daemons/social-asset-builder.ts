@@ -552,20 +552,43 @@ async function runRecipe(recipe: string, params: Record<string, unknown>): Promi
         // Step 4a: video clip cut del segment del quote (NUOVO — visual key)
         // Mostra il giocatore che parla nel video finale. L'audio è incluso
         // nel clip MP4 stesso (no <Audio> separato necessario).
-        const clipCut = await cutVideoSegment(visualUrl, segmentStart, segmentEnd, {
-          jobId: p.episodeId,
-        });
-        if (clipCut) {
-          const clipKey = `social/_assets/${p.episodeId}/clip-${Date.now()}.mp4`;
-          quoteClipUrl = await uploadToR2(clipKey, clipCut.buffer, 'video/mp4');
-          log('interview_story_video: quote clip uploaded', {
-            durationSec: clipCut.durationSec,
-            kb: Math.round(clipCut.buffer.byteLength / 1024),
-            url: quoteClipUrl,
+        //
+        // Retry 3x con backoff: stesso pattern di Whisper. Caso reale
+        // Toscano 11:49 UTC del 18-05-2026: tutti e 3 gli step ffmpeg
+        // (cut, face, audio) hanno fallito istantaneamente — probabile
+        // glitch transient di rete sul TS della HLS. Senza retry il
+        // daemon proseguiva fino al render Remotion con hasQuoteClip:false
+        // → MP4 di 3.7MB con solo gradient/testo, niente video/audio.
+        // Se anche dopo 3 retry fallisce, ABORT del job (throw) invece
+        // di renderizzare un video vuoto: l'utente vede status=failed
+        // e può rilanciare con clarity.
+        let clipCut = null as Awaited<ReturnType<typeof cutVideoSegment>>;
+        const CLIP_MAX_ATTEMPTS = 3;
+        for (let attempt = 1; attempt <= CLIP_MAX_ATTEMPTS; attempt++) {
+          clipCut = await cutVideoSegment(visualUrl, segmentStart, segmentEnd, {
+            jobId: p.episodeId,
           });
-        } else {
-          log('interview_story_video: video clip cut failed, falling back to face frame static');
+          if (clipCut) break;
+          if (attempt < CLIP_MAX_ATTEMPTS) {
+            const backoffMs = 2500 * attempt; // 2.5s, 5s
+            log('interview_story_video: video clip cut attempt failed, retrying', {
+              attempt, backoffMs,
+            });
+            await new Promise((r) => setTimeout(r, backoffMs));
+          }
         }
+        if (!clipCut) {
+          throw new Error(
+            'interview_story_video: video clip cut failed after 3 attempts — refusing to render empty story video',
+          );
+        }
+        const clipKey = `social/_assets/${p.episodeId}/clip-${Date.now()}.mp4`;
+        quoteClipUrl = await uploadToR2(clipKey, clipCut.buffer, 'video/mp4');
+        log('interview_story_video: quote clip uploaded', {
+          durationSec: clipCut.durationSec,
+          kb: Math.round(clipCut.buffer.byteLength / 1024),
+          url: quoteClipUrl,
+        });
 
         // Step 4b: face frame extraction come fallback statico (solo se clip mancante)
         const frameRes = await extractBestFaceFrame(visualUrl, {
