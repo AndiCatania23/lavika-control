@@ -153,6 +153,7 @@ export const defaultInterviewStoryVideoProps: InterviewStoryVideoProps = {
   },
   episodeFormat: 'match-reaction',
   quote: 'Abbiamo lottato fino alla fine.',
+  quoteSubSegments: [],
   verbToHighlight: 'lottato',
   episodeForMockup: {
     title: 'Catania – Cerignola',
