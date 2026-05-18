@@ -55,6 +55,14 @@ interface SourceRow {
     titleContains?: string[];
   } | null;
   season: { name?: string; startDate?: string; endDate?: string } | null;
+  processing?: {
+    order?: string;
+    skipThumbnail?: boolean;
+    thumbnail_bucket?: string;
+    thumbnail_prefix?: string;
+    resolveSpeaker?: boolean;
+    resolveMissingUploadDate?: boolean;
+  } | null;
 }
 
 interface EpisodeStats {
@@ -606,6 +614,12 @@ interface NewSourceForm {
   min_duration: string;     // sec
   max_duration: string;     // sec
   enabled: boolean;
+  // Default: il sync NON scarica la thumbnail e l'episodio eredita la cover
+  // del suo content_format. Attivare solo se la source ha thumbnail dedicate
+  // su R2/S3 (es. canale ufficiale Catania per highlights).
+  download_thumbnail: boolean;
+  thumbnail_bucket: string;
+  thumbnail_prefix: string;
 }
 
 function emptyNewSourceForm(): NewSourceForm {
@@ -623,6 +637,9 @@ function emptyNewSourceForm(): NewSourceForm {
     min_duration: '60',
     max_duration: '3600',
     enabled: true,
+    download_thumbnail: false,
+    thumbnail_bucket: 'lavika-media',
+    thumbnail_prefix: 'episodes',
   };
 }
 
@@ -638,6 +655,27 @@ function slugifyId(input: string): string {
 
 function csvList(s: string): string[] {
   return s.split(',').map(p => p.trim()).filter(Boolean);
+}
+
+/**
+ * Costruisce il blocco `processing` per video_sources in base alle scelte del form.
+ * Se download_thumbnail è OFF (default): aggiunge skipThumbnail=true così il sync
+ * salta il caricamento thumbnail e l'episodio eredita la cover del format
+ * (vedi `videoAccessCatalogSync` lato app).
+ * Se ON: include bucket/prefix per il caricamento thumbnail dedicato.
+ */
+function buildProcessing(form: NewSourceForm): Record<string, unknown> {
+  const base: Record<string, unknown> = {
+    order: 'uploadDate-asc',
+    resolveMissingUploadDate: true,
+  };
+  if (form.download_thumbnail) {
+    base.thumbnail_bucket = form.thumbnail_bucket || 'lavika-media';
+    base.thumbnail_prefix = form.thumbnail_prefix || 'episodes';
+  } else {
+    base.skipThumbnail = true;
+  }
+  return base;
 }
 
 /**
@@ -684,12 +722,7 @@ function buildSourcePayload(form: NewSourceForm, formatId: string) {
     platform: form.platform,
     channel: form.platform === 'manual' ? null : form.channel,
     filters,
-    processing: {
-      order: 'uploadDate-asc',
-      thumbnail_bucket: 'lavika-media',
-      thumbnail_prefix: 'episodes',
-      resolveMissingUploadDate: true,
-    },
+    processing: buildProcessing(form),
     naming,
     season: Object.keys(seasonObj).length > 0 ? seasonObj : null,
     ui_format: {
@@ -853,6 +886,46 @@ function NewSourceFormView({
         </FieldGroup>
       </div>
 
+      <FieldGroup label="Copertina episodio">
+        <label className="hstack" style={{
+          gap: 10,
+          fontSize: 15,
+          cursor: 'pointer',
+          padding: '10px 4px',
+          userSelect: 'none',
+        }}>
+          <input
+            type="checkbox"
+            checked={value.download_thumbnail}
+            onChange={(e) => update({ download_thumbnail: e.target.checked })}
+            style={{ width: 20, height: 20 }}
+          />
+          Scarica copertina dal video
+        </label>
+        <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '2px 0 0 30px' }}>
+          {value.download_thumbnail
+            ? 'Il sync carica la thumbnail YouTube su R2 per ogni episodio.'
+            : 'L\'episodio eredita la copertina del format (consigliato se non hai thumbnail dedicate).'}
+        </p>
+      </FieldGroup>
+
+      {value.download_thumbnail && (
+        <div className="hstack" style={{ gap: 'var(--s2)' }}>
+          <FieldGroup label="Bucket R2/S3">
+            <input type="text" value={value.thumbnail_bucket}
+              onChange={(e) => update({ thumbnail_bucket: e.target.value })}
+              placeholder="lavika-media"
+              className="input" style={{ width: '100%', minHeight: 44, fontSize: 14, padding: '10px 12px', fontFamily: 'var(--font-mono)' }} />
+          </FieldGroup>
+          <FieldGroup label="Prefix path">
+            <input type="text" value={value.thumbnail_prefix}
+              onChange={(e) => update({ thumbnail_prefix: e.target.value })}
+              placeholder="episodes"
+              className="input" style={{ width: '100%', minHeight: 44, fontSize: 14, padding: '10px 12px', fontFamily: 'var(--font-mono)' }} />
+          </FieldGroup>
+        </div>
+      )}
+
       <label className="hstack" style={{
         gap: 10,
         fontSize: 15,
@@ -906,6 +979,8 @@ function NewSourceFormView({
 function sourceRowToForm(src: SourceRow): NewSourceForm {
   const platform: 'youtube' | 'manual' =
     src.platform === 'youtube' ? 'youtube' : 'manual';
+  // skipThumbnail=true significa "non scaricare" → toggle OFF nel form
+  const skipThumb = src.processing?.skipThumbnail === true;
   return {
     id: src.id,
     id_touched: true,
@@ -920,6 +995,9 @@ function sourceRowToForm(src: SourceRow): NewSourceForm {
     min_duration: src.filters?.minDuration != null ? String(src.filters.minDuration) : '',
     max_duration: src.filters?.maxDuration != null ? String(src.filters.maxDuration) : '',
     enabled: src.enabled,
+    download_thumbnail: !skipThumb,
+    thumbnail_bucket: src.processing?.thumbnail_bucket ?? 'lavika-media',
+    thumbnail_prefix: src.processing?.thumbnail_prefix ?? 'episodes',
   };
 }
 
@@ -965,6 +1043,9 @@ function buildSourcePatchPayload(form: NewSourceForm) {
     },
     season: Object.keys(seasonObj).length > 0 ? seasonObj : null,
     enabled: form.enabled,
+    // Riallinea processing in base al toggle "Scarica copertina": OFF →
+    // skipThumbnail=true (sync salta thumbnail, episodi ereditano cover format).
+    processing: buildProcessing(form),
   };
 }
 
