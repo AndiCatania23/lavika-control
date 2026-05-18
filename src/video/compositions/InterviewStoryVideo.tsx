@@ -114,6 +114,22 @@ export const interviewStoryVideoSchema = z.object({
   quoteClipUrl: z.string().url().optional(),
   faceFrameUrl: z.string().url().optional(),
   quote: z.string(),
+  /** Sub-segments Whisper del quote, in coordinate RELATIVE alla durata
+   *  del clip (start=0 = inizio quote audio). Quando presenti e ≥ 2,
+   *  Scene 1 mostra il testo in modalità "karaoke" sincronizzata con
+   *  l'audio (una linea alla volta, fade tra una e l'altra) invece di
+   *  un testo statico unico che riempirebbe la story. Audio resta
+   *  integrale, solo il testo overlay si segmenta. Se array vuoto o
+   *  un solo segment → fallback statico (testo intero in una volta). */
+  quoteSubSegments: z
+    .array(
+      z.object({
+        start: z.number().min(0),
+        end: z.number().min(0),
+        text: z.string(),
+      }),
+    )
+    .default([]),
   verbToHighlight: z.string().optional(),
   waveformPngUrl: z.string().url().optional(),
   audioUrl: z.string().url().optional(),
@@ -565,15 +581,18 @@ const IntroVS: React.FC<{
    SCENE 1 — QuoteCore (face + quote + waveform + AUDIO)
    ────────────────────────────────────────────────────────────────── */
 
+interface QuoteSubSegment { start: number; end: number; text: string }
+
 const QuoteCore: React.FC<{
   quoteClipUrl?: string;
   faceFrameUrl?: string;
   quote: string;
+  quoteSubSegments?: QuoteSubSegment[];
   verbToHighlight?: string;
   waveformPngUrl?: string;
   audioUrl?: string;
   duration: number;
-}> = ({ quoteClipUrl, faceFrameUrl, quote, verbToHighlight, waveformPngUrl, audioUrl, duration }) => {
+}> = ({ quoteClipUrl, faceFrameUrl, quote, quoteSubSegments = [], verbToHighlight, waveformPngUrl, audioUrl, duration }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const fade = sceneOpacity(frame, duration);
@@ -782,20 +801,72 @@ const QuoteCore: React.FC<{
           “
         </div>
 
-        {/* Quote text */}
-        <div
-          style={{
-            fontFamily: FONT_DISPLAY,
-            fontSize: quote.length > 60 ? 78 : quote.length > 40 ? 92 : 108,
-            lineHeight: 1.05,
-            letterSpacing: -1,
-            color: COLOR_WHITE,
-            textTransform: 'uppercase',
-            textShadow: '0 4px 20px rgba(0,0,0,0.8)',
-          }}
-        >
-          {renderQuoteText(quote)}
-        </div>
+        {/* Quote text — modalità karaoke se ci sono sub-segments Whisper
+            sincronizzati con l'audio, fallback testo statico altrimenti. */}
+        {(() => {
+          const useKaraoke = quoteSubSegments.length >= 2;
+          const tsec = frame / fps;
+          const KARAOKE_FADE_SEC = 0.18;
+
+          if (useKaraoke) {
+            // Trova il segment attivo al tempo corrente. Se nessuno match
+            // (es. micro-gap tra segments), mostra l'ultimo già iniziato.
+            let activeIdx = quoteSubSegments.findIndex(
+              (s) => tsec >= s.start && tsec < s.end,
+            );
+            if (activeIdx === -1) {
+              for (let i = quoteSubSegments.length - 1; i >= 0; i--) {
+                if (tsec >= quoteSubSegments[i].start) { activeIdx = i; break; }
+              }
+            }
+            if (activeIdx === -1) return null; // prima del primo segment
+
+            const active = quoteSubSegments[activeIdx];
+            const text = active.text;
+            // Fade-in nei primi KARAOKE_FADE_SEC dopo l'inizio segment,
+            // fade-out negli ultimi KARAOKE_FADE_SEC prima della fine.
+            const fadeIn = Math.min(1, Math.max(0, (tsec - active.start) / KARAOKE_FADE_SEC));
+            const fadeOut = Math.min(1, Math.max(0, (active.end - tsec) / KARAOKE_FADE_SEC));
+            const segOpacity = Math.min(fadeIn, fadeOut);
+
+            return (
+              <div
+                style={{
+                  fontFamily: FONT_DISPLAY,
+                  // Karaoke: ogni segment è 1-2 righe (4-8s parlato).
+                  // Font scaling meno aggressivo perché la stringa è breve.
+                  fontSize: text.length > 60 ? 88 : text.length > 35 ? 100 : 116,
+                  lineHeight: 1.05,
+                  letterSpacing: -1,
+                  color: COLOR_WHITE,
+                  textTransform: 'uppercase',
+                  textShadow: '0 4px 20px rgba(0,0,0,0.8)',
+                  opacity: segOpacity,
+                  minHeight: 240, // riserva spazio costante → no jump tra segment di lunghezza diversa
+                }}
+              >
+                {renderQuoteText(text)}
+              </div>
+            );
+          }
+
+          // Fallback: testo intero statico (vecchio comportamento).
+          return (
+            <div
+              style={{
+                fontFamily: FONT_DISPLAY,
+                fontSize: quote.length > 60 ? 78 : quote.length > 40 ? 92 : 108,
+                lineHeight: 1.05,
+                letterSpacing: -1,
+                color: COLOR_WHITE,
+                textTransform: 'uppercase',
+                textShadow: '0 4px 20px rgba(0,0,0,0.8)',
+              }}
+            >
+              {renderQuoteText(quote)}
+            </div>
+          );
+        })()}
 
         {/* Virgoletta chiusura big */}
         <div
@@ -1151,6 +1222,7 @@ export const InterviewStoryVideo: React.FC<InterviewStoryVideoProps> = ({
   quoteClipUrl,
   faceFrameUrl,
   quote,
+  quoteSubSegments = [],
   verbToHighlight,
   waveformPngUrl,
   audioUrl,
@@ -1169,6 +1241,7 @@ export const InterviewStoryVideo: React.FC<InterviewStoryVideoProps> = ({
           quoteClipUrl={quoteClipUrl}
           faceFrameUrl={faceFrameUrl}
           quote={quote}
+          quoteSubSegments={quoteSubSegments}
           verbToHighlight={verbToHighlight}
           waveformPngUrl={waveformPngUrl}
           audioUrl={audioUrl}

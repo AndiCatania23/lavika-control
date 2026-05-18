@@ -425,6 +425,11 @@ async function runRecipe(recipe: string, params: Record<string, unknown>): Promi
       let waveformPngUrl: string | undefined;
       let segmentStart = 0;
       let segmentEnd = 8;
+      // Sub-segments del quote in coordinate ASSOLUTE (dal video sorgente).
+      // Vengono shiftate a coordinate RELATIVE al clip prima del passaggio
+      // a Remotion (sotto, in inputProps). Default vuoto → Remotion userà
+      // il fallback testo statico se la lista è vuota.
+      let quoteSubSegmentsAbs: Array<{ start: number; end: number; text: string }> = [];
 
       if (videoUrl) {
         // Step 2: Whisper transcribe — TRIM ai primi 180s.
@@ -467,6 +472,9 @@ async function runRecipe(recipe: string, params: Record<string, unknown>): Promi
           if (selected) {
             quote = selected.quote;
             verbToHighlight = selected.verbToHighlight;
+            // Salva sub-segments per il rendering karaoke (timestamps assoluti,
+            // shiftati a relativi sotto prima di inviarli al Remotion).
+            quoteSubSegmentsAbs = selected.subSegments;
 
             // Cap hard del testo overlay a 90 caratteri. Anche con MAX_QUOTE_SEC=8
             // un parlatore veloce può infilare 100+ caratteri, e il render
@@ -658,12 +666,26 @@ async function runRecipe(recipe: string, params: Record<string, unknown>): Promi
       const fmtLabel = p.episodeFormat === 'press-conference' ? 'Press Conference' : 'Match Reaction';
       const fmtSubtitle = p.episodeFormat === 'press-conference' ? 'Conferenza stampa' : 'Interviste post partita';
 
+      // Shift sub-segments a coordinate clip-relative (segmentStart = 0).
+      // Il Remotion li riceve come timestamps interni alla durata del clip,
+      // così può sincronizzarsi col frame corrente senza sapere il source.
+      // Filter: tieni solo quelli che cadono effettivamente dentro al clip
+      // (start >= segmentStart && end <= segmentEnd, con tolleranza).
+      const quoteSubSegments = quoteSubSegmentsAbs
+        .filter((s) => s.end > segmentStart && s.start < segmentEnd)
+        .map((s) => ({
+          start: Math.max(0, s.start - segmentStart),
+          end: Math.min(segmentEnd - segmentStart, s.end - segmentStart),
+          text: s.text,
+        }));
+
       const inputProps = {
         matchData,
         episodeFormat: p.episodeFormat as 'match-reaction' | 'press-conference',
         quoteClipUrl,
         faceFrameUrl,
         quote,
+        quoteSubSegments,
         verbToHighlight,
         waveformPngUrl,
         audioUrl,

@@ -95,6 +95,13 @@ export interface SelectedQuote {
   segmentIndex: number;
   /** Source: 'llm' (Ollama refined) | 'regex' (deterministic fallback) */
   source: 'llm' | 'regex';
+  /**
+   * Sub-segments individuali Whisper che compongono il quote (post-expand).
+   * Timestamps in secondi ASSOLUTI rispetto all'inizio del video sorgente.
+   * Il consumer (social-asset-builder) li trasforma in relativi al clip
+   * tagliato prima di passarli al Remotion per il rendering karaoke.
+   */
+  subSegments: WhisperSegment[];
 }
 
 /** Whitelist verbi d'azione "forti" per match-reaction / press-conference.
@@ -314,6 +321,9 @@ function selectQuoteRegex(segments: WhisperSegment[]): SelectedQuote | null {
     segmentEnd: seg.end,
     segmentIndex: sel.idx,
     source: 'regex',
+    // Seed iniziale: il segment scelto. expandQuoteWithContinuation
+    // popolerà con gli eventuali segments di continuazione.
+    subSegments: [{ start: seg.start, end: seg.end, text: seg.text.trim() }],
   };
 }
 
@@ -420,6 +430,9 @@ REGOLE CRITICHE:
       segmentEnd: seg.end,
       segmentIndex: segIdx,
       source: 'llm',
+      // Seed iniziale: il segment scelto. expandQuoteWithContinuation
+      // popolerà con gli eventuali segments di continuazione.
+      subSegments: [{ start: seg.start, end: seg.end, text: quoteText }],
     };
   } catch {
     clearTimeout(timeout);
@@ -461,10 +474,16 @@ function expandQuoteWithContinuation(
   const startIdx = allSegments.findIndex(
     (s) => Math.abs(s.start - selected.segmentStart) < 0.1,
   );
-  if (startIdx === -1) return selected;
+  if (startIdx === -1) {
+    return { ...selected, subSegments: [{ start: selected.segmentStart, end: selected.segmentEnd, text: selected.quote }] };
+  }
 
   let endTime = selected.segmentEnd;
   let quote = selected.quote;
+  // Inizia con il segment "seme" (quello già selezionato).
+  const subSegments: WhisperSegment[] = [
+    { start: allSegments[startIdx].start, end: allSegments[startIdx].end, text: allSegments[startIdx].text.trim() },
+  ];
 
   for (let i = startIdx + 1; i < allSegments.length; i++) {
     const next = allSegments[i];
@@ -475,9 +494,10 @@ function expandQuoteWithContinuation(
     // Aggiungi come continuazione del concetto
     quote = `${quote} ${next.text.trim()}`.replace(/\s+/g, ' ').trim();
     endTime = next.end;
+    subSegments.push({ start: next.start, end: next.end, text: next.text.trim() });
   }
 
-  return { ...selected, quote, segmentEnd: endTime };
+  return { ...selected, quote, segmentEnd: endTime, subSegments };
 }
 
 export async function selectQuoteFromSegments(
