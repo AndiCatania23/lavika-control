@@ -10,21 +10,18 @@ import { useToast } from '@/lib/toast';
 import { Play, Clock, Calendar, ChevronRight, Workflow, Video, RefreshCw, Settings } from 'lucide-react';
 import Link from 'next/link';
 
-// Map from quickSource.id → Supabase content_formats.id
-const SOURCE_FORMAT_MAP: Record<string, string> = {
-  'catanista-live':              'catanista',
-  'serie-c-2025-2026':           'highlights',
-  'catania-press-conference':    'press-conference',
-  'unica-sport-live':            'unica-sport',
-  'match-reaction-2025-2026':    'match-reaction',
-};
-
-const QUICK_SOURCES = [
-  { id: 'catanista-live',              title: 'CATANISTA LIVE'    },
-  { id: 'serie-c-2025-2026',           title: 'HIGHLIGHTS'        },
-  { id: 'catania-press-conference',    title: 'PRESS CONFERENCE'  },
-  { id: 'unica-sport-live',            title: 'UNICA SPORT'       },
-  { id: 'match-reaction-2025-2026',    title: 'MATCH REACTION'    },
+/**
+ * Quick sync per format. L'API risolve a runtime la source ENABLED per
+ * quel format_id (in video_sources). Cosi' non serve mantenere mapping
+ * hardcoded che diventano stantii ad ogni cambio stagione (es. quando
+ * 'serie-c-2025-2026' diventa disabled e arriva 'play-off-2025-2026').
+ */
+const QUICK_FORMATS = [
+  { formatId: 'catanista',         title: 'CATANISTA LIVE'   },
+  { formatId: 'highlights',        title: 'HIGHLIGHTS'       },
+  { formatId: 'press-conference',  title: 'PRESS CONFERENCE' },
+  { formatId: 'unica-sport',       title: 'UNICA SPORT'      },
+  { formatId: 'match-reaction',    title: 'MATCH REACTION'   },
 ];
 
 function formatDate(date: string | null) {
@@ -36,7 +33,7 @@ export default function JobsPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [runningJobId, setRunningJobId] = useState<string | null>(null);
-  const [runningSourceId, setRunningSourceId] = useState<string | null>(null);
+  const [runningFormatId, setRunningFormatId] = useState<string | null>(null);
   const [hasRunningJob, setHasRunningJob] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [formatCovers, setFormatCovers] = useState<Record<string, string>>({});
@@ -90,10 +87,14 @@ export default function JobsPage() {
     }, 6000);
   };
 
-  const handleRunSource = async (sourceId: string) => {
-    setRunningSourceId(sourceId);
+  const handleRunFormat = async (formatId: string) => {
+    setRunningFormatId(formatId);
     try {
-      const response = await fetch('/api/jobs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jobId: 'job_sync_video', triggeredBy: 'manual', source: sourceId }) });
+      const response = await fetch('/api/jobs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId: 'job_sync_video', triggeredBy: 'manual', formatId }),
+      });
       if (!response.ok) {
         if (response.status === 409) { showToast('warning', 'Un sync è già in corso — riprova tra poco'); setHasRunningJob(true); }
         else {
@@ -101,17 +102,19 @@ export default function JobsPage() {
           showToast('error', `Trigger fallito: ${body?.error || response.status}`);
         }
       } else {
-        const payload = await response.json().catch(() => null) as { run?: { id?: string } } | null;
+        // L'API risolve formatId → sourceId enabled e lo torna in resolvedSource.
+        const payload = await response.json().catch(() => null) as { run?: { id?: string }; resolvedSource?: string } | null;
         const runId = payload?.run?.id;
-        if (runId) saveRunSourceMapping(runId, sourceId);
-        showToast('success', `Accodato: ${sourceId}`);
+        const resolvedSource = payload?.resolvedSource ?? formatId;
+        if (runId) saveRunSourceMapping(runId, resolvedSource);
+        showToast('success', `Accodato: ${resolvedSource}`);
         setPendingCount(c => c + 1);
       }
     } catch (error) { showToast('error', `Errore rete: ${error instanceof Error ? error.message : 'unknown'}`); }
     setTimeout(async () => {
       const { getJobs: reloadJobs } = await import('@/lib/data');
       reloadJobs().then(data => setJobs(data));
-      setRunningSourceId(null);
+      setRunningFormatId(null);
       refreshQueueState();
     }, 6000);
   };
@@ -165,18 +168,18 @@ export default function JobsPage() {
         <div className="flex items-center gap-2 mb-3">
           <Video className="w-4 h-4 text-[color:var(--accent-raw)]" strokeWidth={1.75} />
           <h2 className="typ-h2 grow">Sync rapido</h2>
-          <span className="typ-micro">{QUICK_SOURCES.length} source</span>
+          <span className="typ-micro">{QUICK_FORMATS.length} format</span>
         </div>
         <div className="vstack-tight">
-          {QUICK_SOURCES.map(source => {
-            const coverUrl = formatCovers[SOURCE_FORMAT_MAP[source.id]];
-            const running = runningSourceId === source.id;
+          {QUICK_FORMATS.map(fmt => {
+            const coverUrl = formatCovers[fmt.formatId];
+            const running = runningFormatId === fmt.formatId;
             return (
-              <div key={source.id} className="card" style={{ padding: 10, display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div key={fmt.formatId} className="card" style={{ padding: 10, display: 'flex', alignItems: 'center', gap: 12 }}>
                 {/* Thumb 16:9 (72×41) */}
                 <div className="shrink-0 rounded-[var(--r-sm)] overflow-hidden" style={{ width: 72, height: 41, background: 'var(--card-muted)' }}>
                   {coverUrl ? (
-                    <Image src={coverUrl} alt={source.title} width={288} height={162} className="w-full h-full object-cover" />
+                    <Image src={coverUrl} alt={fmt.title} width={288} height={162} className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
                       <Video className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
@@ -186,13 +189,13 @@ export default function JobsPage() {
 
                 {/* Title + subtitle */}
                 <div className="grow min-w-0">
-                  <div className="typ-label truncate">{source.title}</div>
+                  <div className="typ-label truncate">{fmt.title}</div>
                   <div className="typ-micro truncate">Sync Video</div>
                 </div>
 
                 {/* Actions */}
                 <button
-                  onClick={() => handleRunSource(source.id)}
+                  onClick={() => handleRunFormat(fmt.formatId)}
                   disabled={running || hasRunningJob}
                   className="btn btn-primary btn-sm shrink-0"
                 >
@@ -202,7 +205,7 @@ export default function JobsPage() {
                   </span>
                 </button>
                 <button
-                  onClick={() => router.push(`/jobs/job_sync_video?source=${encodeURIComponent(source.id)}`)}
+                  onClick={() => router.push(`/jobs/job_sync_video?formatId=${encodeURIComponent(fmt.formatId)}`)}
                   className="btn btn-ghost btn-sm shrink-0"
                   aria-label="Dettagli"
                 >

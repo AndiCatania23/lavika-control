@@ -49,15 +49,57 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 });
   }
 
-  const { jobId, triggeredBy = 'manual', source, facebook_url } = await request.json() as {
+  const { jobId, triggeredBy = 'manual', source, formatId, facebook_url } = await request.json() as {
     jobId?: string;
     triggeredBy?: string;
     source?: string;
+    formatId?: string;
     facebook_url?: string;
   };
 
   if (jobId !== 'job_sync_video') {
     return NextResponse.json({ error: 'Unsupported job id' }, { status: 400 });
+  }
+
+  // ── Risoluzione source ──────────────────────────────────────────────
+  // Due input supportati:
+  //   - formatId (preferito): risolviamo a runtime la source enabled per
+  //     quel format, cosi' i bottoni quick-sync non puntano mai a source
+  //     stantie (es. una stagione vecchia disabilitata).
+  //   - source (legacy): la valida e rifiuta se enabled=false (evita di
+  //     processare playlist abbandonate per errore).
+  let resolvedSource: string | null = null;
+  if (formatId) {
+    const { data: matchedSources, error: lookupError } = await supabaseServer
+      .from('video_sources')
+      .select('id')
+      .eq('format_id', formatId)
+      .eq('enabled', true)
+      .order('updated_at', { ascending: false })
+      .limit(1);
+    if (lookupError) {
+      return NextResponse.json({ success: false, error: `Source lookup failed: ${lookupError.message}` }, { status: 500 });
+    }
+    if (!matchedSources || matchedSources.length === 0) {
+      return NextResponse.json({ success: false, error: `Nessuna source abilitata per format '${formatId}'` }, { status: 404 });
+    }
+    resolvedSource = matchedSources[0].id;
+  } else if (source) {
+    const { data: requestedSource, error: srcError } = await supabaseServer
+      .from('video_sources')
+      .select('id, enabled')
+      .eq('id', source)
+      .maybeSingle();
+    if (srcError) {
+      return NextResponse.json({ success: false, error: `Source check failed: ${srcError.message}` }, { status: 500 });
+    }
+    if (!requestedSource) {
+      return NextResponse.json({ success: false, error: `Source '${source}' non trovata` }, { status: 404 });
+    }
+    if (!requestedSource.enabled) {
+      return NextResponse.json({ success: false, error: `Source '${source}' è disabilitata` }, { status: 400 });
+    }
+    resolvedSource = requestedSource.id;
   }
 
   // Block only if a sync is actively running. Pending jobs are fine — the
@@ -81,7 +123,7 @@ export async function POST(request: NextRequest) {
     .insert({
       job_id: 'job_sync_video',
       status: 'pending',
-      source: source || null,
+      source: resolvedSource,
       facebook_url: facebook_url || null,
       triggered_by: triggeredBy,
     })
@@ -110,7 +152,7 @@ export async function POST(request: NextRequest) {
     errorCount: 0,
   };
 
-  return NextResponse.json({ success: true, run });
+  return NextResponse.json({ success: true, run, resolvedSource });
 }
 
 export async function HEAD() {
