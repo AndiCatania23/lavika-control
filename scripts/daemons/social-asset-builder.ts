@@ -438,7 +438,22 @@ async function runRecipe(recipe: string, params: Record<string, unknown>): Promi
           model: 'large-v3', trimSec: WHISPER_TRIM_SEC,
         });
         const t0 = Date.now();
-        const transcript = await whisperTranscribe(videoUrl, { endSec: WHISPER_TRIM_SEC });
+        // Retry con backoff: Whisper può fallire in modo transient quando
+        // l'HLS è stato appena caricato (segmenti non ancora propagati su CDN,
+        // ffmpeg timeout di lettura). Senza retry il job procede a renderizzare
+        // un video vuoto (no clip/audio/face), come è successo per Forte
+        // 11:22 UTC del 18-05-2026 (fail in 4s).
+        let transcript = null as Awaited<ReturnType<typeof whisperTranscribe>>;
+        const WHISPER_MAX_ATTEMPTS = 3;
+        for (let attempt = 1; attempt <= WHISPER_MAX_ATTEMPTS; attempt++) {
+          transcript = await whisperTranscribe(videoUrl, { endSec: WHISPER_TRIM_SEC });
+          if (transcript) break;
+          if (attempt < WHISPER_MAX_ATTEMPTS) {
+            const backoffMs = 3000 * attempt; // 3s, 6s
+            log('interview_story_video: Whisper attempt failed, retrying', { attempt, backoffMs });
+            await new Promise((r) => setTimeout(r, backoffMs));
+          }
+        }
         if (transcript) {
           log('interview_story_video: Whisper done', {
             ms: Date.now() - t0,
@@ -452,6 +467,21 @@ async function runRecipe(recipe: string, params: Record<string, unknown>): Promi
           if (selected) {
             quote = selected.quote;
             verbToHighlight = selected.verbToHighlight;
+
+            // Cap hard del testo overlay a 90 caratteri. Anche con MAX_QUOTE_SEC=8
+            // un parlatore veloce può infilare 100+ caratteri, e il render
+            // Remotion (font Display 78px su 960px di larghezza) li trasforma
+            // in 6+ righe che riempiono la story. Tronchiamo all'ultimo spazio
+            // entro 90 char e aggiungiamo "..." per indicare continuazione.
+            // L'AUDIO resta integrale (8s del clip) — è solo il testo visivo
+            // ad essere accorciato. Trade-off accettabile: il tifoso ascolta
+            // la frase completa, vede una sintesi leggibile.
+            const QUOTE_TEXT_MAX_CHARS = 90;
+            if (quote.length > QUOTE_TEXT_MAX_CHARS) {
+              const cutAt = quote.slice(0, QUOTE_TEXT_MAX_CHARS).lastIndexOf(' ');
+              const safeCut = cutAt > QUOTE_TEXT_MAX_CHARS / 2 ? cutAt : QUOTE_TEXT_MAX_CHARS;
+              quote = quote.slice(0, safeCut).trim().replace(/[.,;:]+$/, '') + '…';
+            }
             // Padding HEAD + TAIL + estensione min 4s.
             //
             // HEAD (-700ms): parte il clip un attimo prima dell'inizio frase →
@@ -470,7 +500,12 @@ async function runRecipe(recipe: string, params: Record<string, unknown>): Promi
             const QUOTE_HEAD_PADDING_SEC = 0.7;
             const QUOTE_TAIL_PADDING_SEC = 0.5;
             const MIN_QUOTE_SEC = 4;
-            const MAX_QUOTE_SEC = 12;
+            // 8s cap (era 12s): a 12s il quote può arrivare a 110-130
+            // caratteri, che con font Display 78px su viewport 1080×1920
+            // (zona quote ~960×400px) genera 8-10 righe di testo che
+            // riempiono tutta la story. A 8s la frase tipica resta sotto
+            // gli 80 caratteri → 4-5 righe leggibili.
+            const MAX_QUOTE_SEC = 8;
             const paddedStart = Math.max(0, selected.segmentStart - QUOTE_HEAD_PADDING_SEC);
             const paddedEnd = selected.segmentEnd + QUOTE_TAIL_PADDING_SEC;
             const naturalDur = paddedEnd - paddedStart;
