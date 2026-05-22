@@ -3,7 +3,7 @@
 
 // Test free-tier: NB1 (2.5) ha free tier sotto certe quote, NB2 (3.1) pare paid-only.
 // Asset padding 1920x1080 a monte gestisce l'aspect ratio anche senza imageConfig.
-const GEMINI_IMAGE_MODEL = 'gemini-2.5-flash-image-preview';
+const GEMINI_IMAGE_MODEL = 'gemini-2.5-flash-image';
 const MODEL_SUPPORTS_IMAGE_CONFIG = GEMINI_IMAGE_MODEL.startsWith('gemini-3');
 const FETCH_TIMEOUT_MS = 8000;
 
