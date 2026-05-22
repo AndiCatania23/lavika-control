@@ -1,9 +1,10 @@
 // Gemini 2.5 Flash Image (Nano Banana) — versione minima.
 // 3 input → 1 chiamata: base template + foto soggetto + testo pill.
 
-// Test free-tier: NB1 (2.5) ha free tier sotto certe quote, NB2 (3.1) pare paid-only.
-// Asset padding 1920x1080 a monte gestisce l'aspect ratio anche senza imageConfig.
-const GEMINI_IMAGE_MODEL = 'gemini-2.5-flash-image';
+// Test free-tier 2026-05-22 BUSTED: NB1 (2.5) costa come NB2 (~€0.05/cover) ma
+// qualità nettamente inferiore (output cartoony, no realismo editoriale).
+// Tornato su NB2: stesso prezzo, qualità superiore. ~€9-15/mese a regime su volumi LAVIKA.
+const GEMINI_IMAGE_MODEL = 'gemini-3.1-flash-image-preview';
 const MODEL_SUPPORTS_IMAGE_CONFIG = GEMINI_IMAGE_MODEL.startsWith('gemini-3');
 const FETCH_TIMEOUT_MS = 8000;
 
