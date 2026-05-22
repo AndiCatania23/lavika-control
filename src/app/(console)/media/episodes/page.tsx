@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft, RefreshCw, Search, Film, Eye, EyeOff, ChevronLeft, ChevronRight,
-  X, Save, Upload, ImageIcon, Calendar, Trophy, User, Award, Megaphone,
+  X, Save, Upload, ImageIcon, Calendar, Trophy, User, Award, Megaphone, Tag,
 } from 'lucide-react';
 import { MediaPicker } from '@/components/media/MediaPicker';
 import { uploadFile } from '@/lib/mediaUpload';
@@ -40,6 +40,7 @@ interface EpisodeRow {
   title: string | null;
   description: string | null;
   season: string | null;
+  competition_season_id: string | null;
   published_at: string | null;
   thumbnail_url: string | null;
   min_badge: 'bronze' | 'silver' | 'gold' | null;
@@ -50,6 +51,13 @@ interface EpisodeRow {
   hls_url: string | null;
   speaker: SpeakerRef | null;
   match: MatchRef | null;
+}
+
+interface CompetitionSeasonRef {
+  id: string;
+  label: string;
+  competition_name: string;
+  season_label: string | null;
 }
 
 interface MatchPickerItem {
@@ -253,15 +261,19 @@ interface EpisodeDraft {
   min_badge: 'bronze' | 'silver' | 'gold' | null;
   published_at: string;
   thumbnail_url: string | null;
+  season: string;
+  competition_season_id: string | null;
 }
 
 function EpisodeDrawer({
-  episode, onClose, onSaved, players,
+  episode, onClose, onSaved, players, competitionSeasons, seasonsForFormat,
 }: {
   episode: EpisodeRow;
   onClose: () => void;
   onSaved: (updated: Partial<EpisodeRow> & { id: string }) => void;
   players: PlayerLite[];
+  competitionSeasons: CompetitionSeasonRef[];
+  seasonsForFormat: string[];
 }) {
   const [draft, setDraft] = useState<EpisodeDraft>({
     title: episode.title ?? '',
@@ -273,6 +285,8 @@ function EpisodeDrawer({
     min_badge: episode.min_badge,
     published_at: toLocalInputValue(episode.published_at),
     thumbnail_url: episode.thumbnail_url,
+    season: episode.season ?? '',
+    competition_season_id: episode.competition_season_id,
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -314,6 +328,8 @@ function EpisodeDrawer({
         min_badge: draft.min_badge,
         published_at: fromLocalInputValue(draft.published_at),
         thumbnail_url: draft.thumbnail_url,
+        season: draft.season.trim() || null,
+        competition_season_id: draft.competition_season_id,
       };
       const res = await fetch('/api/media/episodes', {
         method: 'PATCH',
@@ -430,6 +446,56 @@ function EpisodeDrawer({
             className="input"
             style={{ resize: 'vertical', minHeight: 72 }}
           />
+        </div>
+
+        {/* Season (free-text + datalist suggerimenti) — admin può cambiarla da telefono */}
+        <div className="vstack-tight">
+          <label className="typ-label inline-flex items-center gap-1.5">
+            <Tag className="w-3.5 h-3.5" /> Stagione (label)
+          </label>
+          <input
+            value={draft.season}
+            onChange={e => set('season', e.target.value)}
+            placeholder='es. "2025/2026" o "2026"'
+            list="episode-season-suggestions"
+            className="input"
+            inputMode="text"
+            autoCapitalize="off"
+            autoCorrect="off"
+            spellCheck={false}
+          />
+          {seasonsForFormat.length > 0 && (
+            <datalist id="episode-season-suggestions">
+              {seasonsForFormat.map(s => <option key={s} value={s} />)}
+            </datalist>
+          )}
+          <p className="typ-caption">
+            Stringa libera usata nel naming/UI (es. 2025/2026). Lascia vuoto per rimuoverla.
+          </p>
+        </div>
+
+        {/* Competition season (FK → competition_seasons) — controlla i filtri per
+            le pagine format (es. Playoff vs Serie C). Se NULL, l'episodio NON
+            apparirà nelle pagine filtrate per stagione/competizione. */}
+        <div className="vstack-tight">
+          <label className="typ-label inline-flex items-center gap-1.5">
+            <Trophy className="w-3.5 h-3.5" /> Competizione · Stagione
+          </label>
+          <select
+            value={draft.competition_season_id ?? ''}
+            onChange={e => set('competition_season_id', e.target.value || null)}
+            className="input"
+          >
+            <option value="">— Nessuna (auto da match) —</option>
+            {competitionSeasons.map(cs => (
+              <option key={cs.id} value={cs.id}>{cs.label}</option>
+            ))}
+          </select>
+          <p className="typ-caption">
+            Determina se l&apos;episodio appare nelle pagine filtrate per competizione (Playoff,
+            Serie C). Di norma viene popolata in automatico dal match collegato; impostala
+            manualmente per fixare episodi orfani.
+          </p>
         </div>
 
         {/* Match link */}
@@ -596,6 +662,7 @@ function EpisodeDrawer({
 export default function EpisodesPage() {
   const [formats, setFormats] = useState<SupaFormat[]>([]);
   const [players, setPlayers] = useState<PlayerLite[]>([]);
+  const [competitionSeasons, setCompetitionSeasons] = useState<CompetitionSeasonRef[]>([]);
   const [selectedFormat, setSelectedFormat] = useState<string>('');
   const [selectedSeason, setSelectedSeason] = useState<string>('');
   const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'hidden'>('all');
@@ -610,7 +677,7 @@ export default function EpisodesPage() {
 
   const [drawerEpisode, setDrawerEpisode] = useState<EpisodeRow | null>(null);
 
-  // Initial load: formats + players
+  // Initial load: formats + players + competition seasons (for drawer dropdown)
   useEffect(() => {
     fetch('/api/media/formats')
       .then(r => r.ok ? r.json() : [])
@@ -625,6 +692,12 @@ export default function EpisodesPage() {
       .then(r => r.ok ? r.json() : { players: [] })
       .then((d: { players: PlayerLite[] }) => setPlayers(Array.isArray(d.players) ? d.players : []))
       .catch(() => setPlayers([]));
+
+    fetch('/api/media/competition-seasons')
+      .then(r => r.ok ? r.json() : { items: [] })
+      .then((d: { items: CompetitionSeasonRef[] }) =>
+        setCompetitionSeasons(Array.isArray(d.items) ? d.items : []))
+      .catch(() => setCompetitionSeasons([]));
   }, []);
 
   // Debounce search
@@ -941,6 +1014,8 @@ export default function EpisodesPage() {
         <EpisodeDrawer
           episode={drawerEpisode}
           players={players}
+          competitionSeasons={competitionSeasons}
+          seasonsForFormat={seasons}
           onClose={() => setDrawerEpisode(null)}
           onSaved={handleSaved}
         />

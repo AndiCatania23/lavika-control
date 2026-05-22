@@ -5,7 +5,14 @@ const VALID_BADGES = new Set(['bronze', 'silver', 'gold']);
 const PATCHABLE_FIELDS = new Set([
   'title', 'description', 'match_id', 'is_active',
   'min_badge', 'published_at', 'speaker_id', 'thumbnail_url',
+  // Season editing (mobile/anywhere fix-up): admins can re-assign an episode
+  // to a different season label (free text) and/or a different competition
+  // season FK (e.g. when the ingest snapshotted matches.season_id before
+  // the playoff competition_season was provisioned).
+  'season', 'competition_season_id',
 ]);
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * GET /api/media/episodes
@@ -54,6 +61,7 @@ export async function GET(request: Request) {
     .select(
       `id, video_id, format_id, title, description, season, published_at,
        hls_url, thumbnail_url, min_badge, duration_secs, match_id, speaker_id,
+       competition_season_id,
        is_active, created_at, updated_at,
        speaker:players!speaker_id(id, full_name, slug),
        match:matches!match_id(id, kickoff_at, matchday,
@@ -116,6 +124,26 @@ export async function PATCH(request: Request) {
       if (key === 'is_active' && typeof value !== 'boolean') {
         return NextResponse.json({ error: 'is_active must be a boolean' }, { status: 400 });
       }
+      if (key === 'competition_season_id' && value !== null) {
+        if (typeof value !== 'string' || !UUID_RE.test(value)) {
+          return NextResponse.json({ error: 'competition_season_id must be a UUID or null' }, { status: 400 });
+        }
+      }
+      if (key === 'season' && value !== null) {
+        if (typeof value !== 'string') {
+          return NextResponse.json({ error: 'season must be a string or null' }, { status: 400 });
+        }
+        const trimmed = value.trim();
+        if (trimmed.length === 0) {
+          updates[key] = null;
+          continue;
+        }
+        if (trimmed.length > 32) {
+          return NextResponse.json({ error: 'season too long (max 32 chars)' }, { status: 400 });
+        }
+        updates[key] = trimmed;
+        continue;
+      }
       updates[key] = value;
     }
 
@@ -126,6 +154,7 @@ export async function PATCH(request: Request) {
       .select(
         `id, title, description, is_active, min_badge, published_at,
          match_id, speaker_id, thumbnail_url, format_id, season, video_id,
+         competition_season_id,
          speaker:players!speaker_id(id, full_name, slug),
          match:matches!match_id(id, kickoff_at, matchday,
            home_team:teams!matches_home_team_id_fkey(normalized_name, short_name),
