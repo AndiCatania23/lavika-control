@@ -1,7 +1,10 @@
 // Gemini 2.5 Flash Image (Nano Banana) — versione minima.
 // 3 input → 1 chiamata: base template + foto soggetto + testo pill.
 
-const GEMINI_IMAGE_MODEL = 'gemini-3.1-flash-image-preview';
+// Test free-tier: NB1 (2.5) ha free tier sotto certe quote, NB2 (3.1) pare paid-only.
+// Asset padding 1920x1080 a monte gestisce l'aspect ratio anche senza imageConfig.
+const GEMINI_IMAGE_MODEL = 'gemini-2.5-flash-image-preview';
+const MODEL_SUPPORTS_IMAGE_CONFIG = GEMINI_IMAGE_MODEL.startsWith('gemini-3');
 const FETCH_TIMEOUT_MS = 8000;
 
 export function isGeminiConfigured(): boolean {
@@ -87,7 +90,9 @@ Output: una card finita, premium, in formato 16:9 orizzontale (~1920×1080), con
       generationConfig: {
         responseModalities: ['TEXT', 'IMAGE'],
         temperature: 0.85,
-        imageConfig: { aspectRatio: '16:9', imageSize: '2K' },
+        ...(MODEL_SUPPORTS_IMAGE_CONFIG
+          ? { imageConfig: { aspectRatio: '16:9', imageSize: '2K' } }
+          : {}),
       },
     }),
     signal: AbortSignal.timeout(90_000),
