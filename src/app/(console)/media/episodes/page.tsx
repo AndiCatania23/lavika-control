@@ -82,6 +82,20 @@ const BADGES = [
   { value: 'gold',   label: 'Gold',    color: '#d4a017' },
 ] as const;
 
+// Format che in app filtrano gli episodi per competition_season_id (Campionato
+// vs Playoff vs ...), NON per il campo `season` text. Allineato a
+// repos/app/web/src/app/format/[slug]/FormatPageClient.tsx (isMatchLinkedFormat).
+const MATCH_LINKED_FORMATS = new Set(['highlights', 'press-conference', 'match-reaction']);
+
+// Opzione del dropdown stagione: chiave duale a seconda del format.
+// - match-linked → kind='competition', value=competition_season_id (UUID)
+// - altri        → kind='season',      value=season string ("2025/2026" / "2026")
+interface SeasonOption {
+  kind: 'competition' | 'season';
+  value: string;
+  label: string;
+}
+
 /* ──────────────────────────── Helpers ──────────────────────────── */
 
 function formatMatchLabel(m: MatchRef | MatchPickerItem | null): string {
@@ -267,6 +281,7 @@ interface EpisodeDraft {
 
 function EpisodeDrawer({
   episode, onClose, onSaved, players, competitionSeasons, seasonsForFormat,
+  isMatchLinkedFormat,
 }: {
   episode: EpisodeRow;
   onClose: () => void;
@@ -274,6 +289,7 @@ function EpisodeDrawer({
   players: PlayerLite[];
   competitionSeasons: CompetitionSeasonRef[];
   seasonsForFormat: string[];
+  isMatchLinkedFormat: boolean;
 }) {
   const [draft, setDraft] = useState<EpisodeDraft>({
     title: episode.title ?? '',
@@ -328,9 +344,15 @@ function EpisodeDrawer({
         min_badge: draft.min_badge,
         published_at: fromLocalInputValue(draft.published_at),
         thumbnail_url: draft.thumbnail_url,
-        season: draft.season.trim() || null,
-        competition_season_id: draft.competition_season_id,
       };
+      // Invia SOLO il campo rilevante per il format per evitare di azzerare
+      // l'altro silenziosamente (es. cambiare competition_season_id su un
+      // match-reaction non deve toccare il `season` text).
+      if (isMatchLinkedFormat) {
+        patch.competition_season_id = draft.competition_season_id;
+      } else {
+        patch.season = draft.season.trim() || null;
+      }
       const res = await fetch('/api/media/episodes', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -448,55 +470,58 @@ function EpisodeDrawer({
           />
         </div>
 
-        {/* Season (free-text + datalist suggerimenti) — admin può cambiarla da telefono */}
-        <div className="vstack-tight">
-          <label className="typ-label inline-flex items-center gap-1.5">
-            <Tag className="w-3.5 h-3.5" /> Stagione (label)
-          </label>
-          <input
-            value={draft.season}
-            onChange={e => set('season', e.target.value)}
-            placeholder='es. "2025/2026" o "2026"'
-            list="episode-season-suggestions"
-            className="input"
-            inputMode="text"
-            autoCapitalize="off"
-            autoCorrect="off"
-            spellCheck={false}
-          />
-          {seasonsForFormat.length > 0 && (
-            <datalist id="episode-season-suggestions">
-              {seasonsForFormat.map(s => <option key={s} value={s} />)}
-            </datalist>
-          )}
-          <p className="typ-caption">
-            Stringa libera usata nel naming/UI (es. 2025/2026). Lascia vuoto per rimuoverla.
-          </p>
-        </div>
-
-        {/* Competition season (FK → competition_seasons) — controlla i filtri per
-            le pagine format (es. Playoff vs Serie C). Se NULL, l'episodio NON
-            apparirà nelle pagine filtrate per stagione/competizione. */}
-        <div className="vstack-tight">
-          <label className="typ-label inline-flex items-center gap-1.5">
-            <Trophy className="w-3.5 h-3.5" /> Competizione · Stagione
-          </label>
-          <select
-            value={draft.competition_season_id ?? ''}
-            onChange={e => set('competition_season_id', e.target.value || null)}
-            className="input"
-          >
-            <option value="">— Nessuna (auto da match) —</option>
-            {competitionSeasons.map(cs => (
-              <option key={cs.id} value={cs.id}>{cs.label}</option>
-            ))}
-          </select>
-          <p className="typ-caption">
-            Determina se l&apos;episodio appare nelle pagine filtrate per competizione (Playoff,
-            Serie C). Di norma viene popolata in automatico dal match collegato; impostala
-            manualmente per fixare episodi orfani.
-          </p>
-        </div>
+        {/* Filtro stagione: per format match-linked (highlights, press-conference,
+            match-reaction) l'app filtra per competition_season_id (Playoff vs Serie C),
+            NON per il campo `season` text. Per gli altri (catanista, unica-sport, …)
+            il filtro app è sul `season` text. Mostriamo SOLO il campo rilevante per
+            ridurre il rischio di edit incoerenti dal telefono. */}
+        {isMatchLinkedFormat ? (
+          <div className="vstack-tight">
+            <label className="typ-label inline-flex items-center gap-1.5">
+              <Trophy className="w-3.5 h-3.5" /> Competizione · Stagione
+            </label>
+            <select
+              value={draft.competition_season_id ?? ''}
+              onChange={e => set('competition_season_id', e.target.value || null)}
+              className="input"
+            >
+              <option value="">— Nessuna (orfano) —</option>
+              {competitionSeasons.map(cs => (
+                <option key={cs.id} value={cs.id}>{cs.label}</option>
+              ))}
+            </select>
+            <p className="typ-caption">
+              Decide se l&apos;episodio appare nella pagina format come Serie C oppure Playoff.
+              Di norma viene popolata in automatico dal match collegato; impostala a mano
+              per fixare orfani come i match-reaction Catania–Lecco playoff.
+            </p>
+          </div>
+        ) : (
+          <div className="vstack-tight">
+            <label className="typ-label inline-flex items-center gap-1.5">
+              <Tag className="w-3.5 h-3.5" /> Stagione (label)
+            </label>
+            <input
+              value={draft.season}
+              onChange={e => set('season', e.target.value)}
+              placeholder='es. "2025/2026" o "2026"'
+              list="episode-season-suggestions"
+              className="input"
+              inputMode="text"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
+            />
+            {seasonsForFormat.length > 0 && (
+              <datalist id="episode-season-suggestions">
+                {seasonsForFormat.map(s => <option key={s} value={s} />)}
+              </datalist>
+            )}
+            <p className="typ-caption">
+              Filtro stagione della pagina format (es. 2025/2026, 2026). Lascia vuoto per rimuoverla.
+            </p>
+          </div>
+        )}
 
         {/* Match link */}
         <div className="vstack-tight">
@@ -673,9 +698,18 @@ export default function EpisodesPage() {
   const [items, setItems] = useState<EpisodeRow[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [seasons, setSeasons] = useState<string[]>([]);
+  const [seasonOptions, setSeasonOptions] = useState<SeasonOption[]>([]);
 
   const [drawerEpisode, setDrawerEpisode] = useState<EpisodeRow | null>(null);
+
+  const isMatchLinkedFormat = MATCH_LINKED_FORMATS.has(selectedFormat);
+
+  // Suggerimenti per il datalist del drawer (campo `season` text). Sempre la
+  // lista delle season text distinte per il format corrente.
+  const seasonTextSuggestions = useMemo(
+    () => Array.from(new Set(seasonOptions.filter(o => o.kind === 'season').map(o => o.value))),
+    [seasonOptions],
+  );
 
   // Initial load: formats + players + competition seasons (for drawer dropdown)
   useEffect(() => {
@@ -706,20 +740,53 @@ export default function EpisodesPage() {
     return () => clearTimeout(t);
   }, [search]);
 
-  // Load seasons whenever format changes
+  // Load season options whenever format changes. Logica duale:
+  // - match-linked → opzioni = competition_seasons distinte degli episodi
+  //   (es. "Serie C Girone C · 2025/2026", "Serie C - Promozione - Playoff · 2025/2026").
+  //   Allineato a app FormatPageClient.competitionSeasonOptions.
+  // - altri (catanista, unica-sport, ...) → opzioni = season text distinte.
   useEffect(() => {
-    if (!selectedFormat) { setSeasons([]); setSelectedSeason(''); return; }
+    if (!selectedFormat) { setSeasonOptions([]); setSelectedSeason(''); return; }
     fetch(`/api/media/formats/${encodeURIComponent(selectedFormat)}/episodes`)
       .then(r => r.ok ? r.json() : [])
-      .then((data: Array<{ season: string | null }>) => {
+      .then((data: Array<{
+        season: string | null;
+        competition_season_id: string | null;
+        competition_label: string | null;
+        published_at: string | null;
+      }>) => {
         const list = Array.isArray(data) ? data : [];
-        const ss = [...new Set(list.map(ep => ep.season).filter(Boolean))] as string[];
-        ss.sort((a, b) => b.localeCompare(a));
-        setSeasons(ss);
-        setSelectedSeason(ss[0] ?? '');
+        let options: SeasonOption[];
+        if (MATCH_LINKED_FORMATS.has(selectedFormat)) {
+          // Una opzione per competition_season_id distinto. Episodi orfani
+          // (competition_season_id null) restano fuori dal filtro — l'admin
+          // li trova selezionando "Tutte" oppure aprendo il drawer manualmente.
+          const map = new Map<string, { value: string; label: string; latest: string }>();
+          for (const ep of list) {
+            if (!ep.competition_season_id || !ep.competition_label) continue;
+            const existing = map.get(ep.competition_season_id);
+            const pub = ep.published_at ?? '';
+            if (!existing || pub > existing.latest) {
+              map.set(ep.competition_season_id, {
+                value: ep.competition_season_id,
+                label: ep.competition_label,
+                latest: pub,
+              });
+            }
+          }
+          options = [...map.values()]
+            .sort((a, b) => b.latest.localeCompare(a.latest))
+            .map(o => ({ kind: 'competition' as const, value: o.value, label: o.label }));
+        } else {
+          const ss = [...new Set(list.map(ep => ep.season).filter(Boolean))] as string[];
+          ss.sort((a, b) => b.localeCompare(a));
+          options = ss.map(s => ({ kind: 'season' as const, value: s, label: s }));
+        }
+        setSeasonOptions(options);
+        setSelectedSeason(options[0]?.value ?? '');
         setPage(1);
       })
-      .catch(() => { setSeasons([]); setSelectedSeason(''); });
+      .catch(() => { setSeasonOptions([]); setSelectedSeason(''); });
   }, [selectedFormat]);
 
   // Reset page on filter changes
@@ -731,7 +798,13 @@ export default function EpisodesPage() {
     try {
       const params = new URLSearchParams();
       params.set('format_id', selectedFormat);
-      if (selectedSeason) params.set('season', selectedSeason);
+      if (selectedSeason) {
+        if (isMatchLinkedFormat) {
+          params.set('competition_season_id', selectedSeason);
+        } else {
+          params.set('season', selectedSeason);
+        }
+      }
       if (searchDebounced) params.set('q', searchDebounced);
       if (activeFilter === 'active') params.set('active', 'true');
       if (activeFilter === 'hidden') params.set('active', 'false');
@@ -747,7 +820,7 @@ export default function EpisodesPage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedFormat, selectedSeason, searchDebounced, activeFilter, page]);
+  }, [selectedFormat, selectedSeason, isMatchLinkedFormat, searchDebounced, activeFilter, page]);
 
   useEffect(() => { loadEpisodes(); }, [loadEpisodes]);
 
@@ -806,15 +879,19 @@ export default function EpisodesPage() {
           </select>
         </div>
         <div>
-          <label className="typ-micro block mb-1.5">Stagione</label>
+          <label className="typ-micro block mb-1.5">
+            {isMatchLinkedFormat ? 'Competizione · Stagione' : 'Stagione'}
+          </label>
           <select
             value={selectedSeason}
             onChange={e => setSelectedSeason(e.target.value)}
-            disabled={seasons.length === 0}
+            disabled={seasonOptions.length === 0}
             className="input w-full"
           >
             <option value="">Tutte</option>
-            {seasons.map(s => <option key={s} value={s}>{s}</option>)}
+            {seasonOptions.map(o => (
+              <option key={`${o.kind}:${o.value}`} value={o.value}>{o.label}</option>
+            ))}
           </select>
         </div>
         <div>
@@ -1015,7 +1092,8 @@ export default function EpisodesPage() {
           episode={drawerEpisode}
           players={players}
           competitionSeasons={competitionSeasons}
-          seasonsForFormat={seasons}
+          seasonsForFormat={seasonTextSuggestions}
+          isMatchLinkedFormat={MATCH_LINKED_FORMATS.has(drawerEpisode.format_id)}
           onClose={() => setDrawerEpisode(null)}
           onSaved={handleSaved}
         />

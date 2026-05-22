@@ -28,13 +28,67 @@ export async function GET(
 
   const { data: episodes, error } = await supabaseServer
     .from('content_episodes')
-    .select('id, format_id, video_id, title, thumbnail_url, published_at, is_active, min_badge, season')
+    .select(`
+      id, format_id, video_id, title, thumbnail_url, published_at,
+      is_active, min_badge, season, competition_season_id,
+      competition_season:competition_seasons!competition_season_id(
+        season_label,
+        competition:competitions!competition_id(name)
+      )
+    `)
     .eq('format_id', formatId)
     .order('created_at', { ascending: false });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  return NextResponse.json(episodes ?? []);
+  // Flatten the nested competition_season → competition relation into a single
+  // `competition_label` string ("Competition · Season") so the Control page can
+  // build a filter dropdown that mirrors the app (Playoff 2025/26 vs Serie C 2025/26)
+  // without having to traverse the relation client-side.
+  type CompetitionRel = { name: string | null } | { name: string | null }[] | null;
+  type CompetitionSeasonRel = {
+    season_label: string | null;
+    competition: CompetitionRel;
+  } | { season_label: string | null; competition: CompetitionRel }[] | null;
+  type Row = {
+    id: string;
+    format_id: string;
+    video_id: string | null;
+    title: string | null;
+    thumbnail_url: string | null;
+    published_at: string | null;
+    is_active: boolean;
+    min_badge: string | null;
+    season: string | null;
+    competition_season_id: string | null;
+    competition_season: CompetitionSeasonRel;
+  };
+
+  const enriched = (episodes as Row[] | null ?? []).map((ep) => {
+    const csRel = ep.competition_season;
+    const cs = Array.isArray(csRel) ? csRel[0] : csRel;
+    const compRel = cs?.competition;
+    const competitionName =
+      (Array.isArray(compRel) ? compRel[0]?.name : compRel?.name) ?? null;
+    const seasonLabel = cs?.season_label ?? null;
+    const competitionLabel =
+      competitionName && seasonLabel ? `${competitionName} · ${seasonLabel}` : null;
+    return {
+      id: ep.id,
+      format_id: ep.format_id,
+      video_id: ep.video_id,
+      title: ep.title,
+      thumbnail_url: ep.thumbnail_url,
+      published_at: ep.published_at,
+      is_active: ep.is_active,
+      min_badge: ep.min_badge,
+      season: ep.season,
+      competition_season_id: ep.competition_season_id,
+      competition_label: competitionLabel,
+    };
+  });
+
+  return NextResponse.json(enriched);
 }
 
 const VALID_BADGE_VALUES = ['bronze', 'silver', 'gold'];

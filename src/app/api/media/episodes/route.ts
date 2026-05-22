@@ -37,11 +37,12 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const formatId  = url.searchParams.get('format_id');
   const season    = url.searchParams.get('season');
+  const competitionSeasonId = url.searchParams.get('competition_season_id');
   const q         = url.searchParams.get('q')?.trim();
   const activeRaw = url.searchParams.get('active');
   const page      = Math.max(1, parseInt(url.searchParams.get('page') ?? '1', 10) || 1);
   const pageSize  = Math.min(200, Math.max(1, parseInt(url.searchParams.get('pageSize') ?? '50', 10) || 50));
-  const hasParams = formatId || season || q || activeRaw || url.searchParams.has('page') || url.searchParams.has('pageSize');
+  const hasParams = formatId || season || competitionSeasonId || q || activeRaw || url.searchParams.has('page') || url.searchParams.has('pageSize');
 
   if (!hasParams) {
     // Legacy: return all episodes with editorial thumbnail
@@ -75,6 +76,7 @@ export async function GET(request: Request) {
 
   if (formatId) query = query.eq('format_id', formatId);
   if (season)   query = query.eq('season', season);
+  if (competitionSeasonId) query = query.eq('competition_season_id', competitionSeasonId);
   if (q)        query = query.ilike('title', `%${q}%`);
   if (activeRaw === 'true')  query = query.eq('is_active', true);
   if (activeRaw === 'false') query = query.eq('is_active', false);
