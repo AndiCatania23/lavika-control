@@ -114,17 +114,25 @@ interface IgContainerStatus {
   status?: string;
 }
 
+// Post-Live mode Meta returns code 100 / subcode 33 on GET status for image
+// containers even when they're valid. Treat as FINISHED for images.
 async function waitForIgContainerReady(containerId: string, maxWaitMs = 30000): Promise<void> {
   const start = Date.now();
   while (Date.now() - start < maxWaitMs) {
-    const status = await metaGet<IgContainerStatus>(
-      `/${containerId}?fields=status_code,status`
-    );
-    if (status.status_code === 'FINISHED') return;
-    if (status.status_code === 'ERROR' || status.status_code === 'EXPIRED') {
-      throw new Error(`IG container ${status.status_code}: ${status.status ?? ''}`);
+    try {
+      const status = await metaGet<IgContainerStatus>(
+        `/${containerId}?fields=status_code,status`
+      );
+      if (status.status_code === 'FINISHED') return;
+      if (status.status_code === 'ERROR' || status.status_code === 'EXPIRED') {
+        throw new Error(`IG container ${status.status_code}: ${status.status ?? ''}`);
+      }
+    } catch (e) {
+      if (e instanceof MetaApiError && e.meta.code === 100 && e.meta.error_subcode === 33) {
+        return;
+      }
+      throw e;
     }
-    // IN_PROGRESS or PUBLISHED — wait
     await new Promise(r => setTimeout(r, 1500));
   }
   throw new Error(`IG container timeout after ${maxWaitMs}ms`);
