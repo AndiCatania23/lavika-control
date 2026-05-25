@@ -114,8 +114,14 @@ interface IgContainerStatus {
   status?: string;
 }
 
-// Post-Live mode Meta returns code 100 / subcode 33 on GET status for image
-// containers even when they're valid. Treat as FINISHED for images.
+// Post-Live mode: Meta a volte ritorna code 100 / subcode 33 sul GET status
+// dei container image anche quando sono validi. NON è un segnale di "pronto" —
+// è solo che la API status non è interrogabile. Garantiamo comunque un'attesa
+// minima cumulativa (MIN_WAIT_ON_100_33) prima di trattare come ready, perché
+// il container può essere ancora in processing lato Meta e un media_publish
+// prematuro restituisce 9007 ("Media ID is not available").
+const MIN_WAIT_ON_100_33 = 6000;  // 6s minimi prima di assumere ready su 100/33
+
 async function waitForIgContainerReady(containerId: string, maxWaitMs = 30000): Promise<void> {
   const start = Date.now();
   while (Date.now() - start < maxWaitMs) {
@@ -129,6 +135,10 @@ async function waitForIgContainerReady(containerId: string, maxWaitMs = 30000): 
       }
     } catch (e) {
       if (e instanceof MetaApiError && e.meta.code === 100 && e.meta.error_subcode === 33) {
+        const elapsed = Date.now() - start;
+        if (elapsed < MIN_WAIT_ON_100_33) {
+          await new Promise(r => setTimeout(r, MIN_WAIT_ON_100_33 - elapsed));
+        }
         return;
       }
       throw e;
@@ -136,6 +146,39 @@ async function waitForIgContainerReady(containerId: string, maxWaitMs = 30000): 
     await new Promise(r => setTimeout(r, 1500));
   }
   throw new Error(`IG container timeout after ${maxWaitMs}ms`);
+}
+
+// Wrapper attorno a media_publish con retry su 9007 ("Media ID is not available").
+// Capita quando Meta dichiara il container FINISHED (o non interrogabile, vedi
+// 100/33) ma internamente non è ancora completamente disponibile. La chiamata
+// è idempotente per creation_id, quindi un retry è sicuro: se il primo tentativo
+// "passa" Meta restituisce comunque lo stesso media_id sul retry — ma in pratica
+// se siamo qui significa che il primo è fallito con 9007.
+async function publishIgMediaWithRetry(
+  igBusinessId: string,
+  creationId: string,
+  context: string,
+): Promise<{ id: string }> {
+  const delays = [2000, 4000, 8000];  // backoff esponenziale, max 4 tentativi
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= delays.length; attempt++) {
+    try {
+      return await metaPost<{ id: string }>(
+        `/${igBusinessId}/media_publish`,
+        { creation_id: creationId },
+      );
+    } catch (e) {
+      lastError = e;
+      const is9007 = e instanceof MetaApiError && e.meta.code === 9007;
+      if (!is9007 || attempt === delays.length) throw e;
+      const delay = delays[attempt];
+      console.warn(
+        `[IG publish ${context}] 9007 on attempt ${attempt + 1}, retrying in ${delay}ms (creation_id=${creationId})`,
+      );
+      await new Promise(r => setTimeout(r, delay));
+    }
+  }
+  throw lastError;
 }
 
 export async function publishIgPhotoPost(opts: {
@@ -158,11 +201,8 @@ export async function publishIgPhotoPost(opts: {
   // Step 2: wait for container to be ready (usually instant for images, longer for videos)
   await waitForIgContainerReady(containerId);
 
-  // Step 3: publish
-  const published = await metaPost<{ id: string }>(
-    `/${cfg.igBusinessId}/media_publish`,
-    { creation_id: containerId }
-  );
+  // Step 3: publish (con retry su 9007)
+  const published = await publishIgMediaWithRetry(cfg.igBusinessId, containerId, 'photo');
 
   // Step 4: get permalink
   let permalink: string | undefined;
@@ -226,11 +266,8 @@ export async function publishIgCarouselPost(opts: {
   // Step 4: attendi parent
   await waitForIgContainerReady(parentId);
 
-  // Step 5: publish
-  const published = await metaPost<{ id: string }>(
-    `/${cfg.igBusinessId}/media_publish`,
-    { creation_id: parentId }
-  );
+  // Step 5: publish (con retry su 9007)
+  const published = await publishIgMediaWithRetry(cfg.igBusinessId, parentId, 'carousel');
 
   let permalink: string | undefined;
   try {
@@ -321,10 +358,7 @@ export async function publishIgStoryPhoto(opts: {
   const containerId = container.id;
   await waitForIgContainerReady(containerId);
 
-  const published = await metaPost<{ id: string }>(
-    `/${cfg.igBusinessId}/media_publish`,
-    { creation_id: containerId }
-  );
+  const published = await publishIgMediaWithRetry(cfg.igBusinessId, containerId, 'story_photo');
 
   let permalink: string | undefined;
   try {
@@ -362,10 +396,7 @@ export async function publishIgStoryVideo(opts: {
   // Video container needs more time to process (encoding)
   await waitForIgContainerReady(containerId, 120000);
 
-  const published = await metaPost<{ id: string }>(
-    `/${cfg.igBusinessId}/media_publish`,
-    { creation_id: containerId }
-  );
+  const published = await publishIgMediaWithRetry(cfg.igBusinessId, containerId, 'story_video');
 
   let permalink: string | undefined;
   try {
