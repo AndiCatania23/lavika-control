@@ -112,6 +112,11 @@ export default function FormatDetailPage() {
   const [newSource, setNewSource] = useState<NewSourceForm>(emptyNewSourceForm());
   const [creatingSource, setCreatingSource] = useState(false);
 
+  // ── Iniezione manuale di un video da URL ──
+  const [injectUrl, setInjectUrl] = useState('');
+  const [injecting, setInjecting] = useState(false);
+  const [injectResult, setInjectResult] = useState<{ ok: boolean; msg: string } | null>(null);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -236,6 +241,33 @@ export default function FormatDetailPage() {
     if (res.ok) await load();
     else alert(data.error ?? 'Errore');
   }, [load]);
+
+  const submitInject = useCallback(async () => {
+    const url = injectUrl.trim();
+    if (!url) return;
+    setInjecting(true);
+    setInjectResult(null);
+    try {
+      const res = await fetch('/api/jobs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId: 'job_sync_video', triggeredBy: 'manual-inject', formatId: id, videoUrl: url }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setInjectResult({ ok: true, msg: 'Video accodato — il daemon lo scarica e processa (HLS V2) tra poco.' });
+        setInjectUrl('');
+      } else if (res.status === 409) {
+        setInjectResult({ ok: false, msg: 'Un sync è già in corso — riprova tra poco.' });
+      } else {
+        setInjectResult({ ok: false, msg: data.error ?? `Errore (${res.status})` });
+      }
+    } catch (err) {
+      setInjectResult({ ok: false, msg: err instanceof Error ? err.message : 'Errore di rete' });
+    } finally {
+      setInjecting(false);
+    }
+  }, [injectUrl, id]);
 
   if (loading) {
     return <div className="page-container"><div className="card card-body" style={{ textAlign: 'center', color: 'var(--text-muted)' }}>Caricamento…</div></div>;
@@ -470,6 +502,53 @@ export default function FormatDetailPage() {
             }}
             onSubmit={submitSourceForm}
           />
+        )}
+      </Section>
+
+      {/* Sezione Inietta video da URL */}
+      <Section title="Inietta video da URL">
+        <p className="typ-micro" style={{ color: 'var(--text-muted)', marginTop: 0, marginBottom: 'var(--s2)' }}>
+          Incolla l&apos;URL di un video (YouTube o Facebook) per scaricarlo e processarlo a mano su
+          questo format, anche se la discovery automatica l&apos;ha saltato (es. titolo senza parola chiave).
+          Passa per la stessa pipeline del sync → HLS V2.
+        </p>
+        <div className="hstack" style={{ gap: 'var(--s2)', alignItems: 'stretch', flexWrap: 'wrap' }}>
+          <input
+            type="url"
+            inputMode="url"
+            placeholder="https://www.facebook.com/…/videos/123  •  https://youtu.be/…"
+            value={injectUrl}
+            onChange={e => setInjectUrl(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && !injecting && injectUrl.trim()) void submitInject(); }}
+            disabled={injecting}
+            style={{
+              flex: 1, minWidth: 220,
+              background: 'var(--card-muted)',
+              border: '1px solid var(--border)',
+              borderRadius: 10,
+              padding: '10px 12px',
+              color: 'var(--text)',
+              fontSize: 14,
+            }}
+          />
+          <button
+            className="btn btn-primary"
+            onClick={() => void submitInject()}
+            disabled={injecting || !injectUrl.trim()}
+          >
+            {injecting ? 'Invio…' : (<><Plus size={14} /> Inietta</>)}
+          </button>
+        </div>
+        {injectResult && (
+          <div className="typ-micro" style={{
+            marginTop: 'var(--s2)',
+            padding: '8px 10px',
+            borderRadius: 8,
+            background: injectResult.ok ? 'var(--success-soft, rgba(46,160,67,0.14))' : 'var(--danger-soft)',
+            color: injectResult.ok ? 'var(--success, #2ea043)' : 'var(--danger)',
+          }}>
+            {injectResult.msg}
+          </div>
         )}
       </Section>
 

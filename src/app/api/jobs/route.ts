@@ -49,13 +49,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 });
   }
 
-  const { jobId, triggeredBy = 'manual', source, formatId, facebook_url } = await request.json() as {
+  const { jobId, triggeredBy = 'manual', source, formatId, facebook_url, videoUrl } = await request.json() as {
     jobId?: string;
     triggeredBy?: string;
     source?: string;
     formatId?: string;
     facebook_url?: string;
+    videoUrl?: string;
   };
+
+  // Iniezione manuale: accetta sia `videoUrl` (nuovo, qualsiasi piattaforma) che
+  // `facebook_url` (legacy). Normalizziamo su un unico valore.
+  const injectUrl = (videoUrl ?? facebook_url ?? '').trim() || null;
+  if (injectUrl && !/^https?:\/\/.+/i.test(injectUrl)) {
+    return NextResponse.json({ success: false, error: 'URL non valido (atteso http/https)' }, { status: 400 });
+  }
 
   if (jobId !== 'job_sync_video') {
     return NextResponse.json({ error: 'Unsupported job id' }, { status: 400 });
@@ -102,6 +110,16 @@ export async function POST(request: NextRequest) {
     resolvedSource = requestedSource.id;
   }
 
+  // L'iniezione manuale di un URL richiede una source risolta (serve per
+  // naming/season/format). Senza, sync-master --url non saprebbe come
+  // catalogare il video.
+  if (injectUrl && !resolvedSource) {
+    return NextResponse.json(
+      { success: false, error: 'Per iniettare un URL specifica un format (o una source)' },
+      { status: 400 }
+    );
+  }
+
   // Block only if a sync is actively running. Pending jobs are fine — the
   // daemon drains the queue FIFO, so new triggers just get appended.
   const { data: runningJobs } = await supabaseServer
@@ -124,6 +142,7 @@ export async function POST(request: NextRequest) {
       job_id: 'job_sync_video',
       status: 'pending',
       source: resolvedSource,
+      video_url: injectUrl,
       facebook_url: facebook_url || null,
       triggered_by: triggeredBy,
     })
