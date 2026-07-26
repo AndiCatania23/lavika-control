@@ -34,7 +34,7 @@ export async function GET() {
   // generator runs (when articles_total is updated in batch).
   const feeds = (data ?? []) as FeedRow[];
   const slugs = feeds.map(f => f.slug);
-  let countsBySlug = new Map<string, { total: number; last: string | null }>();
+  const countsBySlug = new Map<string, { total: number; last: string | null }>();
   if (slugs.length > 0) {
     const { data: stats } = await supabaseServer
       .from('pill_sources')
@@ -103,7 +103,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 });
   }
   const body = (await request.json().catch(() => null)) as {
-    id?: string; enabled?: boolean; priority?: number; notes?: string; display_name?: string;
+    id?: string; enabled?: boolean; priority?: number; notes?: string; display_name?: string; feed_url?: string;
   } | null;
   if (!body?.id) {
     return NextResponse.json({ error: 'id mancante' }, { status: 400 });
@@ -113,6 +113,15 @@ export async function PATCH(request: Request) {
   if (Number.isFinite(body.priority)) updates.priority = body.priority;
   if (typeof body.notes === 'string') updates.notes = body.notes;
   if (typeof body.display_name === 'string') updates.display_name = body.display_name.trim();
+  if (typeof body.feed_url === 'string') {
+    try {
+      const feedUrl = body.feed_url.trim();
+      new URL(feedUrl);
+      updates.feed_url = feedUrl;
+    } catch {
+      return NextResponse.json({ error: 'feed_url non è un URL valido' }, { status: 400 });
+    }
+  }
 
   const { data, error } = await supabaseServer
     .from('rss_feeds')

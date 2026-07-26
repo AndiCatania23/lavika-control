@@ -25,6 +25,7 @@ import {
   AlertTriangle,
   Flag,
   Megaphone,
+  ShieldCheck,
 } from 'lucide-react';
 import { useTheme } from '@/lib/theme';
 import { getNotificationsData, AppNotification, getGlobalSearchData, GlobalSearchResult } from '@/lib/data';
@@ -82,9 +83,10 @@ const AREAS: NavArea[] = [
     // nessun subItems → click diretto a /social (la pagina ha nav interna)
   },
   {
-    key: 'sync', href: '/jobs', label: 'Sync & Jobs', icon: Workflow,
-    matchPrefixes: ['/jobs', '/errors'],
+    key: 'sync', href: '/ops', label: 'Sync & Jobs', icon: Workflow,
+    matchPrefixes: ['/ops', '/jobs', '/errors'],
     subItems: [
+      { href: '/ops',             label: 'Operations' },
       { href: '/jobs',            label: 'Job & Runs' },
       { href: '/errors',          label: 'Errori' },
       { href: '/content/formats', label: 'Configurazione Format' },  // cross-link
@@ -442,6 +444,7 @@ const QUICK_ITEMS: Array<{ id: string; href: string; title: string; icon: typeof
   { id: 'p12', href: '/shop',            title: 'Shop',                 icon: ShoppingBag },
   { id: 'p13', href: '/analytics',       title: 'Analytics complete',   icon: LayoutDashboard },
   { id: 'p14', href: '/settings',        title: 'Impostazioni',         icon: Settings },
+  { id: 'p15', href: '/ops',             title: 'Operations cockpit',   icon: ShieldCheck },
 ];
 
 function SubmenuSheet({ area, pathname, onClose }: { area: NavArea; pathname: string; onClose: () => void }) {

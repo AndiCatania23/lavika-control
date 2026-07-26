@@ -19,6 +19,7 @@ function resolveTitle(pathname: string): { title: string; subtitle?: string } {
   if (pathname.startsWith('/content/formats')) return { title: 'Format',    subtitle: 'Configurazione contenuti' };
   if (pathname.startsWith('/content'))         return { title: 'Contenuti', subtitle: 'Configurazione' };
   if (pathname.startsWith('/jobs'))            return { title: 'Job & Runs',subtitle: 'Sync daemon' };
+  if (pathname.startsWith('/ops'))             return { title: 'Operations', subtitle: 'Cockpit remoto' };
   if (pathname.startsWith('/errors'))          return { title: 'Errori',    subtitle: 'Log e triage' };
   if (pathname.startsWith('/notifications'))   return { title: 'Notifiche', subtitle: 'Storico' };
   if (pathname.startsWith('/users'))           return { title: 'Utenti',    subtitle: 'Moderazione' };
