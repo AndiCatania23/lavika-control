@@ -26,80 +26,137 @@ export interface HeroKpis {
   dau: number;
   wau: number;
   mau: number;
-  avgSessionMinutes: number | null;
+  stickinessPct: number | null; // DAU/MAU * 100
+  nextDayReturnPct: number | null; // % attivi che tornano il giorno dopo (media 30gg)
+  nextDayReturnSample: number; // n. di (giorno,utente) attivi nel calcolo
+  sessionMedianMinutes: number | null; // mediana (la media e' distorta da sessioni lunghe)
+  sessionSample: number;
   retentionD7Pct: number | null;
+  retentionD7Sample: number; // n. utenti nelle coorti mature usate per il calcolo
   pushOptInPct: number | null;
-  appStoreRating: number | null; // placeholder, ASC non lo espone direttamente
+  pushOptedUsers: number;
+  pushOpenRatePct: number | null; // % notifiche aperte (clicked/sent, 30gg)
+  pushSent30d: number;
+  pushClicked30d: number;
+  appStoreRating: number | null; // nessuna fonte: ASC non espone il rating via API
 }
 
-export async function loadHeroKpis(): Promise<HeroKpis> {
-  if (!supabaseServer) {
-    return {
-      totalUsers: 0, dau: 0, wau: 0, mau: 0,
-      avgSessionMinutes: null, retentionD7Pct: null, pushOptInPct: null, appStoreRating: null,
-    };
-  }
+// Una coorte settimanale e' "matura" per D7 solo quando anche l'ultimo iscritto
+// della settimana ha avuto >= 7 giorni per tornare: week_start + 6 (fine sett.)
+// + 7.5 (finestra D7) ~= 14 giorni. Sotto questa soglia il D7=0 e' un artefatto.
+const D7_MATURITY_DAYS = 14;
 
-  const today = new Date();
-  const isoDay = today.toISOString().slice(0, 10);
-  const thirtyAgo = new Date(today.getTime() - 30 * 86400000).toISOString().slice(0, 10);
+export async function loadHeroKpis(): Promise<HeroKpis> {
+  const empty: HeroKpis = {
+    totalUsers: 0, dau: 0, wau: 0, mau: 0,
+    stickinessPct: null, nextDayReturnPct: null, nextDayReturnSample: 0,
+    sessionMedianMinutes: null, sessionSample: 0,
+    retentionD7Pct: null, retentionD7Sample: 0,
+    pushOptInPct: null, pushOptedUsers: 0,
+    pushOpenRatePct: null, pushSent30d: 0, pushClicked30d: 0,
+    appStoreRating: null,
+  };
+  if (!supabaseServer) return empty;
+
+  const nowMs = Date.now();
 
   const [
     totalUsersRes,
-    dauSeriesRes,
-    pushOptedRes,
-    pushTotalRes,
+    windowsRes,
+    returnRes,
+    pushActiveRes,
+    pushOpenRes,
     cohortsRes,
   ] = await Promise.all([
     supabaseServer.from('user_profiles').select('id', { count: 'exact', head: true }),
-    // 30gg di DAU per calcolare WAU/MAU lato app sommando le ultime 7/30 righe.
+    // DAU/WAU/MAU come count(DISTINCT) sulle finestre + mediana sessione.
     supabaseServer
-      .from('v_insights_active_users_daily')
-      .select('day,dau_total')
-      .gte('day', thirtyAgo)
-      .lte('day', isoDay)
-      .order('day', { ascending: false }),
+      .from('v_insights_kpi_windows')
+      .select('dau,wau,mau,session_median_min,session_sample')
+      .maybeSingle(),
+    // Ritorno entro 24h (next-day return, media 30gg).
+    supabaseServer
+      .from('v_insights_next_day_return')
+      .select('next_day_return_pct,active_user_days')
+      .maybeSingle(),
+    // Push opt-in = UTENTI distinti con subscription attiva (non righe: chi ha
+    // piu' device conterebbe piu' volte). Dedup lato app.
     supabaseServer
       .from('push_subscriptions')
-      .select('id', { count: 'exact', head: true })
-      .eq('is_active', true),
-    supabaseServer.from('user_profiles').select('id', { count: 'exact', head: true }),
-    // Retention D7 = media delle ultime 4 coorti settimanali (per avere
-    // un campione decente con N=39 utenti totali). Niente filtro per data:
-    // le coorti recenti potrebbero essere troppo giovani per D7 ma il
-    // weighted average sotto le ignora se cohort_size=0.
+      .select('user_id')
+      .eq('is_active', true)
+      .not('user_id', 'is', null),
+    // Push open-rate: clicked/sent sulle notifiche inviate negli ultimi 30gg.
+    supabaseServer
+      .from('v_insights_push_open')
+      .select('sent_30d,clicked_30d,open_rate_pct')
+      .maybeSingle(),
+    // Retention D7 pesata sulle coorti MATURE (>= 14gg): le coorti troppo giovani
+    // non hanno ancora superato la finestra D7 e falserebbero la media verso il basso.
     supabaseServer
       .from('v_insights_retention_cohorts')
-      .select('cohort_size,d7_returned')
+      .select('cohort_week,cohort_size,d7_returned')
       .order('cohort_week', { ascending: false })
-      .limit(4),
+      .limit(12),
   ]);
 
   const totalUsers = totalUsersRes.count ?? 0;
 
-  const dauRows = (dauSeriesRes.data as Array<{ day: string; dau_total: number }> | null) ?? [];
-  const dau = dauRows.find((r) => r.day === isoDay)?.dau_total ?? dauRows[0]?.dau_total ?? 0;
-  const wau = dauRows.slice(0, 7).reduce((s, r) => s + (r.dau_total ?? 0), 0);
-  const mau = dauRows.slice(0, 30).reduce((s, r) => s + (r.dau_total ?? 0), 0);
+  const win = (windowsRes.data as {
+    dau: number; wau: number; mau: number;
+    session_median_min: number | null; session_sample: number | null;
+  } | null) ?? null;
+  const dau = win?.dau ?? 0;
+  const wau = win?.wau ?? 0;
+  const mau = win?.mau ?? 0;
+  const sessionMedianMinutes = win?.session_median_min != null ? Number(win.session_median_min) : null;
+  const sessionSample = win?.session_sample ?? 0;
 
+  // Stickiness = DAU/MAU.
+  const stickinessPct = mau > 0 ? Math.round((dau / mau) * 1000) / 10 : null;
+
+  // Ritorno entro 24h.
+  const ret = (returnRes.data as { next_day_return_pct: number | null; active_user_days: number | null } | null) ?? null;
+  const nextDayReturnPct = ret?.next_day_return_pct != null ? Number(ret.next_day_return_pct) : null;
+  const nextDayReturnSample = ret?.active_user_days ?? 0;
+
+  // Push open-rate.
+  const po = (pushOpenRes.data as { sent_30d: number | null; clicked_30d: number | null; open_rate_pct: number | null } | null) ?? null;
+  const pushSent30d = po?.sent_30d ?? 0;
+  const pushClicked30d = po?.clicked_30d ?? 0;
+  const pushOpenRatePct = po?.open_rate_pct != null ? Number(po.open_rate_pct) : null;
+
+  // Push opt-in su utenti distinti.
+  const pushRows = (pushActiveRes.data as Array<{ user_id: string | null }> | null) ?? [];
+  const pushOptedUsers = new Set(pushRows.map((r) => r.user_id).filter(Boolean)).size;
+  const pushOptInPct = totalUsers > 0 ? Math.round((pushOptedUsers / totalUsers) * 1000) / 10 : null;
+
+  // Retention D7: solo coorti mature, weighted average.
+  const cutoffMs = nowMs - D7_MATURITY_DAYS * 86400000;
   const cohorts =
-    (cohortsRes.data as Array<{ cohort_size: number; d7_returned: number }> | null) ?? [];
-  const cohortTotal = cohorts.reduce((s, c) => s + (c.cohort_size ?? 0), 0);
-  const cohortReturned = cohorts.reduce((s, c) => s + (c.d7_returned ?? 0), 0);
+    (cohortsRes.data as Array<{ cohort_week: string; cohort_size: number; d7_returned: number }> | null) ?? [];
+  const mature = cohorts.filter((c) => new Date(`${c.cohort_week}T00:00:00Z`).getTime() <= cutoffMs);
+  const cohortTotal = mature.reduce((s, c) => s + (c.cohort_size ?? 0), 0);
+  const cohortReturned = mature.reduce((s, c) => s + (c.d7_returned ?? 0), 0);
   const retentionD7Pct = cohortTotal > 0 ? Math.round((cohortReturned / cohortTotal) * 1000) / 10 : null;
-
-  const pushOpted = pushOptedRes.count ?? 0;
-  const pushTotal = pushTotalRes.count ?? 0;
-  const pushOptInPct = pushTotal > 0 ? Math.round((pushOpted / pushTotal) * 1000) / 10 : null;
 
   return {
     totalUsers,
     dau,
     wau,
     mau,
-    avgSessionMinutes: null, // TODO: derivare da user_sessions duration quando schema completo
+    stickinessPct,
+    nextDayReturnPct,
+    nextDayReturnSample,
+    sessionMedianMinutes,
+    sessionSample,
     retentionD7Pct,
+    retentionD7Sample: cohortTotal,
     pushOptInPct,
+    pushOptedUsers,
+    pushOpenRatePct,
+    pushSent30d,
+    pushClicked30d,
     appStoreRating: null,
   };
 }
@@ -364,12 +421,14 @@ export async function loadDeviceGeo(days = 30): Promise<DeviceGeoBreakdown> {
 
   const from = new Date(Date.now() - days * 86400000).toISOString();
 
-  // user_sessions: os_name + country_code (geo IP). Limitiamo a 5000 righe
-  // recenti per evitare full table scan.
+  // user_sessions: os_name + country_code (geo IP). Prendiamo le 5000 righe
+  // PIU' RECENTI (order desc + limit): senza l'order il limit prenderebbe un
+  // sottoinsieme arbitrario, non "le ultime" come dichiara la UI.
   const { data, error } = await supabaseServer
     .from('user_sessions')
     .select('os_name,country_code,user_id,device_id')
     .gte('first_seen_at', from)
+    .order('first_seen_at', { ascending: false })
     .limit(5000);
 
   if (error || !data) return empty;

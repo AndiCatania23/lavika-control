@@ -17,28 +17,47 @@ function formatNumber(n: number): string {
 function buildTiles(k: HeroKpis): Tile[] {
   return [
     { label: 'Utenti totali', value: formatNumber(k.totalUsers) },
-    { label: 'DAU (oggi)', value: formatNumber(k.dau), hint: 'Daily active users' },
-    { label: 'WAU (7g)', value: formatNumber(k.wau), hint: 'Weekly active users (somma 7gg)' },
-    { label: 'MAU (30g)', value: formatNumber(k.mau), hint: 'Monthly active users (somma 30gg)' },
+    { label: 'DAU (oggi)', value: formatNumber(k.dau), hint: 'Utenti distinti attivi oggi' },
+    { label: 'WAU (7g)', value: formatNumber(k.wau), hint: 'Utenti distinti · 7gg' },
+    { label: 'MAU (30g)', value: formatNumber(k.mau), hint: 'Utenti distinti · 30gg' },
     {
-      label: 'Sessione media',
-      value: k.avgSessionMinutes != null ? `${k.avgSessionMinutes}'` : '—',
-      hint: 'TBD (richiede session_duration)',
+      label: 'Stickiness',
+      value: k.stickinessPct != null ? `${k.stickinessPct}%` : '—',
+      hint: 'DAU / MAU',
+    },
+    {
+      label: 'Ritorno 24h',
+      value: k.nextDayReturnPct != null ? `${k.nextDayReturnPct}%` : '—',
+      hint: k.nextDayReturnSample > 0 ? `torna il giorno dopo · media 30gg` : 'dati insufficienti',
     },
     {
       label: 'Retention D7',
       value: k.retentionD7Pct != null ? `${k.retentionD7Pct}%` : '—',
-      hint: 'Media ultime 4 coorti',
+      hint: k.retentionD7Sample > 0 ? `coorti mature · n=${k.retentionD7Sample}` : 'dati insufficienti',
+    },
+    {
+      label: 'Sessione mediana',
+      value: k.sessionMedianMinutes != null ? `${k.sessionMedianMinutes}'` : '—',
+      hint: k.sessionSample > 0 ? `mediana · ${formatNumber(k.sessionSample)} sess. 30gg` : 'nessun dato',
     },
     {
       label: 'Push opt-in',
       value: k.pushOptInPct != null ? `${k.pushOptInPct}%` : '—',
-      hint: 'sub. attive / utenti totali',
+      hint: `${formatNumber(k.pushOptedUsers)} utenti distinti / totali`,
+    },
+    {
+      // Finché non arriva il primo tap (app aggiornata in produzione) mostriamo
+      // "—" invece di 0%, per non confondere "nessun dato ancora" con "0% reale".
+      label: 'Notifiche aperte',
+      value: k.pushClicked30d > 0 && k.pushOpenRatePct != null ? `${k.pushOpenRatePct}%` : '—',
+      hint: k.pushClicked30d > 0
+        ? `${formatNumber(k.pushClicked30d)}/${formatNumber(k.pushSent30d)} tap · 30gg`
+        : `${formatNumber(k.pushSent30d)} inviate · in attesa dei primi tap`,
     },
     {
       label: 'Rating App Store',
-      value: k.appStoreRating != null ? `${k.appStoreRating}★` : '—',
-      hint: 'placeholder (ASC non lo espone)',
+      value: k.appStoreRating != null ? `${k.appStoreRating}★` : 'n/d',
+      hint: 'non disponibile via API ASC',
     },
   ];
 }
