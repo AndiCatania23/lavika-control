@@ -46,13 +46,13 @@ function buildTiles(k: HeroKpis): Tile[] {
       hint: `${formatNumber(k.pushOptedUsers)} utenti distinti / totali`,
     },
     {
-      // Finché non arriva il primo tap (app aggiornata in produzione) mostriamo
+      // Finché non arriva il primo tap tracciato mostriamo
       // "—" invece di 0%, per non confondere "nessun dato ancora" con "0% reale".
       label: 'Notifiche aperte',
-      value: k.pushClicked30d > 0 && k.pushOpenRatePct != null ? `${k.pushOpenRatePct}%` : '—',
-      hint: k.pushClicked30d > 0
-        ? `${formatNumber(k.pushClicked30d)}/${formatNumber(k.pushSent30d)} tap · 30gg`
-        : `${formatNumber(k.pushSent30d)} inviate · in attesa dei primi tap`,
+      value: k.pushClickedSinceTracking > 0 && k.pushOpenRatePct != null ? `${k.pushOpenRatePct}%` : '—',
+      hint: k.pushClickedSinceTracking > 0
+        ? `${formatNumber(k.pushClickedSinceTracking)}/${formatNumber(k.pushSentSinceTracking)} tap · dal 9 ago`
+        : `${formatNumber(k.pushSentSinceTracking)} inviate dal 9 ago · in attesa dei primi tap`,
     },
     {
       label: 'Rating App Store',

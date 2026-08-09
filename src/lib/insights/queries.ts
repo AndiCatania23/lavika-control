@@ -17,6 +17,11 @@ import { supabaseServer } from '@/lib/supabaseServer';
 
 const LAVIKA_APP_ID = '6762273646';
 
+// Il deliveryId e il tracking dei tap sono diventati affidabili dal riavvio
+// del notification worker del 9 agosto 2026. Le consegne precedenti non
+// contenevano l'identificativo nel payload e non devono entrare nel KPI.
+export const PUSH_OPEN_TRACKING_STARTED_AT = '2026-08-09T11:46:55.751Z';
+
 /* =========================================================================
  * HERO KPI (8 valori)
  * ========================================================================= */
@@ -35,9 +40,9 @@ export interface HeroKpis {
   retentionD7Sample: number; // n. utenti nelle coorti mature usate per il calcolo
   pushOptInPct: number | null;
   pushOptedUsers: number;
-  pushOpenRatePct: number | null; // % notifiche aperte (clicked/sent, 30gg)
-  pushSent30d: number;
-  pushClicked30d: number;
+  pushOpenRatePct: number | null; // % notifiche aperte da quando il tracking e' affidabile
+  pushSentSinceTracking: number;
+  pushClickedSinceTracking: number;
   appStoreRating: number | null; // nessuna fonte: ASC non espone il rating via API
 }
 
@@ -53,7 +58,7 @@ export async function loadHeroKpis(): Promise<HeroKpis> {
     sessionMedianMinutes: null, sessionSample: 0,
     retentionD7Pct: null, retentionD7Sample: 0,
     pushOptInPct: null, pushOptedUsers: 0,
-    pushOpenRatePct: null, pushSent30d: 0, pushClicked30d: 0,
+    pushOpenRatePct: null, pushSentSinceTracking: 0, pushClickedSinceTracking: 0,
     appStoreRating: null,
   };
   if (!supabaseServer) return empty;
@@ -65,7 +70,8 @@ export async function loadHeroKpis(): Promise<HeroKpis> {
     windowsRes,
     returnRes,
     pushActiveRes,
-    pushOpenRes,
+    pushSentRes,
+    pushClickedRes,
     cohortsRes,
   ] = await Promise.all([
     supabaseServer.from('user_profiles').select('id', { count: 'exact', head: true }),
@@ -86,11 +92,19 @@ export async function loadHeroKpis(): Promise<HeroKpis> {
       .select('user_id')
       .eq('is_active', true)
       .not('user_id', 'is', null),
-    // Push open-rate: clicked/sent sulle notifiche inviate negli ultimi 30gg.
+    // Denominatore del KPI: solo consegne realmente tracciabili.
     supabaseServer
-      .from('v_insights_push_open')
-      .select('sent_30d,clicked_30d,open_rate_pct')
-      .maybeSingle(),
+      .from('notification_deliveries')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'sent')
+      .gte('sent_at', PUSH_OPEN_TRACKING_STARTED_AT),
+    // Numeratore sullo stesso identico insieme temporale e di stato.
+    supabaseServer
+      .from('notification_deliveries')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'sent')
+      .gte('sent_at', PUSH_OPEN_TRACKING_STARTED_AT)
+      .not('clicked_at', 'is', null),
     // Retention D7 pesata sulle coorti MATURE (>= 14gg): le coorti troppo giovani
     // non hanno ancora superato la finestra D7 e falserebbero la media verso il basso.
     supabaseServer
@@ -121,10 +135,11 @@ export async function loadHeroKpis(): Promise<HeroKpis> {
   const nextDayReturnSample = ret?.active_user_days ?? 0;
 
   // Push open-rate.
-  const po = (pushOpenRes.data as { sent_30d: number | null; clicked_30d: number | null; open_rate_pct: number | null } | null) ?? null;
-  const pushSent30d = po?.sent_30d ?? 0;
-  const pushClicked30d = po?.clicked_30d ?? 0;
-  const pushOpenRatePct = po?.open_rate_pct != null ? Number(po.open_rate_pct) : null;
+  const pushSentSinceTracking = pushSentRes.count ?? 0;
+  const pushClickedSinceTracking = pushClickedRes.count ?? 0;
+  const pushOpenRatePct = pushSentSinceTracking > 0
+    ? Math.round((pushClickedSinceTracking / pushSentSinceTracking) * 1000) / 10
+    : null;
 
   // Push opt-in su utenti distinti.
   const pushRows = (pushActiveRes.data as Array<{ user_id: string | null }> | null) ?? [];
@@ -155,8 +170,8 @@ export async function loadHeroKpis(): Promise<HeroKpis> {
     pushOptInPct,
     pushOptedUsers,
     pushOpenRatePct,
-    pushSent30d,
-    pushClicked30d,
+    pushSentSinceTracking,
+    pushClickedSinceTracking,
     appStoreRating: null,
   };
 }
