@@ -74,7 +74,7 @@ export function DauTimeSeries({ series }: Props) {
           <Line
             type="monotone"
             dataKey="guest"
-            name="Guest"
+            name="Ospiti"
             stroke={COLORS.guest}
             strokeWidth={1.5}
             strokeDasharray="4 3"

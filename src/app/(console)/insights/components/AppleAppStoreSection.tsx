@@ -64,11 +64,11 @@ export function AppleAppStoreSection({ data }: Props) {
   }
 
   const tiles = [
-    { label: 'Downloads (ultimo giorno)', value: formatN(latest.downloads) },
-    { label: 'Sessions', value: formatN(latest.sessions) },
-    { label: 'Active devices', value: formatN(latest.activeDevices) },
+    { label: 'Download (ultimo giorno)', value: formatN(latest.downloads) },
+    { label: 'Sessioni', value: formatN(latest.sessions) },
+    { label: 'Dispositivi attivi', value: formatN(latest.activeDevices) },
     {
-      label: 'Crash-free',
+      label: 'Sessioni senza arresti',
       value: latest.crashFreeRate != null ? `${(latest.crashFreeRate * 100).toFixed(2)}%` : '—',
     },
   ];
@@ -91,7 +91,7 @@ export function AppleAppStoreSection({ data }: Props) {
       <div className="flex flex-col md:flex-row gap-5 items-start">
         <div className="flex-1 space-y-1">
           <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
-            Downloads (30 giorni)
+            Download (30 giorni)
           </div>
           <Sparkline values={series.map((p) => p.downloads)} width={320} height={56} />
           <div className="text-[11.5px] text-muted-foreground mt-1">

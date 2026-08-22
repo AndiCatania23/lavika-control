@@ -21,6 +21,7 @@ const LAVIKA_APP_ID = '6762273646';
 // del notification worker del 9 agosto 2026. Le consegne precedenti non
 // contenevano l'identificativo nel payload e non devono entrare nel KPI.
 export const PUSH_OPEN_TRACKING_STARTED_AT = '2026-08-09T11:46:55.751Z';
+export const CORE_ANALYTICS_STARTED_AT = '2026-08-22T20:41:06.000Z';
 
 /* =========================================================================
  * HERO KPI (8 valori)
@@ -100,7 +101,7 @@ export async function loadHeroKpis(): Promise<HeroKpis> {
       .not('clicked_at', 'is', null),
     // Retention D7 canonica: qualunque core action, solo utenti eleggibili.
     supabaseServer
-      .from('v_insights_core_retention_cohorts')
+      .from('v_insights_complete_retention_cohorts')
       .select('cohort_week,d7_eligible,d7_returned')
       .order('cohort_week', { ascending: false })
       .limit(12),
@@ -215,7 +216,7 @@ export async function loadCohorts(weeks = 8): Promise<CohortRow[]> {
   if (!supabaseServer) return [];
 
   const { data, error } = await supabaseServer
-    .from('v_insights_core_retention_cohorts')
+    .from('v_insights_complete_retention_cohorts')
     .select('cohort_week,cohort_size,d1_eligible,d1_returned,d7_eligible,d7_returned,d30_eligible,d30_returned')
     .order('cohort_week', { ascending: false })
     .limit(weeks);
@@ -299,7 +300,7 @@ export async function loadFunnel(days = 30): Promise<FunnelTotals> {
 
   const from = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
   const { data, error } = await supabaseServer
-    .from('v_insights_core_signup_funnel')
+    .from('v_insights_complete_signup_funnel')
     .select('signups,onboarded,first_value,d7_eligible,returned_d7')
     .gte('day', from);
 
@@ -343,14 +344,16 @@ export interface FeatureActivationRow {
   d7Returned: number;
   d1Pct: number | null;
   d7Pct: number | null;
+  signupUsers: number;
+  activationPct: number | null;
 }
 
 export async function loadActivationByFeature(): Promise<FeatureActivationRow[]> {
   if (!supabaseServer) return [];
   const { data, error } = await supabaseServer
-    .from('v_insights_activation_by_feature')
-    .select('feature,activated_users,d1_eligible,d1_returned,d7_eligible,d7_returned')
-    .order('activated_users', { ascending: false });
+    .from('v_insights_complete_activation_by_feature')
+    .select('feature,feature_order,signup_users,activated_users,d1_eligible,d1_returned,d7_eligible,d7_returned')
+    .order('feature_order', { ascending: true });
   if (error || !data) return [];
 
   const pct = (num: number, den: number) =>
@@ -358,6 +361,7 @@ export async function loadActivationByFeature(): Promise<FeatureActivationRow[]>
 
   return (data as Array<{
     feature: FeatureActivationRow['feature'];
+    signup_users: number;
     activated_users: number;
     d1_eligible: number;
     d1_returned: number;
@@ -365,6 +369,7 @@ export async function loadActivationByFeature(): Promise<FeatureActivationRow[]>
     d7_returned: number;
   }>).map((row) => ({
     feature: row.feature,
+    signupUsers: row.signup_users ?? 0,
     activatedUsers: row.activated_users ?? 0,
     d1Eligible: row.d1_eligible ?? 0,
     d1Returned: row.d1_returned ?? 0,
@@ -372,7 +377,81 @@ export async function loadActivationByFeature(): Promise<FeatureActivationRow[]>
     d7Returned: row.d7_returned ?? 0,
     d1Pct: pct(row.d1_returned ?? 0, row.d1_eligible ?? 0),
     d7Pct: pct(row.d7_returned ?? 0, row.d7_eligible ?? 0),
+    activationPct: pct(row.activated_users ?? 0, row.signup_users ?? 0),
   }));
+}
+
+export type CoreFeature = 'pill' | 'match' | 'video' | 'prediction';
+export type CoreUsageWindow = '24h' | '7d' | '30d';
+
+export interface CoreUsageRow {
+  window: CoreUsageWindow;
+  feature: CoreFeature;
+  uniqueUsers: number;
+  actions: number;
+  effectiveFrom: string;
+}
+
+export interface CoreUsageDay {
+  day: string;
+  pillUsers: number;
+  pillActions: number;
+  matchUsers: number;
+  matchActions: number;
+  videoUsers: number;
+  videoActions: number;
+  predictionUsers: number;
+  predictionActions: number;
+}
+
+export async function loadCoreUsage(): Promise<CoreUsageRow[]> {
+  if (!supabaseServer) return [];
+  const { data, error } = await supabaseServer
+    .from('v_insights_core_usage_windows')
+    .select('window_key,feature,unique_users,actions,effective_from')
+    .order('window_order', { ascending: true })
+    .order('feature_order', { ascending: true });
+  if (error || !data) return [];
+  return (data as Array<{
+    window_key: CoreUsageWindow;
+    feature: CoreFeature;
+    unique_users: number;
+    actions: number;
+    effective_from: string;
+  }>).map((row) => ({
+    window: row.window_key,
+    feature: row.feature,
+    uniqueUsers: row.unique_users ?? 0,
+    actions: row.actions ?? 0,
+    effectiveFrom: row.effective_from,
+  }));
+}
+
+export async function loadCoreUsageDaily(): Promise<CoreUsageDay[]> {
+  if (!supabaseServer) return [];
+  const { data, error } = await supabaseServer
+    .from('v_insights_core_usage_daily')
+    .select('day,feature,unique_users,actions')
+    .order('day', { ascending: true });
+  if (error || !data) return [];
+
+  const days = new Map<string, CoreUsageDay>();
+  for (const row of data as Array<{ day: string; feature: CoreFeature; unique_users: number; actions: number }>) {
+    const current = days.get(row.day) ?? {
+      day: row.day,
+      pillUsers: 0, pillActions: 0,
+      matchUsers: 0, matchActions: 0,
+      videoUsers: 0, videoActions: 0,
+      predictionUsers: 0, predictionActions: 0,
+    };
+    const prefix = row.feature;
+    if (prefix === 'pill') { current.pillUsers = row.unique_users ?? 0; current.pillActions = row.actions ?? 0; }
+    if (prefix === 'match') { current.matchUsers = row.unique_users ?? 0; current.matchActions = row.actions ?? 0; }
+    if (prefix === 'video') { current.videoUsers = row.unique_users ?? 0; current.videoActions = row.actions ?? 0; }
+    if (prefix === 'prediction') { current.predictionUsers = row.unique_users ?? 0; current.predictionActions = row.actions ?? 0; }
+    days.set(row.day, current);
+  }
+  return Array.from(days.values());
 }
 
 /* =========================================================================

@@ -24,7 +24,7 @@ function cellStyle(pct: number | null): string {
 
 export function RetentionCohortTable({ cohorts }: Props) {
   if (cohorts.length === 0) {
-    return <div className="text-[13px] text-muted-foreground">Nessuna coorte disponibile.</div>;
+    return <div className="text-[13px] text-muted-foreground">Dati in raccolta: nessuna coorte completa dal 22 agosto.</div>;
   }
 
   return (
@@ -32,11 +32,11 @@ export function RetentionCohortTable({ cohorts }: Props) {
       <table className="w-full text-[12.5px]">
         <thead>
           <tr className="text-muted-foreground text-[11px] uppercase tracking-wider">
-            <th className="text-left font-medium py-2 pr-3">Coorte</th>
-            <th className="text-right font-medium py-2 pr-3">Size</th>
-            <th className="text-right font-medium py-2 pr-3">D1</th>
-            <th className="text-right font-medium py-2 pr-3">D7</th>
-            <th className="text-right font-medium py-2 pr-3">D30</th>
+            <th className="text-left font-medium py-2 pr-3">Settimana iscrizione</th>
+            <th className="text-right font-medium py-2 pr-3">Iscritti</th>
+            <th className="text-right font-medium py-2 pr-3">Giorno 1</th>
+            <th className="text-right font-medium py-2 pr-3">Giorno 7</th>
+            <th className="text-right font-medium py-2 pr-3">Giorno 30</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-[color:var(--hairline)]">

@@ -30,7 +30,7 @@ function StackedBar({ registered, guest }: { registered: number; guest: number }
       <div
         className="h-full bg-violet-500/70"
         style={{ width: `${100 - regPct}%` }}
-        title={`Guest: ${guest}`}
+        title={`Ospiti: ${guest}`}
       />
     </div>
   );
@@ -62,7 +62,7 @@ export function GuestVsRegistered({ rows }: Props) {
                 Registrati {r.registered}
               </span>
               <span className="flex items-center gap-1.5">
-                Guest {r.guests}
+                Ospiti {r.guests}
                 <span className="inline-block w-2 h-2 rounded-full bg-violet-500/70" />
               </span>
             </div>
