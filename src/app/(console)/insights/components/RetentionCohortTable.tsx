@@ -46,12 +46,15 @@ export function RetentionCohortTable({ cohorts }: Props) {
               <td className="py-2 pr-3 text-right text-muted-foreground">{c.cohortSize}</td>
               <td className={`py-2 pr-3 text-right rounded-sm ${cellStyle(c.d1Pct)}`}>
                 {c.d1Pct != null ? `${c.d1Pct}%` : '—'}
+                {c.d1Eligible > 0 ? <span className="ml-1 text-[9px] opacity-60">n={c.d1Eligible}</span> : null}
               </td>
               <td className={`py-2 pr-3 text-right rounded-sm ${cellStyle(c.d7Pct)}`}>
                 {c.d7Pct != null ? `${c.d7Pct}%` : '—'}
+                {c.d7Eligible > 0 ? <span className="ml-1 text-[9px] opacity-60">n={c.d7Eligible}</span> : null}
               </td>
               <td className={`py-2 pr-3 text-right rounded-sm ${cellStyle(c.d30Pct)}`}>
                 {c.d30Pct != null ? `${c.d30Pct}%` : '—'}
+                {c.d30Eligible > 0 ? <span className="ml-1 text-[9px] opacity-60">n={c.d30Eligible}</span> : null}
               </td>
             </tr>
           ))}

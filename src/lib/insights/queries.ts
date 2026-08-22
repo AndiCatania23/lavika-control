@@ -46,11 +46,6 @@ export interface HeroKpis {
   appStoreRating: number | null; // nessuna fonte: ASC non espone il rating via API
 }
 
-// Una coorte settimanale e' "matura" per D7 solo quando anche l'ultimo iscritto
-// della settimana ha avuto >= 7 giorni per tornare: week_start + 6 (fine sett.)
-// + 7.5 (finestra D7) ~= 14 giorni. Sotto questa soglia il D7=0 e' un artefatto.
-const D7_MATURITY_DAYS = 14;
-
 export async function loadHeroKpis(): Promise<HeroKpis> {
   const empty: HeroKpis = {
     totalUsers: 0, dau: 0, wau: 0, mau: 0,
@@ -62,8 +57,6 @@ export async function loadHeroKpis(): Promise<HeroKpis> {
     appStoreRating: null,
   };
   if (!supabaseServer) return empty;
-
-  const nowMs = Date.now();
 
   const [
     totalUsersRes,
@@ -105,11 +98,10 @@ export async function loadHeroKpis(): Promise<HeroKpis> {
       .eq('status', 'sent')
       .gte('sent_at', PUSH_OPEN_TRACKING_STARTED_AT)
       .not('clicked_at', 'is', null),
-    // Retention D7 pesata sulle coorti MATURE (>= 14gg): le coorti troppo giovani
-    // non hanno ancora superato la finestra D7 e falserebbero la media verso il basso.
+    // Retention D7 canonica: qualunque core action, solo utenti eleggibili.
     supabaseServer
-      .from('v_insights_retention_cohorts')
-      .select('cohort_week,cohort_size,d7_returned')
+      .from('v_insights_core_retention_cohorts')
+      .select('cohort_week,d7_eligible,d7_returned')
       .order('cohort_week', { ascending: false })
       .limit(12),
   ]);
@@ -147,12 +139,10 @@ export async function loadHeroKpis(): Promise<HeroKpis> {
   const pushOptInPct = totalUsers > 0 ? Math.round((pushOptedUsers / totalUsers) * 1000) / 10 : null;
 
   // Retention D7: solo coorti mature, weighted average.
-  const cutoffMs = nowMs - D7_MATURITY_DAYS * 86400000;
   const cohorts =
-    (cohortsRes.data as Array<{ cohort_week: string; cohort_size: number; d7_returned: number }> | null) ?? [];
-  const mature = cohorts.filter((c) => new Date(`${c.cohort_week}T00:00:00Z`).getTime() <= cutoffMs);
-  const cohortTotal = mature.reduce((s, c) => s + (c.cohort_size ?? 0), 0);
-  const cohortReturned = mature.reduce((s, c) => s + (c.d7_returned ?? 0), 0);
+    (cohortsRes.data as Array<{ cohort_week: string; d7_eligible: number; d7_returned: number }> | null) ?? [];
+  const cohortTotal = cohorts.reduce((s, c) => s + (c.d7_eligible ?? 0), 0);
+  const cohortReturned = cohorts.reduce((s, c) => s + (c.d7_returned ?? 0), 0);
   const retentionD7Pct = cohortTotal > 0 ? Math.round((cohortReturned / cohortTotal) * 1000) / 10 : null;
 
   return {
@@ -216,14 +206,17 @@ export interface CohortRow {
   d1Pct: number | null;
   d7Pct: number | null;
   d30Pct: number | null;
+  d1Eligible: number;
+  d7Eligible: number;
+  d30Eligible: number;
 }
 
 export async function loadCohorts(weeks = 8): Promise<CohortRow[]> {
   if (!supabaseServer) return [];
 
   const { data, error } = await supabaseServer
-    .from('v_insights_retention_cohorts')
-    .select('cohort_week,cohort_size,d1_returned,d7_returned,d30_returned')
+    .from('v_insights_core_retention_cohorts')
+    .select('cohort_week,cohort_size,d1_eligible,d1_returned,d7_eligible,d7_returned,d30_eligible,d30_returned')
     .order('cohort_week', { ascending: false })
     .limit(weeks);
 
@@ -233,14 +226,20 @@ export async function loadCohorts(weeks = 8): Promise<CohortRow[]> {
     cohort_week: string;
     cohort_size: number;
     d1_returned: number;
+    d1_eligible: number;
     d7_returned: number;
+    d7_eligible: number;
     d30_returned: number;
+    d30_eligible: number;
   }>).map((r) => ({
     cohortWeek: r.cohort_week,
     cohortSize: r.cohort_size ?? 0,
-    d1Pct: r.cohort_size > 0 ? Math.round(((r.d1_returned ?? 0) / r.cohort_size) * 1000) / 10 : null,
-    d7Pct: r.cohort_size > 0 ? Math.round(((r.d7_returned ?? 0) / r.cohort_size) * 1000) / 10 : null,
-    d30Pct: r.cohort_size > 0 ? Math.round(((r.d30_returned ?? 0) / r.cohort_size) * 1000) / 10 : null,
+    d1Eligible: r.d1_eligible ?? 0,
+    d7Eligible: r.d7_eligible ?? 0,
+    d30Eligible: r.d30_eligible ?? 0,
+    d1Pct: r.d1_eligible > 0 ? Math.round(((r.d1_returned ?? 0) / r.d1_eligible) * 1000) / 10 : null,
+    d7Pct: r.d7_eligible > 0 ? Math.round(((r.d7_returned ?? 0) / r.d7_eligible) * 1000) / 10 : null,
+    d30Pct: r.d30_eligible > 0 ? Math.round(((r.d30_returned ?? 0) / r.d30_eligible) * 1000) / 10 : null,
   }));
 }
 
@@ -282,44 +281,46 @@ export async function loadGuestVsReg(): Promise<GuestVsRegRow[]> {
 export interface FunnelTotals {
   signups: number;
   onboarded: number;
-  firstPlay: number;
+  firstValue: number;
+  d7Eligible: number;
   returnedD7: number;
   onboardedPct: number | null;
-  firstPlayPct: number | null;
+  firstValuePct: number | null;
   returnedD7Pct: number | null;
 }
 
 export async function loadFunnel(days = 30): Promise<FunnelTotals> {
   if (!supabaseServer) {
     return {
-      signups: 0, onboarded: 0, firstPlay: 0, returnedD7: 0,
-      onboardedPct: null, firstPlayPct: null, returnedD7Pct: null,
+      signups: 0, onboarded: 0, firstValue: 0, d7Eligible: 0, returnedD7: 0,
+      onboardedPct: null, firstValuePct: null, returnedD7Pct: null,
     };
   }
 
   const from = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
   const { data, error } = await supabaseServer
-    .from('v_insights_signup_funnel')
-    .select('signups,onboarded,first_play,returned_d7')
+    .from('v_insights_core_signup_funnel')
+    .select('signups,onboarded,first_value,d7_eligible,returned_d7')
     .gte('day', from);
 
   if (error || !data) {
     return {
-      signups: 0, onboarded: 0, firstPlay: 0, returnedD7: 0,
-      onboardedPct: null, firstPlayPct: null, returnedD7Pct: null,
+      signups: 0, onboarded: 0, firstValue: 0, d7Eligible: 0, returnedD7: 0,
+      onboardedPct: null, firstValuePct: null, returnedD7Pct: null,
     };
   }
 
-  const totals = (data as Array<{ signups: number; onboarded: number; first_play: number; returned_d7: number }>)
+  const totals = (data as Array<{ signups: number; onboarded: number; first_value: number; d7_eligible: number; returned_d7: number }>)
     .reduce(
       (acc, r) => {
         acc.signups += r.signups ?? 0;
         acc.onboarded += r.onboarded ?? 0;
-        acc.firstPlay += r.first_play ?? 0;
+        acc.firstValue += r.first_value ?? 0;
+        acc.d7Eligible += r.d7_eligible ?? 0;
         acc.returnedD7 += r.returned_d7 ?? 0;
         return acc;
       },
-      { signups: 0, onboarded: 0, firstPlay: 0, returnedD7: 0 },
+      { signups: 0, onboarded: 0, firstValue: 0, d7Eligible: 0, returnedD7: 0 },
     );
 
   const pct = (num: number, den: number) =>
@@ -328,9 +329,50 @@ export async function loadFunnel(days = 30): Promise<FunnelTotals> {
   return {
     ...totals,
     onboardedPct: pct(totals.onboarded, totals.signups),
-    firstPlayPct: pct(totals.firstPlay, totals.signups),
-    returnedD7Pct: pct(totals.returnedD7, totals.signups),
+    firstValuePct: pct(totals.firstValue, totals.signups),
+    returnedD7Pct: pct(totals.returnedD7, totals.d7Eligible),
   };
+}
+
+export interface FeatureActivationRow {
+  feature: 'pill' | 'video' | 'match' | 'prediction';
+  activatedUsers: number;
+  d1Eligible: number;
+  d1Returned: number;
+  d7Eligible: number;
+  d7Returned: number;
+  d1Pct: number | null;
+  d7Pct: number | null;
+}
+
+export async function loadActivationByFeature(): Promise<FeatureActivationRow[]> {
+  if (!supabaseServer) return [];
+  const { data, error } = await supabaseServer
+    .from('v_insights_activation_by_feature')
+    .select('feature,activated_users,d1_eligible,d1_returned,d7_eligible,d7_returned')
+    .order('activated_users', { ascending: false });
+  if (error || !data) return [];
+
+  const pct = (num: number, den: number) =>
+    den > 0 ? Math.round((num / den) * 1000) / 10 : null;
+
+  return (data as Array<{
+    feature: FeatureActivationRow['feature'];
+    activated_users: number;
+    d1_eligible: number;
+    d1_returned: number;
+    d7_eligible: number;
+    d7_returned: number;
+  }>).map((row) => ({
+    feature: row.feature,
+    activatedUsers: row.activated_users ?? 0,
+    d1Eligible: row.d1_eligible ?? 0,
+    d1Returned: row.d1_returned ?? 0,
+    d7Eligible: row.d7_eligible ?? 0,
+    d7Returned: row.d7_returned ?? 0,
+    d1Pct: pct(row.d1_returned ?? 0, row.d1_eligible ?? 0),
+    d7Pct: pct(row.d7_returned ?? 0, row.d7_eligible ?? 0),
+  }));
 }
 
 /* =========================================================================

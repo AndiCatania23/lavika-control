@@ -14,7 +14,7 @@ export function SignupFunnel({ totals }: Props) {
   const steps = [
     { label: 'Signup', count: totals.signups, pct: 100 as number | null },
     { label: 'Onboarded', count: totals.onboarded, pct: totals.onboardedPct },
-    { label: 'First Play', count: totals.firstPlay, pct: totals.firstPlayPct },
+    { label: 'First Value', count: totals.firstValue, pct: totals.firstValuePct },
     { label: 'Returned D7', count: totals.returnedD7, pct: totals.returnedD7Pct },
   ];
 
@@ -43,6 +43,9 @@ export function SignupFunnel({ totals }: Props) {
           </div>
         );
       })}
+      <p className="text-[10.5px] text-muted-foreground">
+        Returned D7 usa solo utenti eleggibili: n={totals.d7Eligible}.
+      </p>
     </div>
   );
 }

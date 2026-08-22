@@ -22,6 +22,7 @@ import {
   loadFunnel,
   loadAppleMetrics,
   loadDeviceGeo,
+  loadActivationByFeature,
 } from '@/lib/insights/queries';
 import { HeroKpiGrid } from './components/HeroKpiGrid';
 import { AppleAppStoreSection } from './components/AppleAppStoreSection';
@@ -31,6 +32,7 @@ import { GuestVsRegistered } from './components/GuestVsRegistered';
 import { SignupFunnel } from './components/SignupFunnel';
 import { DeviceGeoBreakdown } from './components/DeviceGeoBreakdown';
 import { InsightSection } from './components/InsightSection';
+import { ActivationByFeature } from './components/ActivationByFeature';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 300;
@@ -44,6 +46,7 @@ export default async function InsightsPage() {
     funnel,
     appleMetrics,
     deviceGeo,
+    activationByFeature,
   ] = await Promise.all([
     loadHeroKpis(),
     loadDauSeries(30),
@@ -52,6 +55,7 @@ export default async function InsightsPage() {
     loadFunnel(30),
     loadAppleMetrics(30),
     loadDeviceGeo(30),
+    loadActivationByFeature(),
   ]);
 
   return (
@@ -87,7 +91,7 @@ export default async function InsightsPage() {
       {/* Retention cohorts */}
       <InsightSection
         title="Retention coorti settimanali"
-        subtitle="% di nuovi utenti tornati dopo 1, 7 e 30 giorni"
+        subtitle="% tornati con una core action · Europe/Rome · solo utenti eleggibili"
       >
         <RetentionCohortTable cohorts={cohorts} />
       </InsightSection>
@@ -103,11 +107,18 @@ export default async function InsightsPage() {
 
         <InsightSection
           title="Signup funnel (30 giorni)"
-          subtitle="Signup → Onboarded → First Play → Returned D7"
+          subtitle="Signup → Onboarded → First Value → Returned D7"
         >
           <SignupFunnel totals={funnel} />
         </InsightSection>
       </div>
+
+      <InsightSection
+        title="Activation by feature → Retention"
+        subtitle="Feature usata nel giorno del signup; gli utenti possono comparire in più righe"
+      >
+        <ActivationByFeature rows={activationByFeature} />
+      </InsightSection>
 
       {/* Device/Geo */}
       <InsightSection

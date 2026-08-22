@@ -26,9 +26,9 @@ function buildTiles(k: HeroKpis): Tile[] {
       hint: 'DAU / MAU',
     },
     {
-      label: 'Ritorno 24h',
+      label: 'Ritorno giornaliero',
       value: k.nextDayReturnPct != null ? `${k.nextDayReturnPct}%` : '—',
-      hint: k.nextDayReturnSample > 0 ? `torna il giorno dopo · media 30gg` : 'dati insufficienti',
+      hint: k.nextDayReturnSample > 0 ? `attività giorno→giorno · media 30gg` : 'dati insufficienti',
     },
     {
       label: 'Retention D7',
