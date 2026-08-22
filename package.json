@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:social": "tsx --test src/lib/social-insights/*.test.ts supabase/functions/social-insights-fetcher/*.test.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.999.0",

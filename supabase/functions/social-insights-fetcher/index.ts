@@ -17,6 +17,7 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { engagementRate, firstAvailableMetric, firstMetricValue, pipelineStatus, sumKnownMetrics, sumMetricValues } from "./metrics.ts";
 
 const META_GRAPH_VERSION = "v21.0";
 const META_BASE = `https://graph.facebook.com/${META_GRAPH_VERSION}`;
@@ -104,21 +105,15 @@ async function snapshotAccounts(): Promise<{ instagram: unknown; facebook: unkno
       });
     }
 
-    const sumMetric = (name: string) => {
-      const series = igInsights.data?.find((d) => d.name === name);
-      if (!series?.values) return 0;
-      return series.values.reduce((s, v) => s + (v.value ?? 0), 0);
-    };
-
     const row = {
       platform: "instagram" as const,
       account_id: c.IG_BUSINESS_ID,
       snapshot_date: today,
       followers_count: igInfo.followers_count ?? null,
-      reach_28d: sumMetric("reach"),
+      reach_28d: sumMetricValues(igInsights, "reach"),
       // Meta IG v18+: 'impressions' rinominato in 'views' (content views)
-      impressions_28d: sumMetric("views") || sumMetric("impressions"),
-      profile_views_28d: sumMetric("profile_views"),
+      impressions_28d: firstAvailableMetric(sumMetricValues(igInsights, "views"), sumMetricValues(igInsights, "impressions")),
+      profile_views_28d: sumMetricValues(igInsights, "profile_views"),
       raw: { igInfo, igInsights },
     };
 
@@ -149,17 +144,14 @@ async function snapshotAccounts(): Promise<{ instagram: unknown; facebook: unkno
       console.warn("FB Page insights failed:", e);
     }
 
-    const fbMetric = (name: string) =>
-      fbInsights.data?.find((d) => d.name === name)?.values?.[0]?.value ?? 0;
-
     const row = {
       platform: "facebook" as const,
       account_id: c.PAGE_ID,
       snapshot_date: today,
       followers_count: fbInfo.followers_count ?? fbInfo.fan_count ?? null,
       reach_28d: null,
-      impressions_28d: fbMetric("page_impressions"),
-      profile_views_28d: fbMetric("page_views_total"),
+      impressions_28d: firstMetricValue(fbInsights, "page_impressions"),
+      profile_views_28d: firstMetricValue(fbInsights, "page_views_total"),
       raw: { fbInfo, fbInsights },
     };
 
@@ -214,16 +206,14 @@ async function snapshotPosts(): Promise<{ instagram: number; facebook: number; e
         continue;
       }
 
-      const get = (name: string) =>
-        insights.data?.find((d) => d.name === name)?.values?.[0]?.value ?? 0;
-      const reach = Number(get("reach")) || 0;
-      const likes = Number(get("likes")) || 0;
-      const comments = Number(get("comments")) || 0;
-      const shares = Number(get("shares")) || 0;
-      const saves = Number(get("saved")) || 0;
-      const totalInteractions = Number(get("total_interactions")) || 0;
-      const numerator = totalInteractions || (likes + comments + shares + saves);
-      const engRate = reach > 0 ? Math.min(numerator / reach, 9.9999) : 0;
+      const reach = firstMetricValue(insights, "reach");
+      const likes = firstMetricValue(insights, "likes");
+      const comments = firstMetricValue(insights, "comments");
+      const shares = firstMetricValue(insights, "shares");
+      const saves = firstMetricValue(insights, "saved");
+      const totalInteractions = firstMetricValue(insights, "total_interactions");
+      const numerator = firstAvailableMetric(totalInteractions, sumKnownMetrics([likes, comments, shares, saves]));
+      const engRate = engagementRate(numerator, reach);
 
       const { error } = await sb.from("social_post_insights").upsert(
         {
@@ -237,7 +227,7 @@ async function snapshotPosts(): Promise<{ instagram: number; facebook: number; e
           comments,
           shares,
           saves,
-          video_views: isVideo ? Number(get("plays")) || null : null,
+          video_views: isVideo ? firstMetricValue(insights, "plays") : null,
           engagement_rate: engRate,
           caption: m.caption ?? "",
           permalink: m.permalink ?? null,
@@ -275,8 +265,7 @@ async function snapshotPosts(): Promise<{ instagram: number; facebook: number; e
         continue;
       }
 
-      const getNum = (name: string) =>
-        Number(insights.data?.find((d) => d.name === name)?.values?.[0]?.value) || 0;
+      const getNum = (name: string) => firstMetricValue(insights, name);
       const getObj = (name: string) =>
         insights.data?.find((d) => d.name === name)?.values?.[0]?.value as
           | Record<string, number>
@@ -286,8 +275,10 @@ async function snapshotPosts(): Promise<{ instagram: number; facebook: number; e
       const impressions = getNum("post_impressions");
       const engaged = getNum("post_engaged_users");
       const reactions = getObj("post_reactions_by_type_total") ?? {};
-      const likes = Object.values(reactions).reduce((s, v) => s + (Number(v) || 0), 0);
-      const engRate = reach > 0 ? Math.min(engaged / reach, 9.9999) : 0;
+      const likes = Object.keys(reactions).length > 0
+        ? Object.values(reactions).reduce((s, v) => s + (Number(v) || 0), 0)
+        : null;
+      const engRate = engagementRate(engaged, reach);
 
       const { error } = await sb.from("social_post_insights").upsert(
         {
@@ -320,6 +311,30 @@ async function snapshotPosts(): Promise<{ instagram: number; facebook: number; e
   return { instagram: igCount, facebook: fbCount, errors };
 }
 
+async function recordPipelineRun(args: {
+  task: string;
+  status: 'success' | 'partial' | 'error';
+  startedAt: string;
+  recordsWritten?: number;
+  partialErrors?: string[];
+  errorMessage?: string;
+  metadata?: Record<string, unknown>;
+}) {
+  const { error } = await supabase().from('social_pipeline_runs').insert({
+    pipeline: 'social-insights-fetcher',
+    task: args.task,
+    provider: 'meta',
+    status: args.status,
+    started_at: args.startedAt,
+    completed_at: new Date().toISOString(),
+    records_written: args.recordsWritten ?? 0,
+    partial_errors: args.partialErrors ?? [],
+    error_message: args.errorMessage ?? null,
+    metadata: args.metadata ?? {},
+  });
+  if (error) console.error('social_pipeline_runs insert failed:', error.message);
+}
+
 // ============================================================================
 // HTTP HANDLER
 // ============================================================================
@@ -341,6 +356,7 @@ Deno.serve(async (req) => {
   const task = body.task ?? "all";
 
   const start = Date.now();
+  const startedAt = new Date(start).toISOString();
   const result: Record<string, unknown> = { task };
 
   try {
@@ -354,7 +370,24 @@ Deno.serve(async (req) => {
       const { error } = await supabase().rpc("social_insights_refresh");
       result.refresh_view = error ? { error: error.message } : "ok";
     }
+    const postResult = result.post_insights as { instagram?: number; facebook?: number; errors?: string[] } | undefined;
+    const accountResult = result.account_snapshot as { instagram?: { error?: string }; facebook?: { error?: string } } | undefined;
+    const errors = [
+      ...(postResult?.errors ?? []),
+      ...(accountResult?.instagram?.error ? [`Instagram account: ${accountResult.instagram.error}`] : []),
+      ...(accountResult?.facebook?.error ? [`Facebook account: ${accountResult.facebook.error}`] : []),
+      ...(typeof result.refresh_view === 'object' && result.refresh_view ? [`Refresh view: ${JSON.stringify(result.refresh_view)}`] : []),
+    ];
+    await recordPipelineRun({
+      task,
+      status: pipelineStatus(errors),
+      startedAt,
+      recordsWritten: (postResult?.instagram ?? 0) + (postResult?.facebook ?? 0),
+      partialErrors: errors,
+      metadata: { duration_ms: Date.now() - start },
+    });
   } catch (e) {
+    await recordPipelineRun({ task, status: 'error', startedAt, errorMessage: String(e) });
     return new Response(
       JSON.stringify({ ok: false, error: String(e), partial: result }),
       { status: 500, headers: { "Content-Type": "application/json" } },

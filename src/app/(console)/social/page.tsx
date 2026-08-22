@@ -23,6 +23,10 @@ interface InsightsSummary {
   daysOfData: number;
   mode: 'early' | 'active';
   refreshedAt: string | null;
+  dataStatus?: {
+    account: { status: 'fresh' | 'stale' | 'partial' | 'unavailable' | 'error' };
+    posts: { status: 'fresh' | 'stale' | 'partial' | 'unavailable' | 'error' };
+  };
 }
 
 const IG_COLOR = '#E1306C';

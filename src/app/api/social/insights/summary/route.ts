@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabaseServer';
+import { datasetFreshness } from '@/lib/social-insights/freshness';
 
 /**
  * GET /api/social/insights/summary
@@ -13,9 +14,25 @@ export async function GET() {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
   }
 
-  const { data, error } = await supabaseServer
-    .from('v_social_insights_summary')
-    .select('platform, followers_count, followers_delta_7d, followers_delta_30d, reach_28d, avg_eng_rate_14d, posts_count_14d, days_of_data, mode, refreshed_at');
+  const [summaryResult, accountTimestampResult, postTimestampResult] = await Promise.all([
+    supabaseServer
+      .from('v_social_insights_summary')
+      .select('platform, followers_count, followers_delta_7d, followers_delta_30d, reach_28d, avg_eng_rate_14d, posts_count_14d, days_of_data, mode'),
+    supabaseServer
+      .from('social_account_snapshots')
+      .select('created_at')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabaseServer
+      .from('social_post_insights')
+      .select('snapshot_at')
+      .order('snapshot_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+
+  const { data, error } = summaryResult;
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -29,7 +46,6 @@ export async function GET() {
     posts_count_14d: number;
     days_of_data: number;
     mode: 'early' | 'active';
-    refreshed_at: string | null;
   }>;
 
   const ig = rows.find(r => r.platform === 'instagram') ?? null;
@@ -43,6 +59,22 @@ export async function GET() {
     ig?.avg_eng_rate_14d != null && fb?.avg_eng_rate_14d != null
       ? (ig.avg_eng_rate_14d + fb.avg_eng_rate_14d) / 2
       : ig?.avg_eng_rate_14d ?? fb?.avg_eng_rate_14d ?? null;
+
+  const accountUpdatedAt = (accountTimestampResult.data as { created_at: string } | null)?.created_at ?? null;
+  const postsUpdatedAt = (postTimestampResult.data as { snapshot_at: string } | null)?.snapshot_at ?? null;
+  const accountStatus = datasetFreshness({
+    source: 'Meta account',
+    updatedAt: accountUpdatedAt,
+    staleAfterMinutes: 36 * 60,
+    partial: Boolean(ig && ig.reach_28d == null),
+    error: accountTimestampResult.error?.message ?? null,
+  });
+  const postsStatus = datasetFreshness({
+    source: 'Meta post insights',
+    updatedAt: postsUpdatedAt,
+    staleAfterMinutes: 8 * 60,
+    error: postTimestampResult.error?.message ?? null,
+  });
 
   return NextResponse.json({
     ig: ig
@@ -64,6 +96,10 @@ export async function GET() {
     postsCount14d: (ig?.posts_count_14d ?? 0) + (fb?.posts_count_14d ?? 0),
     daysOfData,
     mode,
-    refreshedAt: ig?.refreshed_at ?? fb?.refreshed_at ?? null,
+    refreshedAt: postsUpdatedAt ?? accountUpdatedAt,
+    dataStatus: {
+      account: accountStatus,
+      posts: postsStatus,
+    },
   });
 }

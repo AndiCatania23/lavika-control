@@ -14,6 +14,8 @@ import Link from 'next/link';
 import { ArrowLeft, Instagram, Facebook, RefreshCw, TrendingUp, TrendingDown, Minus, Sparkles, Trophy, AlertTriangle, ExternalLink, Sunrise, Flame, Target } from 'lucide-react';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { Sparkline } from '@/components/social/Sparkline';
+import { buildSocialDataHealth, loadSocialDataHealthSignals } from '@/lib/social-insights/dataHealth';
+import type { DatasetFreshness } from '@/lib/social-insights/freshness';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 300;
@@ -92,19 +94,15 @@ interface SummaryRow {
 // ============================================================================
 // DATA
 // ============================================================================
-async function loadSummary(): Promise<{ ig: SummaryRow | null; fb: SummaryRow | null; refreshedAt: Date | null }> {
-  if (!supabaseServer) return { ig: null, fb: null, refreshedAt: null };
-  const { data } = await supabaseServer
+async function loadSummary(): Promise<{ ig: SummaryRow | null; fb: SummaryRow | null; error: string | null }> {
+  if (!supabaseServer) return { ig: null, fb: null, error: 'Supabase non configurato' };
+  const { data, error } = await supabaseServer
     .from('v_social_insights_summary')
     .select('*');
   const rows = (data ?? []) as SummaryRow[];
   const ig = rows.find(r => r.platform === 'instagram') ?? null;
   const fb = rows.find(r => r.platform === 'facebook') ?? null;
-  const refreshedAt =
-    ig?.refreshed_at ? new Date(ig.refreshed_at)
-      : fb?.refreshed_at ? new Date(fb.refreshed_at)
-      : null;
-  return { ig, fb, refreshedAt };
+  return { ig, fb, error: error?.message ?? null };
 }
 
 async function loadLatestBrief(): Promise<MorningBrief | null> {
@@ -528,7 +526,6 @@ function PostDiagnosisBox({ diagnosis }: { diagnosis: BriefPostDiagnosis }) {
 
 function EarlyModeBanner({ daysOfData, firstSnapshot }: { daysOfData: number; firstSnapshot: string | null }) {
   const daysToActive = Math.max(0, 14 - daysOfData);
-  const daysSince = firstSnapshot ? Math.floor((Date.now() - new Date(firstSnapshot).getTime()) / 86_400_000) : 0;
 
   return (
     <div
@@ -547,10 +544,26 @@ function EarlyModeBanner({ daysOfData, firstSnapshot }: { daysOfData: number; fi
           Stiamo raccogliendo i dati delle pagine. {daysOfData < 1 ? (
             <>Oggi parte la macchina, primo snapshot stanotte alle 04:00 UTC.</>
           ) : (
-            <>Hai {daysOfData} {daysOfData === 1 ? 'giorno' : 'giorni'} di storico ({daysSince}gg dal primo snapshot).</>
+            <>Hai {daysOfData} {daysOfData === 1 ? 'giorno' : 'giorni'} di storico{firstSnapshot ? ` dal ${new Date(firstSnapshot).toLocaleDateString('it-IT')}` : ''}.</>
           )} Confronti, top/bottom post e trend significativi appariranno {daysToActive > 0 ? `tra ${daysToActive} giorni` : 'a breve'}, quando avremo abbastanza dataset.
         </p>
       </div>
+    </div>
+  );
+}
+
+const STATUS_LABEL: Record<DatasetFreshness['status'], string> = {
+  fresh: 'OK', stale: 'DATI VECCHI', partial: 'PARZIALE', unavailable: 'NON DISPONIBILE', error: 'ERRORE',
+};
+
+function DataStatusRow({ label, data }: { label: string; data: DatasetFreshness }) {
+  return (
+    <div className="flex items-center justify-between gap-3 py-1.5 text-[12px]">
+      <span>{label}</span>
+      <span className="text-right text-muted-foreground">
+        <strong className="text-[color:var(--text)]">{STATUS_LABEL[data.status]}</strong>
+        {data.ageMinutes != null ? ` · ${fmtRelativeTime(new Date(data.updatedAt!))}` : ''}
+      </span>
     </div>
   );
 }
@@ -559,10 +572,13 @@ function EarlyModeBanner({ daysOfData, firstSnapshot }: { daysOfData: number; fi
 // PAGE
 // ============================================================================
 export default async function SocialInsightsPage() {
-  const [{ ig, fb, refreshedAt }, brief] = await Promise.all([
+  const [{ ig, fb, error: summaryError }, brief, healthSignals] = await Promise.all([
     loadSummary(),
     loadLatestBrief(),
+    loadSocialDataHealthSignals(),
   ]);
+  const dataHealth = buildSocialDataHealth(healthSignals, Boolean(ig && ig.reach_28d == null));
+  const refreshedAt = healthSignals.posts.updatedAt ? new Date(healthSignals.posts.updatedAt) : healthSignals.account.updatedAt ? new Date(healthSignals.account.updatedAt) : null;
 
   // Lookup: external_post_id → diagnosis. Le bottom_posts della view e le
   // post_diagnoses del brief notturno hanno entrambi external_post_id.
@@ -626,6 +642,12 @@ export default async function SocialInsightsPage() {
           Crescita, engagement e cosa funziona sui canali LAVIKA. Dati Meta Graph aggiornati ogni 6h.
         </p>
       </div>
+
+      {summaryError && (
+        <div className="card card-body typ-caption" style={{ color: 'var(--danger)' }}>
+          Gli insight Meta non sono temporaneamente disponibili. Le attività editoriali restano operative.
+        </div>
+      )}
 
       {/* Morning Brief (daemon Mac notturno) — hero in cima se disponibile */}
       {brief && <MorningBriefSection brief={brief} />}
@@ -708,10 +730,10 @@ export default async function SocialInsightsPage() {
 
       {/* Footer info */}
       <div className="card card-body" style={{ background: 'var(--card-muted)', borderColor: 'var(--hairline-soft)' }}>
-        <p className="typ-caption" style={{ margin: 0 }}>
-          ✓ <strong>Pipeline attiva.</strong> Snapshot account ogni 24h alle 04:00 UTC, post insights ogni 6h, refresh dashboard ogni 1h.
-          Retention storica: account snapshots per sempre, post insights 60 giorni.
-        </p>
+        <div className="typ-label mb-1">Pipeline dati</div>
+        <DataStatusRow label="Instagram/Facebook account" data={dataHealth.account} />
+        <DataStatusRow label="Insight dei post" data={dataHealth.posts} />
+        <DataStatusRow label="Sintesi AI" data={dataHealth.ai} />
       </div>
     </div>
   );
