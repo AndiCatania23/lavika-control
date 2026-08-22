@@ -16,6 +16,8 @@ import { supabaseServer } from '@/lib/supabaseServer';
 import { Sparkline } from '@/components/social/Sparkline';
 import { buildSocialDataHealth, loadSocialDataHealthSignals } from '@/lib/social-insights/dataHealth';
 import type { DatasetFreshness } from '@/lib/social-insights/freshness';
+import { loadSocialOperatingSnapshot } from '@/lib/social-insights/operatingData';
+import { ApprovalQueue, OpportunityFeed, TodayCommandCenter } from './components/SocialOperatingSections';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 300;
@@ -572,10 +574,11 @@ function DataStatusRow({ label, data }: { label: string; data: DatasetFreshness 
 // PAGE
 // ============================================================================
 export default async function SocialInsightsPage() {
-  const [{ ig, fb, error: summaryError }, brief, healthSignals] = await Promise.all([
+  const [{ ig, fb, error: summaryError }, brief, healthSignals, operating] = await Promise.all([
     loadSummary(),
     loadLatestBrief(),
     loadSocialDataHealthSignals(),
+    loadSocialOperatingSnapshot(),
   ]);
   const dataHealth = buildSocialDataHealth(healthSignals, Boolean(ig && ig.reach_28d == null));
   const refreshedAt = healthSignals.posts.updatedAt ? new Date(healthSignals.posts.updatedAt) : healthSignals.account.updatedAt ? new Date(healthSignals.account.updatedAt) : null;
@@ -642,6 +645,19 @@ export default async function SocialInsightsPage() {
           Crescita, engagement e cosa funziona sui canali LAVIKA. Dati Meta Graph aggiornati ogni 6h.
         </p>
       </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.7fr)_minmax(280px,.8fr)] lg:items-start">
+        <TodayCommandCenter subtitle={operating.context.subtitle} objective={operating.context.objective} actions={operating.actions} />
+        <ApprovalQueue approvals={operating.approvals} />
+      </div>
+
+      <OpportunityFeed opportunities={operating.opportunities} />
+
+      {operating.errors.length > 0 && (
+        <div className="card card-body typ-caption" style={{ color: 'var(--warn)' }}>
+          Alcune fonti editoriali non sono disponibili; le altre sezioni continuano a funzionare.
+        </div>
+      )}
 
       {summaryError && (
         <div className="card card-body typ-caption" style={{ color: 'var(--danger)' }}>
