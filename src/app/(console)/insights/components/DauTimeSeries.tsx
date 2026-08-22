@@ -26,7 +26,7 @@ export function DauTimeSeries({ series }: Props) {
   }
 
   return (
-    <div className="w-full h-[280px]">
+    <div className="h-[250px] w-full sm:h-[280px]">
       <ResponsiveContainer>
         <LineChart data={series} margin={{ top: 8, right: 12, bottom: 8, left: -16 }}>
           <CartesianGrid stroke="rgba(120,120,140,0.12)" vertical={false} />
@@ -36,6 +36,7 @@ export function DauTimeSeries({ series }: Props) {
             tick={{ fontSize: 11, fill: 'var(--text-lo, #888)' }}
             tickLine={false}
             axisLine={{ stroke: 'rgba(120,120,140,0.2)' }}
+            minTickGap={24}
           />
           <YAxis
             tick={{ fontSize: 11, fill: 'var(--text-lo, #888)' }}
@@ -52,7 +53,7 @@ export function DauTimeSeries({ series }: Props) {
             }}
             labelFormatter={(label) => formatTick(label as string)}
           />
-          <Legend wrapperStyle={{ fontSize: 11, paddingTop: 4 }} />
+          <Legend wrapperStyle={{ fontSize: 10, paddingTop: 4 }} />
           <Line
             type="monotone"
             dataKey="total"

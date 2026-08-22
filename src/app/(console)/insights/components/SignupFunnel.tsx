@@ -28,9 +28,9 @@ export function SignupFunnel({ totals }: Props) {
         const widthPct = Math.max((s.count / base) * 100, s.count > 0 ? 4 : 0);
         return (
           <div key={s.label} className="space-y-1">
-            <div className="flex items-center justify-between text-[12.5px]">
-              <span className="text-[color:var(--text-hi)]">{s.label}</span>
-              <span className="text-muted-foreground">
+            <div className="flex items-center justify-between gap-2 text-[12.5px]">
+              <span className="min-w-0 text-[color:var(--text-hi)]">{s.label}</span>
+              <span className="shrink-0 text-muted-foreground">
                 {s.count} {s.pct != null ? <span className="ml-2 text-[11px]">({s.pct}%)</span> : null}
               </span>
             </div>

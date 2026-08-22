@@ -39,6 +39,7 @@ export interface HeroKpis {
   sessionSample: number;
   retentionD7Pct: number | null;
   retentionD7Sample: number; // n. utenti nelle coorti mature usate per il calcolo
+  retentionD7Returned: number;
   pushOptInPct: number | null;
   pushOptedUsers: number;
   pushOpenRatePct: number | null; // % notifiche aperte da quando il tracking e' affidabile
@@ -52,7 +53,7 @@ export async function loadHeroKpis(): Promise<HeroKpis> {
     totalUsers: 0, dau: 0, wau: 0, mau: 0,
     stickinessPct: null, nextDayReturnPct: null, nextDayReturnSample: 0,
     sessionMedianMinutes: null, sessionSample: 0,
-    retentionD7Pct: null, retentionD7Sample: 0,
+    retentionD7Pct: null, retentionD7Sample: 0, retentionD7Returned: 0,
     pushOptInPct: null, pushOptedUsers: 0,
     pushOpenRatePct: null, pushSentSinceTracking: 0, pushClickedSinceTracking: 0,
     appStoreRating: null,
@@ -158,6 +159,7 @@ export async function loadHeroKpis(): Promise<HeroKpis> {
     sessionSample,
     retentionD7Pct,
     retentionD7Sample: cohortTotal,
+    retentionD7Returned: cohortReturned,
     pushOptInPct,
     pushOptedUsers,
     pushOpenRatePct,
@@ -210,6 +212,9 @@ export interface CohortRow {
   d1Eligible: number;
   d7Eligible: number;
   d30Eligible: number;
+  d1Returned: number;
+  d7Returned: number;
+  d30Returned: number;
 }
 
 export async function loadCohorts(weeks = 8): Promise<CohortRow[]> {
@@ -238,6 +243,9 @@ export async function loadCohorts(weeks = 8): Promise<CohortRow[]> {
     d1Eligible: r.d1_eligible ?? 0,
     d7Eligible: r.d7_eligible ?? 0,
     d30Eligible: r.d30_eligible ?? 0,
+    d1Returned: r.d1_returned ?? 0,
+    d7Returned: r.d7_returned ?? 0,
+    d30Returned: r.d30_returned ?? 0,
     d1Pct: r.d1_eligible > 0 ? Math.round(((r.d1_returned ?? 0) / r.d1_eligible) * 1000) / 10 : null,
     d7Pct: r.d7_eligible > 0 ? Math.round(((r.d7_returned ?? 0) / r.d7_eligible) * 1000) / 10 : null,
     d30Pct: r.d30_eligible > 0 ? Math.round(((r.d30_returned ?? 0) / r.d30_eligible) * 1000) / 10 : null,
@@ -392,6 +400,11 @@ export interface CoreUsageRow {
   effectiveFrom: string;
 }
 
+export interface CoreUsageResult {
+  rows: CoreUsageRow[];
+  available: boolean;
+}
+
 export interface CoreUsageDay {
   day: string;
   pillUsers: number;
@@ -404,15 +417,15 @@ export interface CoreUsageDay {
   predictionActions: number;
 }
 
-export async function loadCoreUsage(): Promise<CoreUsageRow[]> {
-  if (!supabaseServer) return [];
+export async function loadCoreUsage(): Promise<CoreUsageResult> {
+  if (!supabaseServer) return { rows: [], available: false };
   const { data, error } = await supabaseServer
     .from('v_insights_core_usage_windows')
     .select('window_key,feature,unique_users,actions,effective_from')
     .order('window_order', { ascending: true })
     .order('feature_order', { ascending: true });
-  if (error || !data) return [];
-  return (data as Array<{
+  if (error || !data) return { rows: [], available: false };
+  const rows = (data as Array<{
     window_key: CoreUsageWindow;
     feature: CoreFeature;
     unique_users: number;
@@ -425,6 +438,7 @@ export async function loadCoreUsage(): Promise<CoreUsageRow[]> {
     actions: row.actions ?? 0,
     effectiveFrom: row.effective_from,
   }));
+  return { rows, available: true };
 }
 
 export async function loadCoreUsageDaily(): Promise<CoreUsageDay[]> {

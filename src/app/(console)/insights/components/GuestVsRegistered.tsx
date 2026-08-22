@@ -47,12 +47,12 @@ export function GuestVsRegistered({ rows }: Props) {
         const total = r.registered + r.guests;
         return (
           <div key={r.window} className="space-y-1.5">
-            <div className="flex items-center justify-between text-[12.5px]">
+            <div className="flex flex-wrap items-center justify-between gap-1 text-[12.5px]">
               <span className="text-[color:var(--text-hi)] font-medium">
                 {WINDOW_LABEL[r.window]}
               </span>
               <span className="text-muted-foreground">
-                {total} attivi · {r.viewStarts} view
+                {total} attivi · {r.viewStarts} avvii video
               </span>
             </div>
             <StackedBar registered={r.registered} guest={r.guests} />

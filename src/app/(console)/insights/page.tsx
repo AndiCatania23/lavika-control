@@ -37,6 +37,7 @@ import { DeviceGeoBreakdown } from './components/DeviceGeoBreakdown';
 import { InsightSection } from './components/InsightSection';
 import { ActivationByFeature } from './components/ActivationByFeature';
 import { CoreUsageDashboard } from './components/CoreUsageDashboard';
+import { CopyInsightsReport } from './components/CopyInsightsReport';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 300;
@@ -51,7 +52,7 @@ export default async function InsightsPage() {
     appleMetrics,
     deviceGeo,
     activationByFeature,
-    coreUsage,
+    coreUsageResult,
     coreUsageDaily,
   ] = await Promise.all([
     loadHeroKpis(),
@@ -69,16 +70,32 @@ export default async function InsightsPage() {
   const registeredActiveUsers = Object.fromEntries(
     guestVsReg.map((row) => [row.window, row.registered]),
   ) as Record<'24h' | '7d' | '30d', number>;
+  const coreUsage = coreUsageResult.rows;
 
   return (
-    <div className="px-4 py-6 lg:px-8 lg:py-8 space-y-8 max-w-[1280px] mx-auto">
-      <header className="space-y-1">
-        <h1 className="text-[24px] font-semibold tracking-tight text-[color:var(--text-hi)]">
-          Prodotto e crescita
-        </h1>
-        <p className="text-[13px] text-muted-foreground">
-          Cosa fanno i tifosi, cosa li attiva e cosa li fa tornare
-        </p>
+    <div className="mx-auto max-w-[1280px] space-y-7 px-3 py-5 sm:px-4 sm:py-6 lg:space-y-8 lg:px-8 lg:py-8">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="space-y-1">
+          <h1 className="text-[24px] font-semibold tracking-tight text-[color:var(--text-hi)]">
+            Prodotto e crescita
+          </h1>
+          <p className="text-[13px] text-muted-foreground">
+            Cosa fanno i tifosi, cosa li attiva e cosa li fa tornare
+          </p>
+        </div>
+        <CopyInsightsReport data={{
+          hero,
+          coreUsage,
+          coreUsageAvailable: coreUsageResult.available,
+          coreUsageDaily,
+          funnel,
+          activation: activationByFeature,
+          cohorts,
+          dauSeries,
+          guestVsReg,
+          apple: appleMetrics,
+          deviceGeo,
+        }} />
       </header>
 
       <div className="rounded-xl border border-sky-400/20 bg-sky-400/[0.06] px-4 py-3">
@@ -105,6 +122,7 @@ export default async function InsightsPage() {
         <CoreUsageDashboard
           rows={coreUsage}
           daily={coreUsageDaily}
+          available={coreUsageResult.available}
           activeUsers={{
             '24h': registeredActiveUsers['24h'] ?? 0,
             '7d': registeredActiveUsers['7d'] ?? 0,

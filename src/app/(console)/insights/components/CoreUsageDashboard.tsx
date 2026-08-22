@@ -33,10 +33,12 @@ export function CoreUsageDashboard({
   rows,
   daily,
   activeUsers,
+  available,
 }: {
   rows: CoreUsageRow[];
   daily: CoreUsageDay[];
   activeUsers: Record<CoreUsageWindow, number>;
+  available: boolean;
 }) {
   const [windowKey, setWindowKey] = useState<CoreUsageWindow>('7d');
   const [trendMetric, setTrendMetric] = useState<'users' | 'actions'>('users');
@@ -54,16 +56,20 @@ export function CoreUsageDashboard({
 
   const totalActions = selectedRows.reduce((sum, row) => sum + row.actions, 0);
 
+  if (!available) {
+    return <div className="rounded-lg border border-dashed border-[color:var(--hairline)] p-4 text-[12px] text-muted-foreground">Dati momentaneamente non disponibili. Riprova tra poco.</div>;
+  }
+
   return (
     <div className="space-y-7">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="inline-flex rounded-lg border border-[color:var(--hairline)] bg-[color:var(--surface-2)] p-1">
+        <div className="grid w-full grid-cols-3 rounded-lg border border-[color:var(--hairline)] bg-[color:var(--surface-2)] p-1 sm:inline-flex sm:w-auto">
           {WINDOWS.map((window) => (
             <button
               key={window.key}
               type="button"
               onClick={() => setWindowKey(window.key)}
-              className={`rounded-md px-3 py-1.5 text-[12px] font-medium transition-colors duration-150 active:scale-[0.98] ${
+              className={`min-h-10 rounded-md px-3 py-1.5 text-[12px] font-medium transition-[color,background-color,transform] duration-150 active:scale-[0.98] ${
                 windowKey === window.key
                   ? 'bg-white/10 text-[color:var(--text-hi)] shadow-sm'
                   : 'text-muted-foreground hover:text-[color:var(--text-hi)]'
@@ -78,7 +84,19 @@ export function CoreUsageDashboard({
         </p>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-[color:var(--hairline)]">
+      <div className="space-y-2 md:hidden">
+        {selectedRows.map((row) => (
+          <article key={row.key} className="rounded-lg border border-[color:var(--hairline)] bg-[color:var(--surface-2)] p-3">
+            <div className="flex items-center gap-2 font-medium text-[color:var(--text-hi)]"><span className="h-2 w-2 rounded-full" style={{ background: row.color }} />{row.label}</div>
+            <div className="mt-3 grid grid-cols-2 gap-3">
+              <div><div className="text-[10px] uppercase tracking-wider text-muted-foreground">Utenti</div><div className="mt-0.5 text-[20px] font-semibold tabular-nums">{row.uniqueUsers}</div></div>
+              <div><div className="text-[10px] uppercase tracking-wider text-muted-foreground">Azioni</div><div className="mt-0.5 text-[20px] font-semibold tabular-nums">{row.actions}</div></div>
+            </div>
+            <div className="mt-2 text-[11px] text-muted-foreground">{pct(row.uniqueUsers, activeUsers[windowKey])} dei registrati attivi · {row.actionsPerUser > 0 ? row.actionsPerUser.toFixed(1) : '—'} azioni per utente</div>
+          </article>
+        ))}
+      </div>
+      <div className="hidden overflow-x-auto rounded-lg border border-[color:var(--hairline)] md:block">
         <table className="w-full min-w-[650px] text-[12.5px]">
           <thead className="bg-[color:var(--surface-2)] text-[10.5px] uppercase tracking-wider text-muted-foreground">
             <tr>
@@ -154,7 +172,7 @@ export function CoreUsageDashboard({
             <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Andamento giornaliero</div>
             <div className="mt-0.5 text-[11px] text-muted-foreground">Misurazione completa dal 22 agosto</div>
           </div>
-          <div className="inline-flex rounded-lg border border-[color:var(--hairline)] bg-[color:var(--surface-2)] p-1">
+          <div className="grid min-h-10 grid-cols-2 rounded-lg border border-[color:var(--hairline)] bg-[color:var(--surface-2)] p-1">
             {(['users', 'actions'] as const).map((metric) => (
               <button key={metric} type="button" onClick={() => setTrendMetric(metric)} className={`rounded-md px-3 py-1 text-[11px] transition-colors ${trendMetric === metric ? 'bg-white/10 text-[color:var(--text-hi)]' : 'text-muted-foreground'}`}>
                 {metric === 'users' ? 'Utenti' : 'Azioni'}
@@ -162,14 +180,14 @@ export function CoreUsageDashboard({
             ))}
           </div>
         </div>
-        <div className="h-[280px]">
+        <div className="h-[250px] sm:h-[280px]">
           <ResponsiveContainer>
             <LineChart data={daily} margin={{ top: 8, right: 12, bottom: 8, left: -16 }}>
               <CartesianGrid stroke="rgba(120,120,140,0.12)" vertical={false} />
               <XAxis dataKey="day" tickFormatter={formatDay} tick={{ fontSize: 11, fill: 'var(--text-lo, #888)' }} axisLine={false} tickLine={false} />
               <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: 'var(--text-lo, #888)' }} axisLine={false} tickLine={false} />
               <Tooltip labelFormatter={(label) => formatDay(String(label))} contentStyle={{ background: '#17171c', border: '1px solid rgba(255,255,255,.1)', borderRadius: 8, fontSize: 12 }} />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
+              <Legend wrapperStyle={{ fontSize: 10 }} />
               {FEATURES.map((feature) => (
                 <Line key={feature.key} type="monotone" dataKey={`${feature.key}${trendMetric === 'users' ? 'Users' : 'Actions'}`} name={feature.label} stroke={feature.color} strokeWidth={2} dot={daily.length < 10} activeDot={{ r: 4 }} isAnimationActive={false} />
               ))}

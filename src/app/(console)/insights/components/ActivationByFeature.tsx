@@ -13,7 +13,25 @@ export function ActivationByFeature({ rows }: { rows: FeatureActivationRow[] }) 
   }
 
   return (
-    <div className="overflow-x-auto">
+    <>
+      <div className="space-y-2 md:hidden">
+        {rows.map((row) => (
+          <article key={row.feature} className="rounded-lg border border-[color:var(--hairline)] bg-[color:var(--surface-2)] p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="font-medium text-[color:var(--text-hi)]">{LABELS[row.feature]}</div>
+              <div className="text-right text-[12px] tabular-nums">
+                <div>{row.activatedUsers} attivati</div>
+                <div className="text-muted-foreground">{row.activationPct == null ? '—' : `${row.activationPct}%`} degli iscritti</div>
+              </div>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-2 border-t border-[color:var(--hairline)] pt-3">
+              <div><div className="text-[10px] uppercase tracking-wider text-muted-foreground">Giorno 1</div><div className="mt-0.5 text-[14px] tabular-nums">{row.d1Pct == null ? '—' : `${row.d1Pct}%`} <span className="text-[10px] text-muted-foreground">n={row.d1Eligible}</span></div></div>
+              <div><div className="text-[10px] uppercase tracking-wider text-muted-foreground">Giorno 7</div><div className="mt-0.5 text-[14px] tabular-nums">{row.d7Pct == null ? '—' : `${row.d7Pct}%`} <span className="text-[10px] text-muted-foreground">n={row.d7Eligible}</span></div></div>
+            </div>
+          </article>
+        ))}
+      </div>
+      <div className="hidden overflow-x-auto md:block">
       <table className="w-full text-[12.5px]">
         <thead>
           <tr className="text-[11px] uppercase tracking-wider text-muted-foreground">
@@ -42,6 +60,7 @@ export function ActivationByFeature({ rows }: { rows: FeatureActivationRow[] }) 
           ))}
         </tbody>
       </table>
-    </div>
+      </div>
+    </>
   );
 }

@@ -34,7 +34,7 @@ function Sparkline({ values, width = 240, height = 48 }: { values: number[]; wid
   const areaPath = `${linePath} L ${width},${height} L 0,${height} Z`;
 
   return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden="true">
+    <svg className="h-auto w-full max-w-[320px]" viewBox={`0 0 ${width} ${height}`} aria-hidden="true">
       <defs>
         <linearGradient id="spark-grad" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="var(--accent-raw, #e8701a)" stopOpacity="0.32" />
@@ -94,10 +94,10 @@ export function AppleAppStoreSection({ data }: Props) {
             Download (30 giorni)
           </div>
           <Sparkline values={series.map((p) => p.downloads)} width={320} height={56} />
-          <div className="text-[11.5px] text-muted-foreground mt-1">
-            Totale 30g: <strong className="text-[color:var(--text-hi)]">{formatN(totals30d.downloads)}</strong>
-            {' · '}First-time: <strong className="text-[color:var(--text-hi)]">{formatN(totals30d.installs)}</strong>
-            {' · '}Ultima sync: {formatDate(latest.metricDate)}
+          <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11.5px] text-muted-foreground">
+            <span>Totale 30g: <strong className="text-[color:var(--text-hi)]">{formatN(totals30d.downloads)}</strong></span>
+            <span>Prime installazioni: <strong className="text-[color:var(--text-hi)]">{formatN(totals30d.installs)}</strong></span>
+            <span>Ultimo aggiornamento: {formatDate(latest.metricDate)}</span>
           </div>
         </div>
 

@@ -65,13 +65,13 @@ function buildTiles(k: HeroKpis): Tile[] {
 export function HeroKpiGrid({ kpis }: Props) {
   const tiles = buildTiles(kpis);
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+    <div className="grid auto-rows-fr grid-cols-2 gap-2.5 sm:gap-3 md:grid-cols-4">
       {tiles.map((t) => (
         <div
           key={t.label}
-          className="rounded-xl border border-[color:var(--hairline)] bg-card p-4 flex flex-col gap-1"
+          className="flex min-w-0 flex-col gap-1 rounded-xl border border-[color:var(--hairline)] bg-card p-3 sm:p-4"
         >
-          <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
+          <span className="text-[10px] uppercase tracking-wider text-muted-foreground sm:text-[11px]">
             {t.label}
           </span>
           <span className="text-[22px] font-semibold tracking-tight text-[color:var(--text-hi)]">

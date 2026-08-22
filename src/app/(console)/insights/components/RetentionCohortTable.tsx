@@ -28,7 +28,31 @@ export function RetentionCohortTable({ cohorts }: Props) {
   }
 
   return (
-    <div className="overflow-x-auto">
+    <>
+      <div className="space-y-2 md:hidden">
+        {cohorts.map((c) => (
+          <article key={c.cohortWeek} className="rounded-lg border border-[color:var(--hairline)] bg-[color:var(--surface-2)] p-3">
+            <div className="flex items-center justify-between gap-3">
+              <span className="font-medium text-[color:var(--text-hi)]">Settimana {formatDate(c.cohortWeek)}</span>
+              <span className="text-[12px] text-muted-foreground">{c.cohortSize} iscritti</span>
+            </div>
+            <div className="mt-3 grid grid-cols-3 gap-1.5">
+              {([
+                ['Giorno 1', c.d1Pct, c.d1Eligible],
+                ['Giorno 7', c.d7Pct, c.d7Eligible],
+                ['Giorno 30', c.d30Pct, c.d30Eligible],
+              ] as const).map(([label, percentage, eligible]) => (
+                <div key={label} className={`rounded-md p-2 text-center ${cellStyle(percentage)}`}>
+                  <div className="text-[9px] uppercase tracking-wide opacity-70">{label}</div>
+                  <div className="mt-1 text-[14px] font-medium tabular-nums">{percentage == null ? '—' : `${percentage}%`}</div>
+                  <div className="text-[9px] opacity-60">n={eligible}</div>
+                </div>
+              ))}
+            </div>
+          </article>
+        ))}
+      </div>
+      <div className="hidden overflow-x-auto md:block">
       <table className="w-full text-[12.5px]">
         <thead>
           <tr className="text-muted-foreground text-[11px] uppercase tracking-wider">
@@ -60,6 +84,7 @@ export function RetentionCohortTable({ cohorts }: Props) {
           ))}
         </tbody>
       </table>
-    </div>
+      </div>
+    </>
   );
 }
