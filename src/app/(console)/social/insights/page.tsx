@@ -17,7 +17,7 @@ import { Sparkline } from '@/components/social/Sparkline';
 import { buildSocialDataHealth, loadSocialDataHealthSignals } from '@/lib/social-insights/dataHealth';
 import type { DatasetFreshness } from '@/lib/social-insights/freshness';
 import { loadSocialOperatingSnapshot } from '@/lib/social-insights/operatingData';
-import { ApprovalQueue, OpportunityFeed, TodayCommandCenter } from './components/SocialOperatingSections';
+import { ApprovalQueue, EditorialRadar, OpportunityFeed, TodayCommandCenter } from './components/SocialOperatingSections';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 300;
@@ -652,6 +652,8 @@ export default async function SocialInsightsPage() {
       </div>
 
       <OpportunityFeed opportunities={operating.opportunities} />
+
+      <EditorialRadar triggers={operating.radar} />
 
       {operating.errors.length > 0 && (
         <div className="card card-body typ-caption" style={{ color: 'var(--warn)' }}>

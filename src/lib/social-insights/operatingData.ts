@@ -3,17 +3,19 @@ import { enrichPost } from './analytics';
 import { classifyContentType } from './classification';
 import { buildTodayActions, buildTodayContext, detectOpportunities, type EditorialSource, type UpcomingMatch } from './operations';
 import type { SocialPostMetric } from './types';
+import { buildEditorialRadar } from './editorialRadar';
 
 export interface SocialOperatingSnapshot {
   context: ReturnType<typeof buildTodayContext>;
   actions: ReturnType<typeof buildTodayActions>;
   opportunities: ReturnType<typeof detectOpportunities>;
   approvals: Array<{ id: string; title: string; sourceType: string; createdAt: string; readyVariants: number }>;
+  radar: ReturnType<typeof buildEditorialRadar>;
   errors: string[];
 }
 
 export async function loadSocialOperatingSnapshot(now = new Date()): Promise<SocialOperatingSnapshot> {
-  if (!supabaseServer) return { context: buildTodayContext({ match: null, sources: [], now }), actions: [], opportunities: [], approvals: [], errors: ['Supabase non configurato'] };
+  if (!supabaseServer) return { context: buildTodayContext({ match: null, sources: [], now }), actions: [], opportunities: [], approvals: [], radar: [], errors: ['Supabase non configurato'] };
   const since7d = new Date(now.getTime() - 7 * 86_400_000).toISOString();
   const since90d = new Date(now.getTime() - 90 * 86_400_000).toISOString();
   const until7d = new Date(now.getTime() + 7 * 86_400_000).toISOString();
@@ -63,5 +65,5 @@ export async function loadSocialOperatingSnapshot(now = new Date()): Promise<Soc
 
   const context = buildTodayContext({ match, sources, now });
   const actions = buildTodayActions({ sources, approvalDrafts: approvals, match });
-  return { context, actions, opportunities: detectOpportunities(posts, sourceLinks, now), approvals, errors };
+  return { context, actions, opportunities: detectOpportunities(posts, sourceLinks, now), approvals, radar: buildEditorialRadar({ match, sources, now }), errors };
 }

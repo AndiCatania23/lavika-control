@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { ArrowRight, CheckCircle2, CircleAlert, Flame, Inbox, Sparkles, Target } from 'lucide-react';
 import { actionPriority, type OperationalAction, type SocialOpportunity } from '@/lib/social-insights/operations';
+import type { EditorialTrigger } from '@/lib/social-insights/editorialRadar';
 
 const STATUS_LABEL: Record<OperationalAction['status'], string> = {
   done: 'Fatto', ready: 'Pronto', needs_approval: 'Da approvare', scheduled: 'Programmato', waiting_trigger: 'In attesa', suggested: 'Suggerito', blocked: 'Bloccato', skipped: 'Ignorato',
@@ -52,6 +53,22 @@ export function OpportunityFeed({ opportunities }: { opportunities: SocialOpport
     <section className="rounded-[22px] border border-[color:var(--hairline-soft)] bg-white p-4 shadow-sm sm:p-5">
       <div className="flex items-center gap-2"><Sparkles size={18} className="text-orange-600" /><h2 className="text-[18px] font-semibold">Opportunità</h2></div>
       {opportunities.length === 0 ? <div className="mt-4 rounded-xl border border-dashed p-4 text-[13px] text-muted-foreground">Nessuna opportunità sufficientemente supportata dai dati.</div> : <div className="mt-4 grid gap-3 md:grid-cols-2">{opportunities.map((opportunity) => <article key={opportunity.id} className="rounded-2xl border border-[color:var(--hairline-soft)] p-4"><div className="flex items-start gap-2"><Flame size={16} className="mt-0.5 shrink-0 text-orange-600" /><h3 className="line-clamp-2 text-[15px] font-semibold leading-snug">{opportunity.title}</h3></div><p className="mt-2 text-[12.5px] leading-relaxed text-muted-foreground">{opportunity.summary}</p><div className="mt-3 space-y-1">{opportunity.evidence.slice(0, 2).map((item) => <div key={item} className="text-[11px]">• {item}</div>)}</div><div className="mt-2 flex items-center gap-1 text-[10.5px] text-muted-foreground"><CircleAlert size={12} />Confidenza {opportunity.confidence} · {opportunity.sampleSize} confronti</div>{opportunity.href !== '#' && <Link href={opportunity.href} className="mt-3 inline-flex min-h-10 items-center gap-1.5 text-[11.5px] font-semibold text-orange-700">{opportunity.actionLabel}<ArrowRight size={13} /></Link>}</article>)}</div>}
+    </section>
+  );
+}
+
+function triggerTime(trigger: EditorialTrigger) {
+  if (!trigger.expectedAt) return 'Da definire';
+  return new Date(trigger.expectedAt).toLocaleString('it-IT', { timeZone: 'Europe/Rome', weekday: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
+export function EditorialRadar({ triggers }: { triggers: EditorialTrigger[] }) {
+  const automatic = triggers.filter((item) => item.automationLevel === 'generate').length;
+  const approval = triggers.filter((item) => item.automationLevel === 'approval').length;
+  return (
+    <section className="rounded-[22px] border border-[color:var(--hairline-soft)] bg-white p-4 shadow-sm sm:p-5">
+      <div className="flex items-center justify-between gap-3"><div><h2 className="text-[18px] font-semibold">Radar editoriale</h2><p className="mt-0.5 text-[12px] text-muted-foreground">Prossime 48 ore</p></div><span className="rounded-full bg-neutral-100 px-2.5 py-1 text-[11px] font-semibold">{triggers.length} opportunità</span></div>
+      {triggers.length === 0 ? <div className="mt-4 rounded-xl border border-dashed p-4 text-[13px] text-muted-foreground">Nessun evento editoriale imminente rilevato.</div> : <><div className="mt-3 flex gap-3 text-[10.5px] text-muted-foreground"><span>{automatic} generabili</span><span>{approval} con approvazione</span><span>0 auto-publish</span></div><div className="mt-4 space-y-1.5">{triggers.slice(0, 7).map((trigger) => <div key={trigger.id} className="flex items-center gap-3 rounded-xl border border-[color:var(--hairline-soft)] px-3 py-2.5"><div className={`h-2 w-2 shrink-0 rounded-full ${trigger.status === 'ready' ? 'bg-orange-500' : 'bg-neutral-300'}`} /><div className="min-w-0 grow"><div className="truncate text-[12.5px] font-medium">{trigger.title}</div><div className="text-[10.5px] text-muted-foreground">{triggerTime(trigger)} · {trigger.status === 'ready' ? 'Pronto' : 'In attesa del momento'}</div></div>{trigger.href && <Link href={trigger.href} className="min-h-10 shrink-0 py-3 text-[10.5px] font-semibold text-orange-700">{trigger.actionLabel}</Link>}</div>)}</div></>}
     </section>
   );
 }
