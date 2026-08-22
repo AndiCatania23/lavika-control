@@ -6,7 +6,7 @@ import { useParams } from 'next/navigation';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, RefreshCw, Send, CheckCircle2, AlertTriangle, ImageIcon,
-  Instagram, Facebook, ExternalLink, Trash2, Save, Clock, X,
+  Instagram, Facebook, ExternalLink, Trash2, Save, Clock, X, ShieldCheck,
 } from 'lucide-react';
 
 interface Variant {
@@ -50,6 +50,7 @@ interface DraftResponse {
     source_type: string;
     status: string;
     requires_approval: boolean;
+    approved_at: string | null;
     created_at: string;
   };
   variants: Variant[];
@@ -82,6 +83,25 @@ export default function DraftPreviewPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deletingDraft, setDeletingDraft] = useState(false);
+  const [approvalAction, setApprovalAction] = useState<'approve' | 'reject' | null>(null);
+
+  const updateApproval = async (action: 'approve' | 'reject') => {
+    if (action === 'reject' && !confirm('Scartare questo pacchetto? Non verrà pubblicato.')) return;
+    setApprovalAction(action);
+    try {
+      const response = await fetch(`/api/social/drafts/${draftId}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action }),
+      });
+      const result = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
+      if (action === 'reject') router.push('/social/drafts');
+      else await load();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Errore approvazione');
+    } finally {
+      setApprovalAction(null);
+    }
+  };
 
   const deleteDraft = async () => {
     if (!confirm(`Eliminare l'intero pacchetto "${data?.draft.title}" e tutti gli asset R2?`)) return;
@@ -156,6 +176,7 @@ export default function DraftPreviewPage() {
 
   const { draft, variants, source } = data;
   const sourceImage = source?.image_url ?? source?.thumbnail_url;
+  const isApproved = Boolean(draft.approved_at) || draft.status === 'approved';
 
   return (
     <div className="vstack" style={{ gap: 'var(--s5)' }}>
@@ -187,6 +208,30 @@ export default function DraftPreviewPage() {
         </p>
       </div>
 
+      {draft.requires_approval && draft.status !== 'cancelled' && (
+        <section className="card card-body" aria-labelledby="approval-title" style={{ borderColor: isApproved ? 'color-mix(in oklab, var(--ok) 35%, transparent)' : 'color-mix(in oklab, var(--accent-raw) 35%, transparent)' }}>
+          <div className="flex items-start gap-3 flex-wrap">
+            <ShieldCheck className="w-5 h-5 mt-0.5" style={{ color: isApproved ? 'var(--ok)' : 'var(--accent-raw)' }} />
+            <div className="grow min-w-0">
+              <h2 id="approval-title" className="typ-label">{isApproved ? 'Pacchetto approvato' : 'Da approvare'}</h2>
+              <p className="typ-caption mt-1" style={{ color: 'var(--text-muted)' }}>
+                {isApproved ? 'Le varianti pronte possono essere pubblicate singolarmente.' : 'Controlla visual e caption. Approvare non pubblica nulla automaticamente.'}
+              </p>
+            </div>
+            {!isApproved && (
+              <div className="flex gap-2 flex-wrap w-full sm:w-auto">
+                <button className="btn btn-primary btn-sm grow sm:grow-0" disabled={approvalAction !== null} onClick={() => updateApproval('approve')}>
+                  {approvalAction === 'approve' ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />} Approva
+                </button>
+                <button className="btn btn-ghost btn-sm grow sm:grow-0" disabled={approvalAction !== null} onClick={() => updateApproval('reject')} style={{ color: 'var(--danger)' }}>
+                  <X className="w-4 h-4" /> Scarta
+                </button>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
       {/* Source preview */}
       {sourceImage && (
         <div className="card card-body flex items-center gap-3">
@@ -202,7 +247,7 @@ export default function DraftPreviewPage() {
       {/* Variants */}
       <div className="vstack" style={{ gap: 'var(--s4)' }}>
         {variants.map(v => (
-          <VariantCard key={v.id} variant={v} onChanged={load} />
+          <VariantCard key={v.id} variant={v} draftApproved={isApproved || !draft.requires_approval} onChanged={load} />
         ))}
       </div>
     </div>
@@ -213,7 +258,7 @@ export default function DraftPreviewPage() {
    VariantCard — preview asset + caption editor + publish button
    ────────────────────────────────────────────────────────────────── */
 
-function VariantCard({ variant, onChanged }: { variant: Variant; onChanged: () => void }) {
+function VariantCard({ variant, draftApproved, onChanged }: { variant: Variant; draftApproved: boolean; onChanged: () => void }) {
   const meta = PLATFORM_META[variant.platform] ?? PLATFORM_META.instagram;
   const Icon = meta.Icon;
   const statusInfo = STATUS_LABEL[variant.status];
@@ -280,7 +325,9 @@ function VariantCard({ variant, onChanged }: { variant: Variant; onChanged: () =
 
   const isImage = variant.asset_type === 'image';
   const isVideo = variant.asset_type === 'video';
-  const canPublish = variant.asset_url && (variant.status === 'asset_ready' || variant.status === 'scheduled' || variant.status === 'failed');
+  const hasAsset = Boolean(variant.asset_url) || Boolean(variant.asset_urls?.length);
+  const assetCanPublish = hasAsset && (variant.status === 'asset_ready' || variant.status === 'scheduled' || variant.status === 'failed');
+  const canPublish = assetCanPublish && draftApproved;
   const isPublished = variant.status === 'published';
 
   // Constrain preview height on mobile so the card stays usable.
@@ -473,6 +520,9 @@ function VariantCard({ variant, onChanged }: { variant: Variant; onChanged: () =
                 ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Pubblicazione…</>
                 : <><Send className="w-3.5 h-3.5" /> Pubblica subito</>}
             </button>
+          )}
+          {assetCanPublish && !draftApproved && (
+            <span className="typ-caption" style={{ color: 'var(--text-muted)' }}>Approva il pacchetto per pubblicare</span>
           )}
           {isPublished && variant.external_post_url && (
             <a

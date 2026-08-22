@@ -8,6 +8,7 @@ import {
 } from '@/lib/meta/publisher';
 import { MetaApiError } from '@/lib/meta/client';
 import { rewriteToPublicBase, MEDIA_PUBLIC_BASE_URL } from '@/lib/r2MediaClient';
+import { canPublishApprovedDraft } from '@/lib/social/approval';
 
 /**
  * POST /api/social/variants/[id]/publish
@@ -64,6 +65,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     .single();
 
   if (vErr || !variant) return NextResponse.json({ error: `Variant non trovata: ${id}` }, { status: 404 });
+
+  const { data: draft, error: draftError } = await supabaseServer
+    .from('social_drafts')
+    .select('requires_approval, approved_at, status')
+    .eq('id', variant.draft_id)
+    .single();
+  if (draftError || !draft) return NextResponse.json({ error: 'Pacchetto padre non trovato' }, { status: 409 });
+  if (!canPublishApprovedDraft(draft)) {
+    return NextResponse.json({ error: 'Approva il pacchetto prima di pubblicare.' }, { status: 409 });
+  }
   // Carousel usa asset_urls[] (>=2 slide). Altri format usano asset_url singolo.
   const isCarousel = variant.format === 'carousel';
   if (isCarousel) {

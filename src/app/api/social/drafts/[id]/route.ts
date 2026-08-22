@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { deleteAssetsFromUrls } from '@/lib/social/r2Cleanup';
+import { validateApproval, type ApprovalAction } from '@/lib/social/approval';
 
 /**
  * GET /api/social/drafts/[id]
@@ -96,6 +97,43 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     })),
     source,
   });
+}
+
+/** Approva o scarta senza pubblicare: la pubblicazione resta sempre un'azione separata. */
+export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  if (!supabaseServer) return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
+  const { id } = await params;
+  const body = await req.json().catch(() => null) as { action?: ApprovalAction } | null;
+  if (body?.action !== 'approve' && body?.action !== 'reject') {
+    return NextResponse.json({ error: 'Azione non valida' }, { status: 400 });
+  }
+
+  const [{ data: draft, error: draftError }, { data: variants, error: variantsError }] = await Promise.all([
+    supabaseServer.from('social_drafts').select('id, status, requires_approval, approved_at').eq('id', id).single(),
+    supabaseServer.from('social_variants').select('status, asset_url, asset_urls').eq('draft_id', id),
+  ]);
+  if (draftError || !draft) return NextResponse.json({ error: `Draft non trovato: ${id}` }, { status: 404 });
+  if (variantsError) return NextResponse.json({ error: variantsError.message }, { status: 500 });
+
+  const now = new Date().toISOString();
+  if (body.action === 'approve') {
+    const validation = validateApproval(draft, variants ?? []);
+    if (!validation.ok) return NextResponse.json({ error: validation.reason }, { status: 409 });
+    const { data, error } = await supabaseServer.from('social_drafts').update({
+      status: 'approved', approved_at: now, updated_at: now,
+    }).eq('id', id).select('*').single();
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true, draft: data });
+  }
+
+  if (draft.status === 'published') {
+    return NextResponse.json({ error: 'Un pacchetto già pubblicato non può essere scartato.' }, { status: 409 });
+  }
+  const { data, error } = await supabaseServer.from('social_drafts').update({
+    status: 'cancelled', approved_at: null, approved_by: null, updated_at: now,
+  }).eq('id', id).select('*').single();
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true, draft: data });
 }
 
 /**
