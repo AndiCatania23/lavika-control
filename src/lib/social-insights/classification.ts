@@ -12,7 +12,7 @@ export function classifyContentType(caption: string | null): ContentType {
   if (/\b(episodio|puntata|press conference|conferenza stampa|on demand)\b/.test(text)) return 'episode';
   if (/\b(carriera|profilo|numeri di|ritratto)\b/.test(text)) return 'player_profile';
   if (/\b(quiz|voi cosa|tifosi|community|sondaggio)\b/.test(text)) return 'community';
-  if (/\b(scarica|apri l['’]?app|solo su làvika|disponibile su)\b/.test(text)) return 'promo';
+  if (/\b(scarica|apri l['’]?app|solo su lavika|disponibile su)\b/.test(text)) return 'promo';
   if (/\b(comunicato|società|club comunica)\b/.test(text)) return 'institutional';
   if (/\b(storia|anniversario|amarcord|accadde oggi)\b/.test(text)) return 'evergreen';
   return 'news';

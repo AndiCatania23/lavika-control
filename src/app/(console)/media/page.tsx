@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { Film, ImageIcon, Users, Cloud, Database, ArrowRight } from 'lucide-react';
+import { Film, ImageIcon, Users, Cloud, Database, ArrowRight, ShieldCheck } from 'lucide-react';
 
 interface HubStats {
   formats: number;
@@ -67,6 +67,14 @@ export default function MediaHubPage() {
       stat: stats ? `${stats.playersWithCutout}/${stats.players} con cutout` : '…',
       accent: 'var(--ok)',
     },
+    {
+      href: '/roster',
+      icon: ShieldCheck,
+      title: 'Roster verificato',
+      desc: 'Rosa pubblicata, fonti ufficiali, conflitti e osservazioni da approvare.',
+      stat: 'Provenienza + audit',
+      accent: 'var(--warn)',
+    },
   ];
 
   return (
@@ -92,7 +100,7 @@ export default function MediaHubPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         {cards.map(card => {
           const Icon = card.icon;
           return (

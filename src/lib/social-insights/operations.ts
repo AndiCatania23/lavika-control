@@ -52,7 +52,7 @@ export function buildTodayContext(args: { match: UpcomingMatch | null; sources: 
       const when = hours <= 12 ? 'oggi' : 'domani';
       return {
         subtitle: `${args.match.label} ${when}. Priorità alla copertura pre-partita.`,
-        objective: 'Aumentare l’attenzione pre-partita e portare i tifosi verso le funzioni match di LÀVIKA.',
+        objective: 'Aumentare l’attenzione pre-partita e portare i tifosi verso le funzioni match di LAVIKA.',
       };
     }
   }

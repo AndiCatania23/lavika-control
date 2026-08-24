@@ -32,16 +32,19 @@ export async function GET() {
     return NextResponse.json({ players: [] }, { status: 500 });
   }
 
-  // 1. Load all players from DB
-  const { data, error } = await supabaseServer
-    .from('players')
-    .select('id, slug, full_name, position, shirt_number, photo_url, cutout_url, cutout_updated_at, team_id')
-    .not('slug', 'is', null)
-    .order('position', { ascending: true })
-    .order('full_name', { ascending: true });
+  // 1. Load all players plus the explicitly published current roster.
+  const [{ data, error }, { data: publishedRoster, error: rosterError }] = await Promise.all([
+    supabaseServer
+      .from('players')
+      .select('id, slug, full_name, position, shirt_number, photo_url, cutout_url, cutout_updated_at, team_id')
+      .not('slug', 'is', null)
+      .order('position', { ascending: true })
+      .order('full_name', { ascending: true }),
+    supabaseServer.from('published_player_roster').select('id, resolved_shirt_number'),
+  ]);
 
-  if (error) {
-    return NextResponse.json({ error: error.message, players: [] }, { status: 500 });
+  if (error || rosterError) {
+    return NextResponse.json({ error: (error ?? rosterError)?.message, players: [] }, { status: 500 });
   }
 
   const players = (data ?? []) as PlayerRow[];
@@ -72,15 +75,14 @@ export async function GET() {
     } catch { /* ignore — we'll return without bucket enrichment */ }
   }
 
-  // 4. Filter to Catania roster only.
-  //    Il sync API-Football salva il roster Catania con team_id NULL
-  //    (~36 giocatori), mentre i coach speciali hanno team_id = Catania.
-  //    I giocatori con team_id = una squadra avversaria sono i capitani
-  //    delle altre squadre del girone (uno per squadra) — vanno esclusi.
-  //    Mantieni anche eventuali slug con folder R2 esistente (legacy).
+  const publishedNumbers = new Map((publishedRoster ?? []).map((p) => [p.id as string, p.resolved_shirt_number]));
+  const publishedIds = new Set(publishedNumbers.keys());
+
+  // 4. Current roster comes from the publication view. Coaches and historical
+  // players with editorial R2 assets remain available for content management.
   const relevant = players.filter(p => {
-    if (p.team_id === null) return true;                    // roster Catania (team_id non popolato)
-    if (cataniaId && p.team_id === cataniaId) return true;  // coach Catania
+    if (publishedIds.has(p.id)) return true;
+    if (cataniaId && p.team_id === cataniaId && p.position?.toLowerCase().includes('coach')) return true;
     if (p.slug && slugsWithFolder.has(p.slug)) return true; // legacy R2 folder
     return false;
   });
@@ -88,7 +90,13 @@ export async function GET() {
   const enriched: EnrichedPlayer[] = relevant.map(p => {
     const hasCustomCutout = Boolean(p.cutout_url);
     const cutoutBucketKey = p.slug ? `players/${p.slug}/cutout.webp` : null;
-    return { ...p, hasCustomCutout, cutoutBucketKey };
+    const resolvedNumber = publishedNumbers.get(p.id);
+    return {
+      ...p,
+      shirt_number: resolvedNumber == null ? p.shirt_number : String(resolvedNumber),
+      hasCustomCutout,
+      cutoutBucketKey,
+    };
   });
 
   return NextResponse.json({

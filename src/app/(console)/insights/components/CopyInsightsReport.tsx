@@ -35,7 +35,7 @@ const value = (number: number | null, suffix = '') => number == null ? 'n/d' : `
 function buildReport(data: ReportData): string {
   const { hero: h } = data;
   const lines = [
-    '# LÀVIKA — Statistiche prodotto e crescita',
+    '# LAVIKA — Statistiche prodotto e crescita',
     `Generato il ${new Date().toLocaleString('it-IT', { timeZone: 'Europe/Rome' })}`,
     'Nota metodologica: la misurazione completa di Pills, Partite, Video e Pronostici è attiva dal 22 agosto 2026 alle 22:41 (Europe/Rome). Lo storico precedente riguarda soprattutto i video.',
     '',
