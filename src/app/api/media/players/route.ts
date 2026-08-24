@@ -18,6 +18,8 @@ interface PlayerRow {
 interface EnrichedPlayer extends PlayerRow {
   hasCustomCutout: boolean;
   cutoutBucketKey: string | null;
+  isCurrentRoster: boolean;
+  isStaff: boolean;
 }
 
 /**
@@ -91,11 +93,14 @@ export async function GET() {
     const hasCustomCutout = Boolean(p.cutout_url);
     const cutoutBucketKey = p.slug ? `players/${p.slug}/cutout.webp` : null;
     const resolvedNumber = publishedNumbers.get(p.id);
+    const isStaff = Boolean(cataniaId && p.team_id === cataniaId && p.position?.toLowerCase().includes('coach'));
     return {
       ...p,
       shirt_number: resolvedNumber == null ? p.shirt_number : String(resolvedNumber),
       hasCustomCutout,
       cutoutBucketKey,
+      isCurrentRoster: publishedIds.has(p.id),
+      isStaff,
     };
   });
 

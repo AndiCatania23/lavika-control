@@ -12,6 +12,7 @@ interface PlayerCutoutRow {
   photo_url: string | null; cutout_url: string | null;
   cutout_updated_at: string | null; team_id: string | null;
   hasCustomCutout: boolean; cutoutBucketKey: string | null;
+  isCurrentRoster: boolean; isStaff: boolean;
 }
 
 export default function PlayersMediaPage() {
@@ -19,6 +20,7 @@ export default function PlayersMediaPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [onlyMissing, setOnlyMissing] = useState(false);
+  const [showArchive, setShowArchive] = useState(false);
   const [uploadState, setUploadState] = useState<Record<string, { progress: number; error: string | null; done: boolean }>>({});
 
   const load = useCallback(async () => {
@@ -61,6 +63,7 @@ export default function PlayersMediaPage() {
   };
 
   const filtered = players.filter(p => {
+    if (!showArchive && !p.isCurrentRoster && !p.isStaff) return false;
     if (onlyMissing && p.hasCustomCutout) return false;
     if (search) {
       const q = search.toLowerCase();
@@ -69,7 +72,9 @@ export default function PlayersMediaPage() {
     return true;
   });
 
-  const missing = players.filter(p => !p.hasCustomCutout).length;
+  const visiblePlayers = players.filter(p => showArchive || p.isCurrentRoster || p.isStaff);
+  const missing = visiblePlayers.filter(p => !p.hasCustomCutout).length;
+  const archived = players.filter(p => !p.isCurrentRoster && !p.isStaff).length;
 
   return (
     <div className="vstack" style={{ gap: 'var(--s5)' }}>
@@ -93,13 +98,17 @@ export default function PlayersMediaPage() {
 
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 flex-wrap">
         <div className="typ-caption">
-          <strong className="typ-label">{players.length}</strong> giocatori ·{' '}
+          <strong className="typ-label">{visiblePlayers.length}</strong> giocatori/staff ·{' '}
           <span style={{ color: missing > 0 ? 'var(--warn)' : 'var(--ok)' }}>{missing} senza cutout</span>
         </div>
         <div className="flex items-center gap-2">
           <label className="flex items-center gap-2 typ-caption cursor-pointer select-none">
             <input type="checkbox" checked={onlyMissing} onChange={e => setOnlyMissing(e.target.checked)} style={{ accentColor: 'var(--accent-raw)' }} />
             Solo mancanti
+          </label>
+          <label className="flex items-center gap-2 typ-caption cursor-pointer select-none">
+            <input type="checkbox" checked={showArchive} onChange={e => setShowArchive(e.target.checked)} style={{ accentColor: 'var(--accent-raw)' }} />
+            Archivio ({archived})
           </label>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none" style={{ color: 'var(--text-muted)' }} />
