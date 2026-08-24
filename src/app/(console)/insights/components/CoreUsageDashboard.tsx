@@ -90,9 +90,9 @@ export function CoreUsageDashboard({
             <div className="flex items-center gap-2 font-medium text-[color:var(--text-hi)]"><span className="h-2 w-2 rounded-full" style={{ background: row.color }} />{row.label}</div>
             <div className="mt-3 grid grid-cols-2 gap-3">
               <div><div className="text-[10px] uppercase tracking-wider text-muted-foreground">Utenti</div><div className="mt-0.5 text-[20px] font-semibold tabular-nums">{row.uniqueUsers}</div></div>
-              <div><div className="text-[10px] uppercase tracking-wider text-muted-foreground">Azioni</div><div className="mt-0.5 text-[20px] font-semibold tabular-nums">{row.actions}</div></div>
+              <div><div className="text-[10px] uppercase tracking-wider text-muted-foreground">{row.key === 'video' ? 'Avvii video' : 'Azioni'}</div><div className="mt-0.5 text-[20px] font-semibold tabular-nums">{row.actions}</div></div>
             </div>
-            <div className="mt-2 text-[11px] text-muted-foreground">{pct(row.uniqueUsers, activeUsers[windowKey])} dei registrati attivi · {row.actionsPerUser > 0 ? row.actionsPerUser.toFixed(1) : '—'} azioni per utente</div>
+            <div className="mt-2 text-[11px] text-muted-foreground">{pct(row.uniqueUsers, activeUsers[windowKey])} dei registrati attivi · {row.actionsPerUser > 0 ? row.actionsPerUser.toFixed(1) : '—'} {row.key === 'video' ? 'avvii' : 'azioni'} per utente</div>
           </article>
         ))}
       </div>
@@ -102,7 +102,7 @@ export function CoreUsageDashboard({
             <tr>
               <th className="px-3 py-2.5 text-left font-medium">Funzione</th>
               <th className="px-3 py-2.5 text-right font-medium">Utenti</th>
-              <th className="px-3 py-2.5 text-right font-medium">Azioni</th>
+              <th className="px-3 py-2.5 text-right font-medium">Azioni / avvii</th>
               <th className="px-3 py-2.5 text-right font-medium">Quota registrati attivi</th>
               <th className="px-3 py-2.5 text-right font-medium">Azioni per utente</th>
             </tr>
@@ -112,7 +112,7 @@ export function CoreUsageDashboard({
               <tr key={row.key}>
                 <td className="px-3 py-3 font-medium text-[color:var(--text-hi)]">
                   <span className="mr-2 inline-block h-2 w-2 rounded-full" style={{ background: row.color }} />
-                  {row.label}
+                  {row.label}{row.key === 'video' ? <span className="ml-1.5 text-[10px] font-normal text-muted-foreground">Avvii video</span> : null}
                 </td>
                 <td className="px-3 py-3 text-right tabular-nums">{row.uniqueUsers}</td>
                 <td className="px-3 py-3 text-right tabular-nums">{row.actions}</td>
