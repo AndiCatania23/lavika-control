@@ -9,7 +9,7 @@ import {
   Plus, X, Check, Ban, Undo2, Pencil, Trash2, Zap, Sparkles, Upload,
   AlertTriangle, Rss, ExternalLink, Search, Eye, BookOpen, Clock, BellRing,
   MousePointerClick, BarChart3, ChevronLeft, Filter, ImagePlus, RefreshCw,
-  Megaphone,
+  Megaphone, Copy,
 } from 'lucide-react';
 
 /* ==================================================================
@@ -180,6 +180,45 @@ function PillRow({
   );
 }
 
+function CopyPillButton({ title, content }: { title: string; content: string }) {
+  const { showToast } = useToast();
+
+  const copy = async () => {
+    const text = [title.trim(), content.trim()].filter(Boolean).join('\n\n');
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        // Compatibility fallback for browsers without the Clipboard API.
+        const previousFocus = document.activeElement;
+        const field = document.createElement('textarea');
+        field.value = text;
+        field.readOnly = true;
+        field.style.cssText = 'position:fixed;left:-9999px;top:0;font-size:16px';
+        document.body.appendChild(field);
+        try {
+          field.select();
+          field.setSelectionRange(0, text.length);
+          if (!document.execCommand('copy')) throw new Error('Copy failed');
+        } finally {
+          field.remove();
+          if (previousFocus instanceof HTMLElement) previousFocus.focus({ preventScroll: true });
+        }
+      }
+      showToast('success', 'Titolo e testo copiati');
+    } catch {
+      showToast('error', 'Copia non riuscita. Riprova o seleziona il testo manualmente.');
+    }
+  };
+
+  return (
+    <button type="button" className="btn btn-ghost btn-sm" onClick={copy}
+      disabled={!title.trim() && !content.trim()} title="Copia titolo e corpo della pill">
+      <Copy className="w-4 h-4" aria-hidden="true" /> Copia
+    </button>
+  );
+}
+
 /* ==================================================================
    Pill Detail (side panel on wide, bottom sheet on mobile)
    ================================================================== */
@@ -211,6 +250,7 @@ function PillDetail({
       <div className="flex items-center gap-2 flex-wrap">
         <span className={st.cls}>{st.label}</span>
         {cat && <span className={cat.cls}>{cat.label}</span>}
+        <div className="ml-auto"><CopyPillButton title={pill.title} content={pill.content ?? ''} /></div>
       </div>
 
       {pill.audit_flags && pill.audit_flags.length > 0 && (
@@ -435,6 +475,7 @@ function PillForm({
 
   return (
     <form onSubmit={submit} className="vstack" style={{ gap: 'var(--s5)' }}>
+      <div className="flex justify-end"><CopyPillButton title={title} content={content} /></div>
       <div>
         <label className="typ-micro block mb-1.5">Titolo *</label>
         <input
