@@ -25,8 +25,8 @@ export function ActivationByFeature({ rows }: { rows: FeatureActivationRow[] }) 
               </div>
             </div>
             <div className="mt-3 grid grid-cols-2 gap-2 border-t border-[color:var(--hairline)] pt-3">
-              <div><div className="text-[10px] uppercase tracking-wider text-muted-foreground">Giorno 1</div><div className="mt-0.5 text-[14px] tabular-nums">{row.d1Pct == null ? '—' : `${row.d1Pct}%`} <span className="text-[10px] text-muted-foreground">n={row.d1Eligible}</span></div></div>
-              <div><div className="text-[10px] uppercase tracking-wider text-muted-foreground">Giorno 7</div><div className="mt-0.5 text-[14px] tabular-nums">{row.d7Pct == null ? '—' : `${row.d7Pct}%`} <span className="text-[10px] text-muted-foreground">n={row.d7Eligible}</span></div></div>
+              <div><div className="text-[10px] uppercase tracking-wider text-muted-foreground">Stessa funzione D1 exact</div><div className="mt-0.5 text-[14px] tabular-nums">{row.d1Pct == null ? '—' : `${row.d1Pct}%`} <span className="text-[10px] text-muted-foreground">n={row.d1Eligible}</span></div></div>
+              <div><div className="text-[10px] uppercase tracking-wider text-muted-foreground">Stessa funzione D7 exact</div><div className="mt-0.5 text-[14px] tabular-nums">{row.d7Pct == null ? '—' : `${row.d7Pct}%`} <span className="text-[10px] text-muted-foreground">n={row.d7Eligible}</span></div></div>
             </div>
           </article>
         ))}
@@ -38,8 +38,8 @@ export function ActivationByFeature({ rows }: { rows: FeatureActivationRow[] }) 
             <th className="py-2 pr-3 text-left font-medium">Funzione</th>
             <th className="py-2 pr-3 text-right font-medium">Attivati</th>
             <th className="py-2 pr-3 text-right font-medium">% nuovi iscritti</th>
-            <th className="py-2 pr-3 text-right font-medium">Ritorno giorno 1</th>
-            <th className="py-2 text-right font-medium">Ritorno giorno 7</th>
+            <th className="py-2 pr-3 text-right font-medium">Stessa funzione D1 exact</th>
+            <th className="py-2 text-right font-medium">Stessa funzione D7 exact</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-[color:var(--hairline)]">

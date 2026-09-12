@@ -38,9 +38,9 @@ export function RetentionCohortTable({ cohorts }: Props) {
             </div>
             <div className="mt-3 grid grid-cols-3 gap-1.5">
               {([
-                ['Giorno 1', c.d1Pct, c.d1Eligible],
-                ['Giorno 7', c.d7Pct, c.d7Eligible],
-                ['Giorno 30', c.d30Pct, c.d30Eligible],
+                ['Core D1 exact', c.d1Pct, c.d1Eligible],
+                ['Core D7 exact', c.d7Pct, c.d7Eligible],
+                ['Core D30 exact', c.d30Pct, c.d30Eligible],
               ] as const).map(([label, percentage, eligible]) => (
                 <div key={label} className={`rounded-md p-2 text-center ${cellStyle(percentage)}`}>
                   <div className="text-[9px] uppercase tracking-wide opacity-70">{label}</div>
@@ -58,9 +58,9 @@ export function RetentionCohortTable({ cohorts }: Props) {
           <tr className="text-muted-foreground text-[11px] uppercase tracking-wider">
             <th className="text-left font-medium py-2 pr-3">Settimana iscrizione</th>
             <th className="text-right font-medium py-2 pr-3">Iscritti</th>
-            <th className="text-right font-medium py-2 pr-3">Giorno 1</th>
-            <th className="text-right font-medium py-2 pr-3">Giorno 7</th>
-            <th className="text-right font-medium py-2 pr-3">Giorno 30</th>
+            <th className="text-right font-medium py-2 pr-3">Core D1 exact</th>
+            <th className="text-right font-medium py-2 pr-3">Core D7 exact</th>
+            <th className="text-right font-medium py-2 pr-3">Core D30 exact</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-[color:var(--hairline)]">

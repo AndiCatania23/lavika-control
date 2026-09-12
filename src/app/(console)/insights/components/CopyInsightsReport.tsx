@@ -13,10 +13,14 @@ import type {
   FunnelTotals,
   GuestVsRegRow,
   HeroKpis,
+  RetentionIntegrity,
+  IntegrityBaseline,
 } from '@/lib/insights/queries';
 
 type ReportData = {
   hero: HeroKpis;
+  retentionIntegrity: RetentionIntegrity | null;
+  integrityBaseline: IntegrityBaseline | null;
   coreUsage: CoreUsageRow[];
   coreUsageAvailable: boolean;
   coreUsageDaily: CoreUsageDay[];
@@ -32,7 +36,7 @@ type ReportData = {
 const featureNames = { pill: 'Pills', match: 'Partite', video: 'Video', prediction: 'Pronostici' } as const;
 const value = (number: number | null, suffix = '') => number == null ? 'n/d' : `${number}${suffix}`;
 
-function buildReport(data: ReportData): string {
+export function buildReport(data: ReportData): string {
   const { hero: h } = data;
   const lines = [
     '# LAVIKA — Statistiche prodotto e crescita',
@@ -41,13 +45,13 @@ function buildReport(data: ReportData): string {
     '',
     '## Panoramica',
     `- Utenti totali: ${h.totalUsers}`,
-    `- Attivi oggi (DAU): ${h.dau}`,
-    `- Attivi negli ultimi 7 giorni (WAU): ${h.wau}`,
-    `- Attivi negli ultimi 30 giorni (MAU): ${h.mau}`,
+    `- Attivi oggi calendario Roma (DAU): ${h.dau}`,
+    `- Attivi nelle ultime 168 ore rolling (WAU): ${h.wau}`,
+    `- Attivi nelle ultime 720 ore rolling (MAU): ${h.mau}`,
     `- Frequenza d’uso (DAU/MAU): ${h.dau}/${h.mau} = ${value(h.stickinessPct, '%')}`,
     `- Ritorno giornaliero medio su 30 giorni: ${value(h.nextDayReturnPct, '%')} (campione: ${h.nextDayReturnSample} coppie giorno-utente; non è retention di coorte)`,
-    `- Ritorno al giorno 7: ${h.retentionD7Returned}/${h.retentionD7Sample} = ${value(h.retentionD7Pct, '%')}`,
-    `- Durata tipica sessione: ${value(h.sessionMedianMinutes, ' minuti')} (sessioni: ${h.sessionSample})`,
+    `- D7 Core Action · exact: ${h.retentionD7Returned}/${h.retentionD7Sample} = ${value(h.retentionD7Pct, '%')}`,
+    `- Intervallo sessione · mediana: ${value(h.sessionMedianMinutes, ' minuti')} (sessioni: ${h.sessionSample})`,
     `- Notifiche attive: ${value(h.pushOptInPct, '%')} (${h.pushOptedUsers} utenti)`,
     `- Apertura notifiche: ${h.pushClickedSinceTracking > 0 ? value(h.pushOpenRatePct, '%') : 'n/d'} (${h.pushClickedSinceTracking}/${h.pushSentSinceTracking}; misurazione affidabile dal 9 agosto 2026)`,
     `- Valutazione App Store: ${value(h.appStoreRating)}`,
@@ -65,7 +69,7 @@ function buildReport(data: ReportData): string {
       lines.push(`- ${featureNames[row.feature]}: ${row.uniqueUsers} utenti, ${row.actions} azioni, quota ${value(share, '%')}, ${value(frequency)} azioni per utente`);
     }
   }
-  lines.push('- Nota: gli utenti possono usare più funzioni; le quote non sono sommabili. Le azioni sono aperture di Pill/Partita, avvii Video e invii di Pronostici.');
+  lines.push('- Nota: gli utenti possono usare più funzioni; le quote non sono sommabili. Azioni: aperture Pill/Partita uniche per account/contenuto/sessione/giorno Roma; avvii Video deduplicati per device (account se assente), episodio e playback key; primo invio Pronostico per account/partita. Video: HLS dopo play() riuscito; YouTube al comando di avvio, non visione confermata.');
 
   lines.push('', '## Andamento giornaliero delle funzioni');
   if (!data.coreUsageAvailable) lines.push('- Dati momentaneamente non disponibili per errore di lettura.');
@@ -73,23 +77,55 @@ function buildReport(data: ReportData): string {
     lines.push(`- ${day.day}: Pills ${day.pillUsers} utenti/${day.pillActions} azioni; Partite ${day.matchUsers}/${day.matchActions}; Video ${day.videoUsers}/${day.videoActions}; Pronostici ${day.predictionUsers}/${day.predictionActions}`);
   }
 
+  lines.push('', '## Retention: exact e ritorno nella settimana');
+  const retention = data.retentionIntegrity;
+  if (!retention) {
+    lines.push('- Dati retention non disponibili: errore di lettura, non zero.');
+  } else {
+    const rate = (n: number) => retention.eligible > 0
+      ? `${n}/${retention.eligible} = ${Math.round(n / retention.eligible * 1000) / 10}%` : 'n/d — nessun utente maturo';
+    lines.push(
+      `- D7 App Return · exact: ${rate(retention.appD7)}`,
+      `- D7 Core Action · exact: ${rate(retention.coreD7)}`,
+      `- Returned D1–D7 · App / W1 Return: ${rate(retention.appWeek1)}`,
+      `- Returned D1–D7 · Core: ${rate(retention.coreWeek1)}`,
+      '- Exact: attività nella data Roma D0+7. D1–D7: almeno una attività nei giorni 1–7 inclusi. Il giorno 7 deve essere concluso.',
+      '- App: evento oppure presenza di sessione osservata. Core: apertura Pill/Partita, primo pronostico per partita o avvio Video canonico.',
+      `- Presenza giornaliera persistente dal ${retention.observedFrom}; lo storico precedente è un minimo osservabile, non una registrazione completa dei ritorni.`,
+      `- Nuova baseline: ${retention.certifiedAt ?? 'certificazione in corso; baseline non avviata'}`,
+    );
+  }
+
+  const baseline = data.integrityBaseline;
+  if (baseline?.certified_at) {
+    const ratio = (n: number, d: number) => d ? `${n}/${d} = ${Math.round(n / d * 1000) / 10}%` : 'n/d — campione non maturato';
+    lines.push('', '## Nuova baseline certificata',
+      `- Inizio: ${baseline.certified_at}. Nessuna cancellazione dello storico.`,
+      `- Acquisition: ${baseline.acquired} nuovi account dalla certificazione.`,
+      `- Activation D0 Core: ${ratio(baseline.activated_d0, baseline.activation_eligible)}; nuovi iscritti, D0 concluso.`,
+      `- W1 Return App D1–D7: ${ratio(baseline.w1_returned, baseline.w1_eligible)}; nuovi iscritti, D7 concluso.`,
+      `- WAU/MAU registrati: ${ratio(baseline.wau, baseline.mau)}; tutti gli account, attività dalla certificazione nelle ultime 168/720 ore; ${baseline.windows_complete ? 'finestre complete' : 'finestre parziali'}.`,
+      '- Next Matchday Retention: non ancora calcolata. Feature engagement nelle sezioni storiche precedenti.',
+    );
+  }
+
   const f = data.funnel;
   lines.push(
     '', '## Percorso dei nuovi iscritti',
     `- Registrati: ${f.signups}`,
-    `- Profilo completato: ${f.onboarded} (${value(f.onboardedPct, '%')})`,
-    `- Primo valore: ${f.firstValue} (${value(f.firstValuePct, '%')})`,
-    `- Tornati al giorno 7: ${f.returnedD7} su ${f.d7Eligible} eleggibili (${value(f.returnedD7Pct, '%')})`,
+    `- Onboarding completato: ${f.onboarded} (${value(f.onboardedPct, '%')})`,
+    `- Prima core action: ${f.firstValue} (${value(f.firstValuePct, '%')})`,
+    `- D7 Core Action · exact: ${f.returnedD7} su ${f.d7Eligible} eleggibili (${value(f.returnedD7Pct, '%')})`,
     '', '## Attivazione per funzione',
   );
   for (const row of data.activation) {
-    lines.push(`- ${featureNames[row.feature]}: ${row.activatedUsers}/${row.signupUsers} attivati (${value(row.activationPct, '%')}); giorno 1 ${row.d1Returned}/${row.d1Eligible} (${value(row.d1Pct, '%')}); giorno 7 ${row.d7Returned}/${row.d7Eligible} (${value(row.d7Pct, '%')})`);
+    lines.push(`- ${featureNames[row.feature]}: ${row.activatedUsers}/${row.signupUsers} attivati (${value(row.activationPct, '%')}); stessa funzione D1 exact ${row.d1Returned}/${row.d1Eligible} (${value(row.d1Pct, '%')}); stessa funzione D7 exact ${row.d7Returned}/${row.d7Eligible} (${value(row.d7Pct, '%')})`);
   }
 
   lines.push('', '## Coorti settimanali');
   if (data.cohorts.length === 0) lines.push('- Dati ancora in raccolta.');
   for (const row of data.cohorts) {
-    lines.push(`- Settimana ${row.cohortWeek}: ${row.cohortSize} iscritti; giorno 1 ${row.d1Returned}/${row.d1Eligible} = ${value(row.d1Pct, '%')}; giorno 7 ${row.d7Returned}/${row.d7Eligible} = ${value(row.d7Pct, '%')}; giorno 30 ${row.d30Returned}/${row.d30Eligible} = ${value(row.d30Pct, '%')}`);
+    lines.push(`- Settimana ${row.cohortWeek}: ${row.cohortSize} iscritti; core D1 exact ${row.d1Returned}/${row.d1Eligible} = ${value(row.d1Pct, '%')}; core D7 exact ${row.d7Returned}/${row.d7Eligible} = ${value(row.d7Pct, '%')}; core D30 exact ${row.d30Returned}/${row.d30Eligible} = ${value(row.d30Pct, '%')}`);
   }
 
   lines.push('', '## Utenti attivi giornalieri — ultimi 30 giorni');
@@ -118,9 +154,11 @@ function buildReport(data: ReportData): string {
     `- Sistemi operativi: ${data.deviceGeo.topOs.map((row) => `${row.label} ${row.users}`).join(', ') || 'n/d'}`,
     `- Paesi: ${data.deviceGeo.topCountries.map((row) => `${row.label} ${row.users}`).join(', ') || 'n/d'}`,
     '', '## Definizioni e limiti',
-    '- DAU, WAU e MAU: utenti distinti attivi in 1, 7 e 30 giorni.',
+    '- DAU: oggi calendario Europe/Rome. WAU/MAU: ultime 168/720 ore rolling. Account e dispositivi guest sono unità differenti.',
     '- Il ritorno giornaliero medio descrive passaggi giorno→giorno; il ritorno D1/D7/D30 misura coorti di iscrizione.',
     '- Le finestre 24 ore, 7 giorni e 30 giorni sono mobili. Giorni e coorti usano Europe/Rome.',
+    '- Intervallo sessione: last_seen − first_seen, non tempo attivo; sessioni iniziate nelle ultime 720 ore, incluse durate zero.',
+    '- Ritorno per funzione: stessa funzione usata in D0 e nel giorno exact indicato; non ritorno a qualsiasi funzione.',
     '- I dati App Store possono arrivare con circa 48 ore di ritardo.',
     '- “n/d” indica un dato non disponibile o non ancora maturato, non uno zero.',
     '- Dispositivi e provenienza derivano dalle ultime 5.000 sessioni al massimo negli ultimi 30 giorni.',

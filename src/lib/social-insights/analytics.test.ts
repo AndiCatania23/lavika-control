@@ -6,7 +6,7 @@ import type { SocialPostMetric } from './types';
 
 const now = new Date('2026-08-22T12:00:00Z');
 const post = (overrides: Partial<SocialPostMetric> & Pick<SocialPostMetric, 'id'>): SocialPostMetric => ({
-  id: overrides.id, platform: 'instagram', publishedAt: '2026-08-21T10:00:00Z', snapshotAt: '2026-08-22T10:00:00Z',
+  platform: 'instagram', publishedAt: '2026-08-21T10:00:00Z', snapshotAt: '2026-08-22T10:00:00Z',
   caption: 'Notizia Catania', reach: 100, impressions: 120, likes: 10, comments: 1, shares: 2, saves: 1, engagementRate: 0.14,
   ...overrides,
 });

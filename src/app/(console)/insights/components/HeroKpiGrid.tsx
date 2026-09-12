@@ -31,12 +31,12 @@ function buildTiles(k: HeroKpis): Tile[] {
       hint: k.nextDayReturnSample > 0 ? `attività giorno→giorno · media 30gg` : 'dati insufficienti',
     },
     {
-      label: 'Ritorno al giorno 7',
+      label: 'D7 Core Action · exact',
       value: k.retentionD7Pct != null ? `${k.retentionD7Pct}%` : '—',
       hint: k.retentionD7Sample > 0 ? `utenti eleggibili · n=${k.retentionD7Sample}` : 'dati in raccolta',
     },
     {
-      label: 'Durata tipica sessione',
+      label: 'Intervallo sessione · mediana',
       value: k.sessionMedianMinutes != null ? `${k.sessionMedianMinutes}'` : '—',
       hint: k.sessionSample > 0 ? `mediana · ${formatNumber(k.sessionSample)} sess. 30gg` : 'nessun dato',
     },

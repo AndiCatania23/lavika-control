@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:social": "tsx --test src/lib/social-insights/*.test.ts src/lib/social/approval.test.ts supabase/functions/social-insights-fetcher/*.test.ts"
+    "test:social": "tsx --test src/lib/social-insights/*.test.ts src/lib/social/approval.test.ts supabase/functions/social-insights-fetcher/*.test.ts",
+    "test:insights": "node --import tsx --test scripts/insights-tests/*.test.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.999.0",
@@ -30,6 +31,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.8",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

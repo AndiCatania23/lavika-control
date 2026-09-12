@@ -13,9 +13,9 @@ export function SignupFunnel({ totals }: Props) {
 
   const steps = [
     { label: 'Registrati', count: totals.signups, pct: 100 as number | null },
-    { label: 'Profilo completato', count: totals.onboarded, pct: totals.onboardedPct },
-    { label: 'Primo valore', count: totals.firstValue, pct: totals.firstValuePct },
-    { label: 'Tornati al giorno 7', count: totals.returnedD7, pct: totals.returnedD7Pct },
+    { label: 'Onboarding completato', count: totals.onboarded, pct: totals.onboardedPct },
+    { label: 'Prima core action', count: totals.firstValue, pct: totals.firstValuePct },
+    { label: 'D7 Core Action · exact', count: totals.returnedD7, pct: totals.returnedD7Pct },
   ];
 
   if (totals.signups === 0) {
@@ -44,7 +44,7 @@ export function SignupFunnel({ totals }: Props) {
         );
       })}
       <p className="text-[10.5px] text-muted-foreground">
-        Il ritorno al giorno 7 usa solo utenti eleggibili: n={totals.d7Eligible}.
+        Il D7 Core Action exact usa solo utenti eleggibili: n={totals.d7Eligible}.
       </p>
     </div>
   );

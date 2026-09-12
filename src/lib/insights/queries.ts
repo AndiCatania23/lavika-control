@@ -75,7 +75,7 @@ export async function loadHeroKpis(): Promise<HeroKpis> {
       .from('v_insights_kpi_windows')
       .select('dau,wau,mau,session_median_min,session_sample')
       .maybeSingle(),
-    // Ritorno entro 24h (next-day return, media 30gg).
+    // Ritorno nel giorno calendario successivo (media pesata 30gg).
     supabaseServer
       .from('v_insights_next_day_return')
       .select('next_day_return_pct,active_user_days')
@@ -102,10 +102,8 @@ export async function loadHeroKpis(): Promise<HeroKpis> {
       .not('clicked_at', 'is', null),
     // Retention D7 canonica: qualunque core action, solo utenti eleggibili.
     supabaseServer
-      .from('v_insights_complete_retention_cohorts')
-      .select('cohort_week,d7_eligible,d7_returned')
-      .order('cohort_week', { ascending: false })
-      .limit(12),
+      .from('v_insights_retention_summary_v1')
+      .select('d7_eligible,d7_returned:d7_core_returned'),
   ]);
 
   const totalUsers = totalUsersRes.count ?? 0;
@@ -123,7 +121,7 @@ export async function loadHeroKpis(): Promise<HeroKpis> {
   // Stickiness = DAU/MAU.
   const stickinessPct = mau > 0 ? Math.round((dau / mau) * 1000) / 10 : null;
 
-  // Ritorno entro 24h.
+  // Ritorno nel giorno calendario successivo.
   const ret = (returnRes.data as { next_day_return_pct: number | null; active_user_days: number | null } | null) ?? null;
   const nextDayReturnPct = ret?.next_day_return_pct != null ? Number(ret.next_day_return_pct) : null;
   const nextDayReturnSample = ret?.active_user_days ?? 0;
@@ -140,9 +138,9 @@ export async function loadHeroKpis(): Promise<HeroKpis> {
   const pushOptedUsers = new Set(pushRows.map((r) => r.user_id).filter(Boolean)).size;
   const pushOptInPct = totalUsers > 0 ? Math.round((pushOptedUsers / totalUsers) * 1000) / 10 : null;
 
-  // Retention D7: solo coorti mature, weighted average.
+  // D7 Core exact: tutte le coorti mature dal cutoff, senza limite di 12 settimane.
   const cohorts =
-    (cohortsRes.data as Array<{ cohort_week: string; d7_eligible: number; d7_returned: number }> | null) ?? [];
+    (cohortsRes.data as Array<{ d7_eligible: number; d7_returned: number }> | null) ?? [];
   const cohortTotal = cohorts.reduce((s, c) => s + (c.d7_eligible ?? 0), 0);
   const cohortReturned = cohorts.reduce((s, c) => s + (c.d7_returned ?? 0), 0);
   const retentionD7Pct = cohortTotal > 0 ? Math.round((cohortReturned / cohortTotal) * 1000) / 10 : null;
@@ -614,4 +612,53 @@ export async function loadDeviceGeo(days = 30): Promise<DeviceGeoBreakdown> {
     topOs: toSorted(osMap),
     topCountries: toSorted(countryMap),
   };
+}
+
+
+export interface RetentionIntegrity {
+  eligible: number;
+  appD7: number;
+  coreD7: number;
+  appWeek1: number;
+  coreWeek1: number;
+  observedFrom: string | null;
+  certifiedAt: string | null;
+}
+
+export async function loadRetentionIntegrity(): Promise<RetentionIntegrity | null> {
+  if (!supabaseServer) return null;
+  const [summary, version] = await Promise.all([
+    supabaseServer.from('v_insights_retention_summary_v1').select('*').single(),
+    supabaseServer.from('analytics_measurement_versions')
+      .select('installed_at,certified_at').eq('version', 'insights_integrity_v1').single(),
+  ]);
+  // A read error must never masquerade as zero retention.
+  if (summary.error || version.error || !summary.data || !version.data) return null;
+  return {
+    eligible: Number(summary.data.d7_eligible),
+    appD7: Number(summary.data.d7_app_returned),
+    coreD7: Number(summary.data.d7_core_returned),
+    appWeek1: Number(summary.data.returned_d1_d7_app),
+    coreWeek1: Number(summary.data.returned_d1_d7_core),
+    observedFrom: version.data.installed_at,
+    certifiedAt: version.data.certified_at,
+  };
+}
+
+export interface IntegrityBaseline {
+  certified_at: string | null;
+  acquired: number;
+  activation_eligible: number;
+  activated_d0: number;
+  w1_eligible: number;
+  w1_returned: number;
+  wau: number;
+  mau: number;
+  windows_complete: boolean;
+}
+
+export async function loadIntegrityBaseline(): Promise<IntegrityBaseline | null> {
+  if (!supabaseServer) return null;
+  const { data, error } = await supabaseServer.from('v_insights_baseline_v1').select('*').maybeSingle();
+  return error ? null : data as IntegrityBaseline | null;
 }

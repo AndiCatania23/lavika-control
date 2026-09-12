@@ -16,6 +16,8 @@
 
 import {
   loadHeroKpis,
+  loadRetentionIntegrity,
+  loadIntegrityBaseline,
   loadDauSeries,
   loadCohorts,
   loadGuestVsReg,
@@ -27,6 +29,8 @@ import {
   loadCoreUsageDaily,
   CORE_ANALYTICS_STARTED_AT,
 } from '@/lib/insights/queries';
+import { IntegrityBaselinePanel } from './components/IntegrityBaselinePanel';
+import { RetentionIntegrityPanel } from './components/RetentionIntegrityPanel';
 import { HeroKpiGrid } from './components/HeroKpiGrid';
 import { AppleAppStoreSection } from './components/AppleAppStoreSection';
 import { DauTimeSeries } from './components/DauTimeSeries';
@@ -45,6 +49,8 @@ export const revalidate = 300;
 export default async function InsightsPage() {
   const [
     hero,
+    retentionIntegrity,
+    integrityBaseline,
     dauSeries,
     cohorts,
     guestVsReg,
@@ -56,6 +62,8 @@ export default async function InsightsPage() {
     coreUsageDaily,
   ] = await Promise.all([
     loadHeroKpis(),
+    loadRetentionIntegrity(),
+    loadIntegrityBaseline(),
     loadDauSeries(30),
     loadCohorts(8),
     loadGuestVsReg(),
@@ -85,6 +93,8 @@ export default async function InsightsPage() {
         </div>
         <CopyInsightsReport data={{
           hero,
+          retentionIntegrity,
+          integrityBaseline,
           coreUsage,
           coreUsageAvailable: coreUsageResult.available,
           coreUsageDaily,
@@ -110,10 +120,14 @@ export default async function InsightsPage() {
         </div>
       </div>
 
+      <IntegrityBaselinePanel data={integrityBaseline} />
+
       <div>
         <div className="mb-3 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Panoramica</div>
         <HeroKpiGrid kpis={hero} />
       </div>
+
+      <RetentionIntegrityPanel data={retentionIntegrity} />
 
       <InsightSection
         title="Cosa fanno i tifosi"
@@ -142,7 +156,7 @@ export default async function InsightsPage() {
           </InsightSection>
           <InsightSection
             title="Attivazione per funzione"
-            subtitle="Funzione usata nel giorno dell’iscrizione; una persona può apparire in più righe"
+            subtitle="Attivazione D0; ritorno exact alla stessa funzione. Una persona può apparire in più righe"
           >
             <ActivationByFeature rows={activationByFeature} />
           </InsightSection>
@@ -154,7 +168,7 @@ export default async function InsightsPage() {
         <div className="space-y-6">
           <InsightSection
             title="Coorti settimanali"
-            subtitle="Utenti iscritti nella stessa settimana · solo dati completi dal 22 agosto"
+            subtitle="Core action exact D1/D7/D30 · iscritti dal 22 agosto · giorni target conclusi"
           >
             <RetentionCohortTable cohorts={cohorts} />
           </InsightSection>
