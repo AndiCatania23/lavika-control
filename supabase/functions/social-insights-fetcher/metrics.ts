@@ -1,6 +1,7 @@
 export type MetaMetricSeries = {
   data?: Array<{
     name: string;
+    total_value?: { value?: unknown } | null;
     values?: Array<{ value: unknown }>;
   }>;
 };
@@ -12,6 +13,11 @@ function finiteNumber(value: unknown): number | null {
     return Number.isFinite(parsed) ? parsed : null;
   }
   return null;
+}
+
+/** Totale aggregato restituito da Meta; non somma reach giornaliere sovrapposte. */
+export function totalMetricValue(series: MetaMetricSeries, name: string): number | null {
+  return finiteNumber(series.data?.find((item) => item.name === name)?.total_value?.value);
 }
 
 /** Mantiene la differenza semantica tra una metrica assente e uno zero reale. */
