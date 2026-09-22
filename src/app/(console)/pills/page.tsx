@@ -227,7 +227,7 @@ function PillDetail({
 }: {
   pill: Pill;
   onClose: () => void;
-  onAction: (action: 'approve' | 'reject' | 'cancel' | 'edit' | 'delete' | 'publish' | 'generate-cover' | 'generate-cover-auto') => void;
+  onAction: (action: 'approve' | 'reject' | 'cancel' | 'edit' | 'delete' | 'publish' | 'generate-cover' | 'generate-cover-auto' | 'upload-cover' | 'remove-cover') => void;
   saving: boolean;
 }) {
   const st = statusPill(pill.status);
@@ -324,6 +324,20 @@ function PillDetail({
         </div>
       </div>
 
+      <div className="vstack-tight">
+        <div className="typ-micro">Cover manuale</div>
+        <button className="btn btn-ghost" disabled={saving} onClick={() => onAction('upload-cover')}>
+          <Upload className="w-4 h-4" />
+          {saving ? 'Salvataggio…' : pill.image_url ? 'Sostituisci cover' : 'Carica cover'}
+        </button>
+        <p className="typ-caption">Carica una cover già pronta, senza AI. JPG, PNG o WebP, massimo 4 MB. Consigliato 16:9.</p>
+        {pill.image_url && (
+          <button className="btn btn-ghost" disabled={saving} onClick={() => onAction('remove-cover')}>
+            <X className="w-4 h-4" /> Rimuovi cover
+          </button>
+        )}
+      </div>
+
       {/* Cover AI — solo per draft. Due varianti: con asset (file picker) o auto (no upload) */}
       {pill.status === 'draft' && (
         <div className="grid grid-cols-2 gap-2">
@@ -334,7 +348,7 @@ function PillDetail({
             title="Scegli una o più immagini (foto soggetto, loghi) e genera la cover"
           >
             {pill.image_url ? <RefreshCw className="w-4 h-4" /> : <ImagePlus className="w-4 h-4" />}
-            {pill.image_url ? 'Rigenera (con foto)' : 'Cover con foto'}
+            {pill.image_url ? 'Rigenera con AI e foto' : 'Genera con AI e foto'}
           </button>
           <button
             className="btn btn-ghost"
@@ -343,7 +357,7 @@ function PillDetail({
             title="Lascia che Nano Banana inventi la visual basandosi solo sul testo della pill"
           >
             <Sparkles className="w-4 h-4" />
-            Cover auto (no foto)
+            Genera con AI senza foto
           </button>
         </div>
       )}
@@ -442,6 +456,10 @@ function PillForm({
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 4 * 1024 * 1024) {
+      setUploadError('Scegli un JPG, PNG o WebP di massimo 4 MB.');
+      return;
+    }
     setUploadingImage(true);
     setUploadError(null);
     try {
@@ -462,6 +480,7 @@ function PillForm({
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
+    if (uploadingImage || saving) return;
     await onSave({
       title,
       content,
@@ -531,7 +550,7 @@ function PillForm({
       </div>
 
       <div>
-        <label className="typ-micro block mb-1.5">Immagine</label>
+        <label className="typ-micro block mb-1.5">Cover manuale</label>
         <div className="vstack-tight">
           {imageUrl && (
             <div className="relative">
@@ -545,7 +564,7 @@ function PillForm({
           <label className={`btn btn-ghost w-full ${uploadingImage ? 'opacity-60 pointer-events-none' : ''}`}>
             <Upload className="w-4 h-4" />
             {uploadingImage ? 'Carico…' : imageUrl ? 'Sostituisci' : 'Carica'}
-            <input type="file" accept="image/*" className="hidden" onChange={handleImagePick} />
+            <input type="file" accept="image/jpeg,image/png,image/webp" disabled={uploadingImage || saving} className="hidden" onChange={handleImagePick} />
           </label>
           <input className="input" value={imageUrl} onChange={e => setImageUrl(e.target.value)} placeholder="o incolla URL..." />
           {uploadError && <span className="typ-caption" style={{ color: 'var(--danger)' }}>{uploadError}</span>}
@@ -554,7 +573,7 @@ function PillForm({
 
       <div className="grid grid-cols-2 gap-2 pt-2">
         <button type="button" className="btn btn-ghost" onClick={onCancel}>Annulla</button>
-        <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Salvo…' : 'Salva'}</button>
+        <button type="submit" className="btn btn-primary" disabled={saving || uploadingImage}>{uploadingImage ? 'Caricamento cover…' : saving ? 'Salvo…' : 'Salva'}</button>
       </div>
     </form>
   );
@@ -838,6 +857,38 @@ export default function PillsPage() {
   const handleQuickApprove = (pill: Pill) => doUpdate(pill.id, { status: 'scheduled' }, 'Pill approvata');
   const handleQuickReject  = (pill: Pill) => doUpdate(pill.id, { status: 'rejected' }, 'Pill rifiutata');
 
+  const manualCoverInputRef = useRef<HTMLInputElement>(null);
+  const manualCoverPillRef = useRef<Pill | null>(null);
+
+  const onManualCoverPicked = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    const pill = manualCoverPillRef.current;
+    manualCoverPillRef.current = null;
+    if (!file || !pill) return;
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 4 * 1024 * 1024) {
+      showToast('error', 'Scegli un JPG, PNG o WebP di massimo 4 MB.');
+      return;
+    }
+    setSaving(true);
+    try {
+      const fd = new FormData();
+      fd.append('type', 'pill-image');
+      fd.append('pillId', pill.id);
+      fd.append('file', file);
+      const res = await fetch('/api/media/upload', { method: 'POST', body: fd });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok || !payload.url) throw new Error(payload.error || `Upload fallito (${res.status})`);
+      const updated = await updatePill(pill.id, { image_url: payload.url });
+      setPills(current => current.map(item => item.id === pill.id ? { ...item, ...updated } : item));
+      showToast('success', 'Cover manuale salvata');
+    } catch (err) {
+      showToast('error', err instanceof Error ? err.message : 'Errore caricamento cover');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const coverFileInputRef = useRef<HTMLInputElement>(null);
   const coverPillRef = useRef<Pill | null>(null);
 
@@ -870,13 +921,22 @@ export default function PillsPage() {
     void doGenerateCover(pill, files);
   };
 
-  const handleAction = (pill: Pill, action: 'approve' | 'reject' | 'cancel' | 'edit' | 'delete' | 'publish' | 'generate-cover' | 'generate-cover-auto') => {
+  const handleAction = (pill: Pill, action: 'approve' | 'reject' | 'cancel' | 'edit' | 'delete' | 'publish' | 'generate-cover' | 'generate-cover-auto' | 'upload-cover' | 'remove-cover') => {
     if (action === 'edit') { setSelectedPill(pill); setView('edit'); return; }
     if (action === 'approve') return setConfirmModal({ open: true, title: 'Approva', message: `Approvare "${pill.title}"? Verrà programmata.`, variant: 'default', onConfirm: () => { setConfirmModal(m => ({ ...m, open: false })); doUpdate(pill.id, { status: 'scheduled' }, 'Approvata'); } });
     if (action === 'reject')  return setConfirmModal({ open: true, title: 'Rifiuta', message: `Rifiutare "${pill.title}"?`, variant: 'danger', onConfirm: () => { setConfirmModal(m => ({ ...m, open: false })); doUpdate(pill.id, { status: 'rejected' }, 'Rifiutata'); } });
     if (action === 'cancel')  return setConfirmModal({ open: true, title: 'Torna draft', message: `Riportare "${pill.title}" in draft?`, variant: 'default', onConfirm: () => { setConfirmModal(m => ({ ...m, open: false })); doUpdate(pill.id, { status: 'draft' }, 'In draft'); } });
     if (action === 'publish') return setConfirmModal({ open: true, title: 'Pubblica ora', message: `Pubblicare "${pill.title}" immediatamente?`, variant: 'default', onConfirm: () => { setConfirmModal(m => ({ ...m, open: false })); doUpdate(pill.id, { status: 'published' }, 'Pubblicata'); } });
     if (action === 'delete')  return setConfirmModal({ open: true, title: 'Elimina', message: `Eliminare "${pill.title}"? Irreversibile.`, variant: 'danger', onConfirm: () => { setConfirmModal(m => ({ ...m, open: false })); doDelete(pill); } });
+    if (action === 'upload-cover') {
+      manualCoverPillRef.current = pill;
+      manualCoverInputRef.current?.click();
+      return;
+    }
+    if (action === 'remove-cover') {
+      void doUpdate(pill.id, { image_url: null }, 'Cover rimossa');
+      return;
+    }
     if (action === 'generate-cover') {
       coverPillRef.current = pill;
       coverFileInputRef.current?.click();
@@ -903,6 +963,9 @@ export default function PillsPage() {
 
   return (
     <div className="vstack" style={{ gap: 'var(--s5)' }}>
+
+      <input ref={manualCoverInputRef} type="file" accept="image/jpeg,image/png,image/webp"
+        onChange={onManualCoverPicked} disabled={saving} style={{ display: 'none' }} />
 
       {/* Hidden file input per "Genera cover AI" */}
       <input

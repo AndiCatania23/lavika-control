@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
-import { PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { PutObjectCommand } from '@aws-sdk/client-s3';
 import sharp from 'sharp';
 import { r2MediaClient, MEDIA_BUCKET_NAME, MEDIA_PUBLIC_BASE_URL } from '@/lib/r2MediaClient';
-import { supabaseServer } from '@/lib/supabaseServer';
 
 export async function POST(request: Request) {
   if (!r2MediaClient) {
@@ -55,6 +54,12 @@ export async function POST(request: Request) {
         key = `library/${ts}.webp`;
         break;
       case 'pill-image':
+        if (!(file instanceof File) || !['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+          return NextResponse.json({ error: 'Scegli un JPG, PNG o WebP.' }, { status: 400 });
+        }
+        if (file.size > 4 * 1024 * 1024) {
+          return NextResponse.json({ error: 'La cover deve essere di massimo 4 MB.' }, { status: 413 });
+        }
         key = `pills/manual/${pillId ?? 'new'}-${ts}.webp`;
         break;
       case 'player-cutout':
@@ -116,27 +121,8 @@ export async function POST(request: Request) {
       .webp({ quality: isCutout ? 90 : 85, alphaQuality: 90 })
       .toBuffer();
 
-    // Cleanup: se questa è una pill-image manuale che sostituisce una cover precedente,
-    // elimina la vecchia (se è su R2 e ha key diversa). Stessa key = overwrite, no cleanup.
-    if (type === 'pill-image' && pillId && supabaseServer) {
-      try {
-        const { data: existing } = await supabaseServer
-          .from('pills')
-          .select('image_url')
-          .eq('id', pillId)
-          .single();
-        const oldUrl = (existing?.image_url as string | null) ?? null;
-        if (oldUrl && oldUrl.startsWith(MEDIA_PUBLIC_BASE_URL)) {
-          const oldKey = oldUrl.replace(`${MEDIA_PUBLIC_BASE_URL}/`, '').split('?')[0];
-          if (oldKey && oldKey !== key) {
-            await r2MediaClient.send(new DeleteObjectCommand({ Bucket: MEDIA_BUCKET_NAME, Key: oldKey }));
-          }
-        }
-      } catch (cleanupErr) {
-        console.warn('[media/upload] cleanup vecchia pill-image fallito:', cleanupErr);
-      }
-    }
-
+    // Keep the previous cover: the editor may cancel or the database save may fail.
+    // Each manual upload gets a new key, so replacing it never breaks the live cover.
     await r2MediaClient.send(
       new PutObjectCommand({
         Bucket: MEDIA_BUCKET_NAME,
