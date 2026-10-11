@@ -22,3 +22,5 @@ test('network retry is idempotent and rejects reuse with changed evidence',async
 });
 
 test('source title may be empty, whitespace or omitted for articles and broadcasts',()=>{for(const source_kind of ['article','broadcast'])for(const title of ['', '   ',undefined]){const result=schema.mutationSchema.safeParse({...input,data:{...data,source_kind,source_title:title}});assert.ok(result.success);assert.equal(result.data.data.source_title,'');}assert.equal(schema.mutationSchema.safeParse({...input,data:{...data,source_title:'x'.repeat(501)}}).success,false);});
+
+test('source URL may be omitted but provided links remain validated',()=>{for(const source_kind of ['article','broadcast'])for(const source_url of ['', '   ',undefined]){const result=schema.mutationSchema.safeParse({...input,data:{...data,source_kind,source_url}});assert.ok(result.success);assert.equal(result.data.data.source_url,'');}for(const source_url of ['not a link','javascript:alert(1)','https://user:pass@example.com'])assert.equal(schema.mutationSchema.safeParse({...input,data:{...data,source_url}}).success,false);});
