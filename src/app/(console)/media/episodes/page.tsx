@@ -43,6 +43,7 @@ interface EpisodeRow {
   competition_season_id: string | null;
   published_at: string | null;
   thumbnail_url: string | null;
+  effective_thumbnail_url?: string | null;
   min_badge: 'bronze' | 'silver' | 'gold' | null;
   duration_secs: number | null;
   match_id: string | null;
@@ -402,6 +403,17 @@ function EpisodeDrawer({
           </a>
           <button onClick={onClose} className="btn btn-quiet btn-icon btn-sm" aria-label="Chiudi"><X className="w-4 h-4" /></button>
         </div>
+
+        {episode.format_id === 'match-reaction' && episode.effective_thumbnail_url && (
+          <div className="vstack-tight">
+            <label className="typ-label">Card nell’app</label>
+            {draft.speaker_id === episode.speaker_id ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={episode.effective_thumbnail_url} alt="Card Match Reaction" className="w-full aspect-video object-cover rounded-[var(--r)]" />
+            ) : <p className="typ-caption">Salva il relatore per aggiornare la card.</p>}
+            <p className="typ-caption">Scelta automaticamente in base al relatore. La miniatura dell’episodio resta modificabile qui sotto.</p>
+          </div>
+        )}
 
         {/* Thumbnail preview + actions */}
         <div className="vstack-tight">
@@ -981,9 +993,9 @@ export default function EpisodesPage() {
                     className="rounded-[var(--r-sm)] overflow-hidden"
                     style={{ width: 80, aspectRatio: '16/9', background: 'var(--card-muted)' }}
                   >
-                    {ep.thumbnail_url ? (
+                    {(ep.effective_thumbnail_url || ep.thumbnail_url) ? (
                       /* eslint-disable-next-line @next/next/no-img-element */
-                      <img src={ep.thumbnail_url} alt="" className="w-full h-full object-cover" loading="lazy" />
+                      <img src={ep.effective_thumbnail_url || ep.thumbnail_url || ''} alt="" className="w-full h-full object-cover" loading="lazy" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
                         <ImageIcon className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />

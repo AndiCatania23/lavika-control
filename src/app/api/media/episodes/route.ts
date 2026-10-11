@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabaseServer';
+import { withEpisodeArtwork } from '@/lib/episodeArtwork';
 
 const VALID_BADGES = new Set(['bronze', 'silver', 'gold']);
 const PATCHABLE_FIELDS = new Set([
@@ -85,7 +86,7 @@ export async function GET(request: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   return NextResponse.json({
-    items: data ?? [],
+    items: await withEpisodeArtwork(data ?? []),
     total: count ?? 0,
     page,
     pageSize,
@@ -165,7 +166,8 @@ export async function PATCH(request: Request) {
       .single();
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json({ episode: data });
+    const [episode] = await withEpisodeArtwork([data]);
+    return NextResponse.json({ episode });
   }
 
   // ── Legacy shape ────────────────────────────────────────────────
