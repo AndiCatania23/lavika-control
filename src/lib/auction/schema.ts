@@ -4,7 +4,7 @@ const sourceUrl=z.string().trim().max(2000).url().refine(value=>{const u=new URL
 const fields=z.object({
  amount:z.number().finite().positive().max(999999999).refine(v=>Math.abs(v*100-Math.round(v*100))<.0001,'Massimo due decimali'),
  source_kind:z.enum(['article','broadcast']),source_name:z.string().trim().min(1).max(120),source_url:sourceUrl,
- source_title:z.string().trim().min(1).max(500),source_published_at:z.iso.datetime({offset:true}).refine(v=>Date.parse(v)<=Date.now()+60000,'La fonte non può essere nel futuro'),
+ source_title:z.string().trim().max(500).default(''),source_published_at:z.iso.datetime({offset:true}).refine(v=>Date.parse(v)<=Date.now()+60000,'La fonte non può essere nel futuro'),
  source_timecode:z.string().regex(/^(?:\d{1,3}:)?[0-5]?\d:[0-5]\d$/,'Usa mm:ss o hh:mm:ss').nullable(),internal_notes:z.string().max(10000),
  status:z.enum(['draft','published','withdrawn']),change_reason:z.string().trim().min(3).max(1000),
 }).strict().refine(v=>v.source_kind==='broadcast'||v.source_timecode===null,'Il minuto riguarda soltanto le trasmissioni');

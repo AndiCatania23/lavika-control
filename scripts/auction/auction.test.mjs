@@ -20,3 +20,5 @@ test('network retry is idempotent and rejects reuse with changed evidence',async
  const r=load('src/app/api/auction/route.ts',{'next/server':{NextResponse:{json:(body,init)=>Response.json(body,init)}},'@/lib/supabaseServer':{supabaseServer:db},'@/lib/auction/schema':schema});
  const retry=await r.POST(req(input));assert.equal(retry.status,200);assert.equal((await retry.json()).replayed,true);assert.equal((await r.POST(req({...input,data:{...data,amount:600000}}))).status,409);assert.equal(inserts,2);
 });
+
+test('source title may be empty, whitespace or omitted for articles and broadcasts',()=>{for(const source_kind of ['article','broadcast'])for(const title of ['', '   ',undefined]){const result=schema.mutationSchema.safeParse({...input,data:{...data,source_kind,source_title:title}});assert.ok(result.success);assert.equal(result.data.data.source_title,'');}assert.equal(schema.mutationSchema.safeParse({...input,data:{...data,source_title:'x'.repeat(501)}}).success,false);});
