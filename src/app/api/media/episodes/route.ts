@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { withEpisodeArtwork } from '@/lib/episodeArtwork';
+import { revalidateAppContent } from '@/lib/revalidateAppContent';
 
 const VALID_BADGES = new Set(['bronze', 'silver', 'gold']);
 const PATCHABLE_FIELDS = new Set([
@@ -62,7 +63,7 @@ export async function GET(request: Request) {
     .from('content_episodes')
     .select(
       `id, video_id, format_id, title, description, season, published_at,
-       hls_url, thumbnail_url, min_badge, duration_secs, match_id, speaker_id,
+       hls_url, thumbnail_url, thumbnail_override_url, min_badge, duration_secs, match_id, speaker_id,
        competition_season_id,
        is_active, created_at, updated_at,
        speaker:players!speaker_id(id, full_name, slug),
@@ -150,13 +151,22 @@ export async function PATCH(request: Request) {
       updates[key] = value;
     }
 
+    if ('thumbnail_url' in updates) {
+      const { data: current, error: lookupError } = await supabaseServer.from('content_episodes').select('format_id').eq('id', body.id).single();
+      if (lookupError) return NextResponse.json({ error: lookupError.message }, { status: 400 });
+      if (current.format_id === 'match-reaction') {
+        updates.thumbnail_override_url = updates.thumbnail_url;
+        delete updates.thumbnail_url;
+      }
+    }
+
     const { data, error } = await supabaseServer
       .from('content_episodes')
       .update(updates)
       .eq('id', body.id)
       .select(
         `id, title, description, is_active, min_badge, published_at,
-         match_id, speaker_id, thumbnail_url, format_id, season, video_id,
+         match_id, speaker_id, thumbnail_url, thumbnail_override_url, format_id, season, video_id,
          competition_season_id,
          speaker:players!speaker_id(id, full_name, slug),
          match:matches!match_id(id, kickoff_at, matchday,
@@ -167,7 +177,7 @@ export async function PATCH(request: Request) {
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     const [episode] = await withEpisodeArtwork([data]);
-    return NextResponse.json({ episode });
+    return NextResponse.json({ episode, appRefreshed: await revalidateAppContent() });
   }
 
   // ── Legacy shape ────────────────────────────────────────────────
@@ -176,14 +186,11 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: 'Provide either { id, patch } or { ids, thumbnail_url }' }, { status: 400 });
   }
 
-  const { count, error } = await supabaseServer
-    .from('content_episodes')
-    .update({
-      thumbnail_url: thumbnail_url ?? null,
-      updated_at: new Date().toISOString(),
-    })
-    .in('id', ids);
-
+  const results = await Promise.all([
+    supabaseServer.from('content_episodes').update({ thumbnail_override_url: thumbnail_url ?? null, updated_at: new Date().toISOString() }).in('id', ids).eq('format_id', 'match-reaction').select('id'),
+    supabaseServer.from('content_episodes').update({ thumbnail_url: thumbnail_url ?? null, updated_at: new Date().toISOString() }).in('id', ids).neq('format_id', 'match-reaction').select('id'),
+  ]);
+  const error = results.find(result => result.error)?.error;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true, updated: count });
+  return NextResponse.json({ ok: true, updated: results.reduce((sum, result) => sum + (result.data?.length ?? 0), 0), appRefreshed: await revalidateAppContent() });
 }

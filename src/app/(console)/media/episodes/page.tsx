@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { MediaPicker } from '@/components/media/MediaPicker';
 import { uploadFile } from '@/lib/mediaUpload';
+import { ReactionCardSettings } from '@/components/media/ReactionCardSettings';
 
 /* ──────────────────────────── Types ──────────────────────────── */
 
@@ -44,6 +45,7 @@ interface EpisodeRow {
   published_at: string | null;
   thumbnail_url: string | null;
   effective_thumbnail_url?: string | null;
+  thumbnail_override_url?: string | null;
   min_badge: 'bronze' | 'silver' | 'gold' | null;
   duration_secs: number | null;
   match_id: string | null;
@@ -301,7 +303,7 @@ function EpisodeDrawer({
     speaker_id: episode.speaker_id,
     min_badge: episode.min_badge,
     published_at: toLocalInputValue(episode.published_at),
-    thumbnail_url: episode.thumbnail_url,
+    thumbnail_url: episode.format_id === 'match-reaction' ? episode.thumbnail_override_url ?? null : episode.thumbnail_url,
     season: episode.season ?? '',
     competition_season_id: episode.competition_season_id,
   });
@@ -319,7 +321,7 @@ function EpisodeDrawer({
     setError(null);
     try {
       const season = (episode.season ?? '').replace(/\//g, '-');
-      const url = await uploadFile(file, 'episode-thumbnail', {
+      const url = await uploadFile(file, 'library-upload', {
         formatId: episode.format_id,
         season,
         episodeId: episode.id,
@@ -411,13 +413,13 @@ function EpisodeDrawer({
               // eslint-disable-next-line @next/next/no-img-element
               <img src={episode.effective_thumbnail_url} alt="Card Match Reaction" className="w-full aspect-video object-cover rounded-[var(--r)]" />
             ) : <p className="typ-caption">Salva il relatore per aggiornare la card.</p>}
-            <p className="typ-caption">Scelta automaticamente in base al relatore. La miniatura dell’episodio resta modificabile qui sotto.</p>
+            <p className="typ-caption">La card specifica dell’episodio ha precedenza su quella del relatore. Rimuovila per tornare alla scelta automatica.</p>
           </div>
         )}
 
         {/* Thumbnail preview + actions */}
         <div className="vstack-tight">
-          <label className="typ-label">Thumbnail</label>
+          <label className="typ-label">{episode.format_id === 'match-reaction' ? 'Card specifica di questo episodio (facoltativa)' : 'Thumbnail'}</label>
           <div
             className="relative aspect-video rounded-[var(--r)] overflow-hidden cursor-pointer"
             style={{ background: 'var(--card-muted)', border: '1px dashed var(--hairline)' }}
@@ -873,6 +875,8 @@ export default function EpisodesPage() {
         <h1 className="typ-h1">Episodi</h1>
         <p className="typ-caption mt-1">Modifica titolo, match collegato, visibilità in app, badge di accesso e thumbnail per ogni episodio.</p>
       </div>
+
+      {selectedFormat === 'match-reaction' && <ReactionCardSettings onSaved={loadEpisodes} />}
 
       {/* Filters: Format · Stagione · Visibilità · Cerca */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">

@@ -1,11 +1,18 @@
-# Card degli episodi
+# Gestione card Match Reaction
 
-La lista Episodi e il dettaglio mostrano `effective_thumbnail_url`, risolta in lettura dall’API. Per Match Reaction il registro unico è `https://lavikasport.app/immagini/match-reaction/cards.json`: l’app importa lo stesso JSON. I nomi completi provengono dal profilo `speaker_id`; speaker assenti o senza card registrata usano la generica.
+In **Media → Episodi → Match Reaction → Gestisci card** si sceglie la generica oppure un relatore, si carica/seleziona un’immagine e si salva. Rimuovere la card di un relatore lo riporta alla generica. Le modifiche valgono per episodi esistenti e futuri.
 
-Control legge il registro con cache di 60 secondi, timeout di 5 secondi e validazione dei percorsi. In caso di indisponibilità conserva la miniatura salvata. Gli altri format non cambiano.
+Nel dettaglio episodio, **Card specifica di questo episodio** è facoltativa: se presente prevale sul relatore. Rimuovendola si torna alla selezione automatica. Gli upload usano chiavi nuove: annullare una modifica non altera la card già pubblicata.
 
-`thumbnail_url` rimane il valore editoriale modificabile: l’immagine effettiva non viene salvata nel database. Il dettaglio distingue “Card nell’app” dalla miniatura episodio. Dopo un cambio relatore, salvare per aggiornare la card.
+Il database è la fonte unica:
+- `players.match_reaction_card_url`: default del relatore, identificato dalla pipeline tramite `speaker_id`.
+- `content_formats.cover_horizontal_url`: generica.
+- `content_episodes.thumbnail_override_url`: scelta manuale episodio.
+- `content_episodes.thumbnail_url`: valore effettivo materializzato dai trigger. Le importazioni non possono sovrascrivere un override.
 
-Per aggiungere una card, pubblicare l’immagine e la voce nel registro JSON dell’app via GitHub; non occorre aggiornare Control. La risposta PATCH ricalcola la card dopo il salvataggio. Il contratto legacy senza parametri resta invariato.
+App, Control, selettori social e notifiche leggono lo stesso `thumbnail_url`. Le modifiche al relatore o alla generica aggiornano retroattivamente gli episodi automatici. PATCH episodi traduce il campo editoriale `thumbnail_url` in override per Match Reaction; gli altri format mantengono il contratto precedente. Nessuna mappa di nomi nel codice.
 
-Verifica: build passata; test di selezione, fallback, conservazione dei dati modificabili e registro non valido passati. Lint API/helper pulito; la pagina conserva il precedente errore set-state-in-effect del selettore partite.
+Il nuovo endpoint di modifica delle card verifica il token Supabase e l’appartenenza a `dev_admins`. Dopo i salvataggi, Control richiede un refresh app con HMAC temporaneo. Un refresh fallito non annulla il salvataggio; l’interfaccia informa del ritardo di cache.
+
+Migrazione: `supabase/migrations/20261011213324_control_managed_reaction_cards.sql`.
+Test transazionale con rollback: `scripts/tests/reaction-artwork.sql` (inserimento, reimportazione, override, relatore sconosciuto, nuove card su interviste passate e generica).

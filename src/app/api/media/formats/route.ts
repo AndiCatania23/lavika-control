@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabaseServer';
+import { revalidateAppContent } from '@/lib/revalidateAppContent';
 
 type FormatColumn = 'cover_vertical_url' | 'cover_horizontal_url' | 'hero_url' | 'default_min_badge';
 const VALID_COLUMNS: FormatColumn[] = ['cover_vertical_url', 'cover_horizontal_url', 'hero_url', 'default_min_badge'];
@@ -44,5 +45,5 @@ export async function PATCH(request: Request) {
     .eq('id', id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, appRefreshed: await revalidateAppContent() });
 }
