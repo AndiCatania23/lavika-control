@@ -1,10 +1,11 @@
 import { createHash, randomUUID } from 'node:crypto';
 import sharp from 'sharp';
+import {firstEpisodeNumber} from './series';
 import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { r2MediaClient, MEDIA_BUCKET_NAME, MEDIA_PUBLIC_BASE_URL } from '../r2MediaClient';
 export const MAX_CARD_BYTES = 4 * 1024 * 1024;
 export async function prepareCard(input: Buffer, series: number, episode: number, version = randomUUID()) {
- if (!Number.isInteger(series) || series < 1 || series > 999 || !Number.isInteger(episode) || episode < 0 || episode > 99999) throw Error('Serie o numero episodio non valido');
+ if (!Number.isInteger(series) || series < 1 || series > 999 || !Number.isInteger(episode) || episode < firstEpisodeNumber(series) || episode > 99999) throw Error('Serie o numero episodio non valido');
  if (!input.length || input.length > MAX_CARD_BYTES) throw Error('La card deve essere di massimo 4 MB');
  const metadata = await sharp(input, { limitInputPixels: 25000000 }).metadata();
  if (!metadata.format || !['jpeg','png','webp'].includes(metadata.format) || (metadata.pages ?? 1) > 1 || !metadata.width || !metadata.height) throw Error('Scegli una card JPG, PNG o WebP statica');

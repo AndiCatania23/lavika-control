@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import {firstEpisodeNumber} from './series';
 export const statuses = { draft: 'Bozza', beta: 'Solo beta', published: 'Pubblicata' } as const;
 export const episodeFields = z.object({
  series: z.number().int().min(1).max(999),
@@ -10,7 +11,7 @@ export const episodeFields = z.object({
  character_ids: z.array(z.string().regex(/^[a-z0-9][a-z0-9-]{0,79}$/)).max(100).refine(ids=>new Set(ids).size===ids.length,'Protagonisti duplicati').transform(ids=>[...ids].sort()),
  status: z.enum(['draft','beta','published']),
  asset_id: z.uuid(),
-}).strict();
+}).strict().refine(data=>data.episode_number>=firstEpisodeNumber(data.series), {path:['episode_number'],message:'I soliti noti parte dall’episodio 001'});
 export const mutation = z.discriminatedUnion('action', [
  z.object({ action: z.literal('create'), id: z.uuid(), data: episodeFields }).strict(),
  z.object({ action: z.literal('edit'), id: z.uuid(), revision: z.number().int().positive(), data: episodeFields }).strict(),

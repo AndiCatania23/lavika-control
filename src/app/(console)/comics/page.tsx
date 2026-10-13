@@ -1,7 +1,7 @@
 'use client';
 /* eslint-disable @next/next/no-img-element -- Approved artwork is displayed intact. */
 import {useCallback,useEffect,useRef,useState,type FormEvent} from 'react';
-import {comicsSeries,seriesInfo,nextEpisodeNumber} from '@/lib/comics/series';
+import {comicsSeries,seriesInfo,nextEpisodeNumber,firstEpisodeNumber} from '@/lib/comics/series';
 import {api} from '@/lib/comics/client';
 import {statuses,type ComicsAsset,type ComicsEpisode} from '@/lib/comics/schema';
 import type {ComicCharacter} from '@/lib/comics/characters';
@@ -25,7 +25,7 @@ export default function ComicsPage(){
  <CharacterManager characters={characters} onSaved={load}/>
  {open&&<form ref={editor} className={styles.editor} onSubmit={save}><h2>{editing?'Modifica':'Nuovo'} episodio /{String(form.episode_number).padStart(3,'0')}</h2><fieldset disabled={busy}><div className={styles.fields}>
  <label>Raccolta<select required disabled={!!editing||!!asset} value={form.series} onChange={e=>{const series=Number(e.target.value);setForm({...form,series,episode_number:nextEpisodeNumber(rows,series)});}}>{[...new Set([...comicsSeries.map(s=>s.id),...rows.map(r=>r.series)])].sort((a,b)=>a-b).map(id=><option key={id} value={id}>{seriesInfo(id).name}</option>)}</select></label>
- <label>Numero episodio<input type="number" min="0" max="99999" required disabled={!!editing||!!asset} value={form.episode_number} onChange={e=>setForm({...form,episode_number:Number(e.target.value)})}/></label>
+ <label>Numero episodio<input type="number" min={firstEpisodeNumber(form.series)} max="99999" required disabled={!!editing||!!asset} value={form.episode_number} onChange={e=>setForm({...form,episode_number:Number(e.target.value)})}/></label>
  <label>Data della card<input type="date" required value={form.episode_date} onChange={e=>setForm({...form,episode_date:e.target.value})}/></label>
  <label>Visibilità<select value={form.status} onChange={e=>setForm({...form,status:e.target.value as keyof typeof statuses})}>{Object.entries(statuses).map(([v,label])=><option key={v} value={v}>{label}</option>)}</select></label>
  <label className={styles.wide}>Titolo · facoltativo<input maxLength={160} value={form.title} onChange={e=>setForm({...form,title:e.target.value})}/></label>

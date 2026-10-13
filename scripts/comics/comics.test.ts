@@ -50,3 +50,12 @@ test('character upload preserves transparent original and rejects baked backgrou
  await assert.rejects(()=>prepareCharacter(original,'../bad'));
  await assert.rejects(()=>prepareCharacter(Buffer.alloc(4*1024*1024+1),'future-character'));
 });
+
+ test('I soliti noti rejects episode zero in metadata and media upload',async()=>{
+ assert.equal(episodeFields.safeParse({...fields,series:2}).success,false);
+ assert.equal(episodeFields.safeParse({...fields,series:2,episode_number:1}).success,true);
+ const input=await sharp({create:{width:108,height:135,channels:3,background:'#d6cab7'}}).jpeg().toBuffer();
+ await assert.rejects(()=>prepareCard(input,2,0),/numero episodio non valido/);
+ const card=await prepareCard(input,2,1);
+ assert.match(card.asset.original_key,/^comics\/serie-02\/001\//);
+ });

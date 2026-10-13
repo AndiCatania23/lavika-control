@@ -12,4 +12,5 @@ export function groupSeries<T extends EpisodeIdentity>(episodes:readonly T[]){
  for(const episode of episodes){const group=groups.get(episode.series)??[];group.push(episode);groups.set(episode.series,group);}
  return [...groups].sort(([a],[b])=>a-b).map(([id,cards])=>({...seriesInfo(id),episodes:cards.sort((a,b)=>b.episode_number-a.episode_number||b.episode_date.localeCompare(a.episode_date))}));
 }
-export function nextEpisodeNumber(episodes:readonly {series:number;episode_number:number}[],series:number){return Math.max(-1,...episodes.filter(e=>e.series===series).map(e=>e.episode_number))+1;}
+export function firstEpisodeNumber(series:number){return series===2?1:0;}
+export function nextEpisodeNumber(episodes:readonly {series:number;episode_number:number}[],series:number){return Math.max(firstEpisodeNumber(series)-1,...episodes.filter(e=>e.series===series).map(e=>e.episode_number))+1;}

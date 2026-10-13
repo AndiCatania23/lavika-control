@@ -55,3 +55,6 @@ La migrazione `20261013181134_comics_publication_push.sql` collega la prima pubb
 Il flag interno `push_on_publish_consumed` e un indice univoco impediscono duplicati dopo modifiche, retry, ritiro e ripubblicazione. Le card già pubblicate all'attivazione vengono marcate senza invio retroattivo. Ritirare una card cancella soltanto un job ancora queued; una notifica già presa in carico/inviata non è revocabile. Il worker esistente gestisce dispositivi attivi iOS, Android e Web; nessun test invia push reali. I marker sono lato server e non entrano nel payload modificabile dell'editor.
 
 Attivazione verificata in produzione: trigger abilitato, 10 card storiche protette, zero job retroattivi. Test payload in sola lettura conferma i due testi approvati.
+
+## Numerazione I soliti noti — modifica locale
+I soliti noti inizia da 001; 000 non è ammesso. Control propone 001 per la raccolta vuota, il campo numero ha minimo 1 e le validazioni di salvataggio/upload rifiutano 000. Serie 01 conserva lo 000. Nessuna rinumerazione delle card esistenti. Verificati i test di sequenza indipendente, validazione dati e percorso media serie-02/001. Da pubblicare insieme alla riga scorrevole dei protagonisti.
