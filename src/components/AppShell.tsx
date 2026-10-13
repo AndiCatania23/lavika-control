@@ -68,9 +68,10 @@ const AREAS: NavArea[] = [
   },
   {
     key: 'editoriale', href: '/pills', label: 'Editoriale', icon: FileEdit,
-    matchPrefixes: ['/pills', '/palinsesto-home', '/media', '/home-schedule', '/content', '/asta'],
+    matchPrefixes: ['/pills', '/palinsesto-home', '/media', '/home-schedule', '/content', '/asta', '/comics'],
     subItems: [
       { href: '/pills',           label: 'Pillole' },
+      { href: '/comics', label: 'LAVIKA Comics' },
       { href: '/palinsesto-home', label: 'Palinsesto Home' },
       { href: '/asta', label: 'Asta logo storico' },
       { href: '/media',           label: 'Media' },

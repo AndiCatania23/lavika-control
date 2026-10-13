@@ -13,6 +13,7 @@ function resolveTitle(pathname: string): { title: string; subtitle?: string } {
   if (pathname === '/dashboard' || pathname.startsWith('/dashboard/')) return { title: 'Oggi', subtitle: 'Azioni e stato' };
   if (pathname.startsWith('/analytics'))       return { title: 'Analytics', subtitle: 'Metriche complete' };
   if (pathname.startsWith('/insights'))        return { title: 'Insights',  subtitle: 'User & engagement analytics' };
+  if (pathname.startsWith('/comics')) return { title: 'LAVIKA Comics', subtitle: 'Episodi e card' };
   if (pathname.startsWith('/asta')) return { title: 'Asta', subtitle: 'Aggiornamenti editoriali' };
   if (pathname.startsWith('/pills'))           return { title: 'Pillole',   subtitle: 'Editoriale' };
   if (pathname.startsWith('/palinsesto-home')) return { title: 'Palinsesto',subtitle: 'Homepage app' };

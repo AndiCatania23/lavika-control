@@ -1,0 +1,38 @@
+'use client';
+/* eslint-disable @next/next/no-img-element -- Approved artwork is displayed intact. */
+import {useCallback,useEffect,useRef,useState,type FormEvent} from 'react';
+import {supabase} from '@/lib/supabaseClient';
+import {statuses,type ComicsAsset,type ComicsEpisode} from '@/lib/comics/schema';
+import styles from './page.module.css';
+const blank=()=>({series:1,episode_number:0,episode_date:new Date().toISOString().slice(0,10),title:'',caption:'',match_reference:'',status:'draft' as keyof typeof statuses});
+async function api(path:string,body?:unknown){
+ const {data:{session}}=await supabase.auth.getSession();if(!session)throw Error('Sessione scaduta. Accedi nuovamente.');
+ const multipart=body instanceof FormData;
+ const response=await fetch('/api/comics'+path,{method:body?'POST':'GET',headers:{Authorization:`Bearer ${session.access_token}`,...(body&&!multipart?{'Content-Type':'application/json'}:{})},body:body?(multipart?body:JSON.stringify(body)):undefined,cache:'no-store'});
+ const result=await response.json().catch(()=>({error:'Risposta non disponibile. Riprova.'}));if(!response.ok)throw Error(result.error??'Operazione non riuscita');return result;
+}
+export default function ComicsPage(){
+ const [rows,setRows]=useState<ComicsEpisode[]>([]),[loading,setLoading]=useState(true),[error,setError]=useState(''),[message,setMessage]=useState('');
+ const [form,setForm]=useState(blank),[editing,setEditing]=useState<ComicsEpisode|null>(null),[open,setOpen]=useState(false),[asset,setAsset]=useState<ComicsAsset|null>(null),[busy,setBusy]=useState(false);
+ const requestId=useRef(''),editor=useRef<HTMLFormElement>(null);
+ const load=useCallback(async()=>{try{const data=await api('');setRows(data.episodes);setError('');}catch(e){setError((e as Error).message);}finally{setLoading(false);}},[]);
+ useEffect(()=>{void load();},[load]);
+ function start(row:ComicsEpisode|null){setEditing(row);setAsset(row?.asset??null);requestId.current=row?.id??crypto.randomUUID();setForm(row?{series:row.series,episode_number:row.episode_number,episode_date:row.episode_date,title:row.title,caption:row.caption,match_reference:row.match_reference,status:row.status}:{...blank(),episode_number:Math.max(-1,...rows.filter(r=>r.series===1).map(r=>r.episode_number))+1});setOpen(true);setError('');setMessage('');requestAnimationFrame(()=>editor.current?.scrollIntoView({block:'start',behavior:'smooth'}));}
+ async function upload(file:File){if(busy)return;setBusy(true);setError('');try{const fd=new FormData();fd.set('file',file);fd.set('series',String(form.series));fd.set('episode_number',String(form.episode_number));const result=await api('/upload',fd);setAsset(result.asset);setMessage('Card caricata. Salva l’episodio per applicarla.');}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
+ async function save(event:FormEvent){event.preventDefault();if(busy||!asset)return;setBusy(true);setError('');setMessage('');try{await api('',{action:editing?'edit':'create',id:requestId.current,...(editing?{revision:editing.revision}:{}),data:{...form,asset_id:asset.id}});setOpen(false);await load();setMessage(form.status==='beta'?'Salvato. L’episodio è disponibile nella beta.':form.status==='draft'?'Bozza salvata. Non compare nell’app.':'Salvato come pubblicato. La sezione ufficiale sarà attivata con il rilascio dedicato.');}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
+ return <div className={styles.page}>
+ <header className={styles.header}><div><p className={styles.eyebrow}>EDITORIALE · SERIE ILLUSTRATA</p><h1>LAVIKA COMICS</h1><p>Le storie da tifosi, una card alla volta.</p></div><button onClick={()=>start(null)} disabled={busy||loading}>Nuovo episodio</button></header>
+ <p className={styles.help}>Bozza: riservata a Control. Solo beta: visibile nella raccolta di prova. Pubblicata: pronta anche per la futura sezione ufficiale. Le card vengono conservate integralmente nell’archivio media.</p>
+ {error&&<p role="alert" className={styles.error}>{error}</p>}{message&&<p role="status" className={styles.success}>{message}</p>}
+ {open&&<form ref={editor} className={styles.editor} onSubmit={save}><h2>{editing?'Modifica':'Nuovo'} episodio /{String(form.episode_number).padStart(3,'0')}</h2><fieldset disabled={busy}><div className={styles.fields}>
+ <label>Serie<input type="number" min="1" max="999" required disabled={!!editing||!!asset} value={form.series} onChange={e=>setForm({...form,series:Number(e.target.value)})}/></label>
+ <label>Numero episodio<input type="number" min="0" max="99999" required disabled={!!editing||!!asset} value={form.episode_number} onChange={e=>setForm({...form,episode_number:Number(e.target.value)})}/></label>
+ <label>Data della card<input type="date" required value={form.episode_date} onChange={e=>setForm({...form,episode_date:e.target.value})}/></label>
+ <label>Visibilità<select value={form.status} onChange={e=>setForm({...form,status:e.target.value as keyof typeof statuses})}>{Object.entries(statuses).map(([v,label])=><option key={v} value={v}>{label}</option>)}</select></label>
+ <label className={styles.wide}>Titolo · facoltativo<input maxLength={160} value={form.title} onChange={e=>setForm({...form,title:e.target.value})}/></label>
+ <label className={styles.wide}>Riferimento alla partita · facoltativo<input maxLength={200} value={form.match_reference} onChange={e=>setForm({...form,match_reference:e.target.value})}/></label>
+ <label className={styles.wide}>Caption · facoltativa<textarea rows={4} maxLength={5000} value={form.caption} onChange={e=>setForm({...form,caption:e.target.value})}/></label></div>
+ <div className={styles.upload}><label>Card definitiva · JPG, PNG o WebP, massimo 4 MB<input type="file" accept="image/jpeg,image/png,image/webp" onChange={e=>{const file=e.target.files?.[0];if(file)void upload(file);e.target.value='';}}/></label><p className={styles.help}>L’originale resta intatto. Sostituire la card crea una nuova versione; il salvataggio aggiorna l’episodio.</p>{asset&&<><a href={asset.image_url} target="_blank" rel="noopener noreferrer"><img className={styles.preview} src={asset.preview_url} alt="Anteprima integrale della card"/></a><p className={styles.help}>{asset.width} × {asset.height} px{asset.width*5!==asset.height*4?' · Proporzioni originali preservate':''}</p></>}</div>
+ <div className={styles.actions}><button type="submit" disabled={!asset}>{busy?'Operazione in corso…':form.status==='beta'?'Salva nella beta':form.status==='published'?'Salva come pubblicata':'Salva bozza'}</button><button type="button" className={styles.secondary} onClick={()=>setOpen(false)}>Annulla</button></div></fieldset></form>}
+ <section><div className={styles.header}><h2>Archivio · {rows.length} episodi</h2><button className={styles.secondary} disabled={busy} onClick={()=>void load()}>Ricarica</button></div>{loading?<p>Caricamento…</p>:!rows.length?<p>Nessun episodio. Carica la prima card per iniziare.</p>:<div className={styles.grid}>{rows.map(row=><article key={row.id}><button className={styles.cardButton} onClick={()=>start(row)} disabled={busy}><img src={row.asset.preview_url} width={row.asset.width} height={row.asset.height} alt={`Apri episodio ${String(row.episode_number).padStart(3,'0')}`} loading="lazy"/></button><div className={styles.cardMeta}><span>{statuses[row.status]}</span><h3>/{String(row.episode_number).padStart(3,'0')} {row.title}</h3><p>Serie {String(row.series).padStart(2,'0')} · {new Date(row.episode_date+'T12:00:00Z').toLocaleDateString('it-IT')}</p><p>{row.match_reference}</p><button className={styles.secondary} onClick={()=>start(row)} disabled={busy}>Modifica</button></div></article>)}</div>}</section></div>;
+}
