@@ -1,6 +1,8 @@
 'use client';
 
+import {comicsReport,type ComicsInsights} from '@/lib/insights/comics';
 import { useState } from 'react';
+import {useComicsInsights} from './ComicsInsightsContext';
 import { Check, Copy } from 'lucide-react';
 import type {
   AppleMetricsSnapshot,
@@ -18,6 +20,7 @@ import type {
 } from '@/lib/insights/queries';
 
 type ReportData = {
+  comics?: ComicsInsights;
   hero: HeroKpis;
   retentionIntegrity: RetentionIntegrity | null;
   integrityBaseline: IntegrityBaseline | null;
@@ -76,6 +79,8 @@ export function buildReport(data: ReportData): string {
   for (const day of data.coreUsageAvailable ? data.coreUsageDaily : []) {
     lines.push(`- ${day.day}: Pills ${day.pillUsers} utenti/${day.pillActions} azioni; Partite ${day.matchUsers}/${day.matchActions}; Video ${day.videoUsers}/${day.videoActions}; Pronostici ${day.predictionUsers}/${day.predictionActions}`);
   }
+
+  lines.push(...comicsReport(data.comics??{available:false,startedAt:null,generatedAt:null,rows:[],daily:[]}));
 
   lines.push('', '## Retention: exact e ritorno nella settimana');
   const retention = data.retentionIntegrity;
@@ -190,11 +195,12 @@ async function copyText(text: string) {
 }
 
 export function CopyInsightsReport({ data }: { data: ReportData }) {
+  const comics=useComicsInsights();
   const [state, setState] = useState<'idle' | 'copied' | 'error'>('idle');
 
   async function handleCopy() {
     try {
-      await copyText(buildReport(data));
+      await copyText(buildReport({...data,comics}));
       setState('copied');
       window.setTimeout(() => setState('idle'), 2200);
     } catch {

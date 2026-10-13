@@ -1,0 +1,22 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import ts from 'typescript';
+import vm from 'node:vm';
+import {readFile} from 'node:fs/promises';
+const compile=s=>ts.transpileModule(s,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText;
+const code=compile(await readFile('src/lib/insights/comicsQueries.ts','utf8'));
+test('direct loader and HTTP endpoint deny missing, invalid and non-admin sessions before RPC',async()=>{
+ let valid=false,admin=false,failAdmin=false,calls=0;
+ const unavailable={available:false};
+ const exports={};
+ const db={auth:{getUser:async()=>({data:{user:valid?{id:'verified-user'}:null},error:!valid})},from:table=>{assert.equal(table,'dev_admins');return {select:()=>({eq:(column,id)=>{assert.equal(id,'verified-user');return {maybeSingle:async()=>({data:admin?{user_id:id}:null,error:failAdmin})}}})}},rpc:async()=>{calls++;return {data:{rows:[],daily:[],startedAt:'2026-10-13',generatedAt:'2026-10-13'}}}};
+ vm.runInNewContext(code,{exports,require:n=>n.endsWith('supabaseServer')?{supabaseServer:db}:{unavailableComics:unavailable}});
+ const load=exports.loadComicsInsights;
+ assert.equal((await load()).available,false);assert.equal((await load('invalid')).available,false);
+ valid=true;assert.equal((await load('normal-user')).available,false);
+ admin=true;failAdmin=true;assert.equal((await load('admin-error')).available,false);assert.equal(calls,0);
+ failAdmin=false;assert.equal((await load('admin')).available,true);assert.equal(calls,1);
+ const endpoint={};vm.runInNewContext(compile(await readFile('src/app/api/insights/comics/route.ts','utf8')),{exports:endpoint,require:n=>n==='next/server'?{NextResponse:{json:(data,init)=>({data,...init})}}:{loadComicsInsights:load}});
+ valid=false;const denied=await endpoint.GET(new Request('http://localhost/api/insights/comics',{headers:{Authorization:'Bearer invalid'}}));assert.equal(denied.status,403);assert.equal(calls,1);assert.equal(denied.headers['Cache-Control'],'private, no-store');
+ valid=true;assert.equal((await endpoint.GET(new Request('http://localhost/api/insights/comics',{headers:{Authorization:'Bearer admin'}}))).status,200);assert.equal(calls,2);
+});

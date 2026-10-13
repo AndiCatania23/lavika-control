@@ -41,6 +41,8 @@ import { DeviceGeoBreakdown } from './components/DeviceGeoBreakdown';
 import { InsightSection } from './components/InsightSection';
 import { ActivationByFeature } from './components/ActivationByFeature';
 import { CoreUsageDashboard } from './components/CoreUsageDashboard';
+import {ComicsInsightsProvider} from './components/ComicsInsightsContext';
+import {ComicsInsightsLive} from './components/ComicsInsightsLive';
 import { CopyInsightsReport } from './components/CopyInsightsReport';
 
 export const dynamic = 'force-dynamic';
@@ -81,7 +83,7 @@ export default async function InsightsPage() {
   const coreUsage = coreUsageResult.rows;
 
   return (
-    <div className="mx-auto max-w-[1280px] space-y-7 px-3 py-5 sm:px-4 sm:py-6 lg:space-y-8 lg:px-8 lg:py-8">
+    <ComicsInsightsProvider><div className="mx-auto max-w-[1280px] space-y-7 px-3 py-5 sm:px-4 sm:py-6 lg:space-y-8 lg:px-8 lg:py-8">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-1">
           <h1 className="text-[24px] font-semibold tracking-tight text-[color:var(--text-hi)]">
@@ -128,6 +130,7 @@ export default async function InsightsPage() {
       </div>
 
       <RetentionIntegrityPanel data={retentionIntegrity} />
+      <InsightSection title="LAVIKA Comics" subtitle="Aperture delle schede · utenti autenticati"><ComicsInsightsLive/></InsightSection>
 
       <InsightSection
         title="Cosa fanno i tifosi"
@@ -207,6 +210,6 @@ export default async function InsightsPage() {
           </div>
         </div>
       </div>
-    </div>
+    </div></ComicsInsightsProvider>
   );
 }
