@@ -48,3 +48,10 @@ Verifiche: `node --import tsx --test scripts/comics/series.test.ts`, lint mirato
 
 ## Rilascio ufficiale — 13 ottobre 2026
 La sezione Comics è disponibile in /comics e nel carosello della Home ufficiale. Lo stato Pubblicata alimenta /api/comics, mentre Solo beta resta riservato alla beta e Bozza a Control. Le serie vuote restano nascoste. Le dieci card approvate della Serie 01 vengono promosse a Pubblicata durante il rilascio. Le immagini originali restano inalterate.
+
+## Notifiche — attivate il 13 ottobre 2026
+La migrazione `20261013181134_comics_publication_push.sql` collega la prima pubblicazione di ogni card alla coda push esistente (`new_comic`, audience `all_active`). Testi approvati per Serie 01 e I soliti noti, numero della card con almeno tre cifre, tap su `/comics/{id}`. Tutte le altre serie hanno un testo Comics generico. Nessuna chiamata push dal browser o dalla richiesta di salvataggio: pubblicazione e accodamento avvengono nella stessa transazione.
+
+Il flag interno `push_on_publish_consumed` e un indice univoco impediscono duplicati dopo modifiche, retry, ritiro e ripubblicazione. Le card già pubblicate all'attivazione vengono marcate senza invio retroattivo. Ritirare una card cancella soltanto un job ancora queued; una notifica già presa in carico/inviata non è revocabile. Il worker esistente gestisce dispositivi attivi iOS, Android e Web; nessun test invia push reali. I marker sono lato server e non entrano nel payload modificabile dell'editor.
+
+Attivazione verificata in produzione: trigger abilitato, 10 card storiche protette, zero job retroattivi. Test payload in sola lettura conferma i due testi approvati.
