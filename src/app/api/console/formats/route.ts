@@ -16,6 +16,7 @@ const VALID_BADGES = new Set(['bronze', 'silver', 'gold']);
 interface CreateFormatPayload {
   id?: unknown;
   title?: unknown;
+  is_published?: unknown;
   description?: unknown;
   category?: unknown;
   team_id?: unknown;
@@ -38,7 +39,7 @@ export async function GET() {
   // Lista format
   const { data: formats, error: fmtErr } = await supabaseServer
     .from('content_formats')
-    .select('id, title, description, category, team_id, default_min_badge, sort_order, sync_trigger_offset_minutes, cover_horizontal_url, cover_vertical_url, hero_url, created_at, updated_at')
+    .select('id, title, is_published, description, category, team_id, default_min_badge, sort_order, sync_trigger_offset_minutes, cover_horizontal_url, cover_vertical_url, hero_url, created_at, updated_at')
     .order('sort_order', { ascending: true });
 
   if (fmtErr) return NextResponse.json({ error: fmtErr.message }, { status: 500 });
@@ -181,9 +182,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: `Format con id "${id}" esiste già` }, { status: 409 });
   }
 
+  if (body.is_published !== undefined && typeof body.is_published !== 'boolean') {
+    return NextResponse.json({ error: 'is_published deve essere booleano' }, { status: 400 });
+  }
+
   const insertPayload = {
     id,
     title,
+    is_published: body.is_published ?? true,
     description: asText(body.description),
     category: asText(body.category),
     team_id: teamId,

@@ -23,6 +23,7 @@ import {
 interface FormatRow {
   id: string;
   title: string | null;
+  is_published: boolean;
   description: string | null;
   category: string | null;
   team_id: string | null;
@@ -100,7 +101,7 @@ export default function FormatDetailPage() {
 
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState({
-    title: '', description: '', category: '',
+    title: '', description: '', category: '', is_published: true,
     default_min_badge: 'bronze', sort_order: '100',
     sync_trigger_offset_minutes: '15',
   });
@@ -149,6 +150,7 @@ export default function FormatDetailPage() {
     if (!format) return;
     setEditForm({
       title: format.title ?? '',
+      is_published: format.is_published,
       description: format.description ?? '',
       category: format.category ?? '',
       default_min_badge: format.default_min_badge,
@@ -167,6 +169,7 @@ export default function FormatDetailPage() {
       if (!Number.isFinite(sortOrder)) throw new Error('Sort order non valido');
       const payload = {
         title: editForm.title.trim() || null,
+        is_published: editForm.is_published,
         description: editForm.description.trim() || null,
         category: editForm.category.trim() || null,
         default_min_badge: editForm.default_min_badge,
@@ -181,6 +184,7 @@ export default function FormatDetailPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Patch fallita');
       setFormat(data.item);
+      if (data.appRefreshed === false) alert("Format salvato. Aggiornamento della cache app non riuscito: la visibilità potrebbe aggiornarsi con ritardo.");
       setEditing(false);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Errore salvataggio');
@@ -361,6 +365,7 @@ export default function FormatDetailPage() {
         {!editing ? (
           <dl className="vstack" style={{ gap: 'var(--s2)', margin: 0 }}>
             <Row label="Titolo" value={format.title} />
+            <Row label="Visibilità app" value={format.is_published ? "Pubblicato" : "Bozza · solo Control"} />
             <Row label="Descrizione" value={format.description} multiline />
             <Row label="Categoria" value={format.category} />
             <Row label="Badge" value={format.default_min_badge} />
@@ -369,6 +374,18 @@ export default function FormatDetailPage() {
           </dl>
         ) : (
           <div className="vstack" style={{ gap: 'var(--s2)' }}>
+            <div>
+              <label htmlFor="format-publication" className="typ-micro block mb-1.5">Visibilità app</label>
+              <select id="format-publication" className="input" value={String(editForm.is_published)}
+                onChange={e => setEditForm(p => ({ ...p, is_published: e.target.value === 'true' }))}>
+                <option value="false">Bozza · solo Control</option>
+                <option value="true">Pubblicato nell’app</option>
+              </select>
+              <p className="typ-micro" style={{ color: 'var(--text-muted)', marginTop: 4 }}>
+                In bozza il format e le puntate sono nascosti nell’app. La sincronizzazione continua.
+                Pubblicare il format rende visibili solo gli episodi attivi; quelli disattivati restano tali.
+              </p>
+            </div>
             <Field label="Titolo" value={editForm.title} onChange={v => setEditForm(p => ({ ...p, title: v }))} />
             <FieldArea label="Descrizione" value={editForm.description} onChange={v => setEditForm(p => ({ ...p, description: v }))} />
             <Field label="Categoria" value={editForm.category} onChange={v => setEditForm(p => ({ ...p, category: v }))} />

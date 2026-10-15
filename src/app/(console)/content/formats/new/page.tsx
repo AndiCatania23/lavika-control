@@ -40,6 +40,7 @@ interface WizardState {
   id: string;
   id_touched: boolean;
   title: string;
+  is_published: boolean;
   category: string;
   default_min_badge: Badge;
   sort_order: string;
@@ -67,7 +68,7 @@ interface WizardState {
 
 function makeDefault(): WizardState {
   return {
-    id: '', id_touched: false, title: '', category: '',
+    id: '', id_touched: false, title: '', category: '', is_published: true,
     default_min_badge: 'bronze', sort_order: '100', description: '',
     platform: 'youtube', channel: '', validate_status: 'idle', validate_message: '',
     min_duration: '60', max_duration: '14400',
@@ -208,6 +209,7 @@ export default function FormatWizardPage() {
       const formatPayload = {
         id: state.id,
         title: state.title.trim(),
+        is_published: state.is_published,
         description: state.description.trim() || undefined,
         category: state.category.trim() || undefined,
         default_min_badge: state.default_min_badge,
@@ -369,6 +371,17 @@ export default function FormatWizardPage() {
               />
               <p className="typ-micro" style={{ color: 'var(--text-muted)', marginTop: 4 }}>
                 Solo lowercase, numeri, trattini. Non modificabile dopo creazione (sarebbe orfano R2).
+              </p>
+            </div>
+            <div>
+              <label htmlFor="format-publication" className="typ-micro block mb-1.5">Visibilità app</label>
+              <select id="format-publication" className="input" value={String(state.is_published)}
+                onChange={e => update('is_published', e.target.value === 'true')}>
+                <option value="false">Bozza · solo Control</option>
+                <option value="true">Pubblicato nell’app</option>
+              </select>
+              <p className="typ-micro" style={{ color: 'var(--text-muted)', marginTop: 4 }}>
+                In bozza il format e le puntate sono nascosti nell’app. La sincronizzazione continua.
               </p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

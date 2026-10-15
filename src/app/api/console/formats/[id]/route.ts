@@ -9,13 +9,14 @@
  * Audit: scrive in audit_log per PATCH.
  */
 import { NextResponse } from 'next/server';
+import { revalidateAppContent } from '@/lib/revalidateAppContent';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { writeAuditLog, actorEmailFromRequest } from '@/lib/auditLog';
 
 const VALID_BADGES = new Set(['bronze', 'silver', 'gold']);
 
 const PATCHABLE_FIELDS = new Set([
-  'title', 'description', 'category', 'team_id', 'default_min_badge',
+  'is_published', 'title', 'description', 'category', 'team_id', 'default_min_badge',
   'sort_order', 'sync_trigger_offset_minutes',
   'cover_horizontal_url', 'cover_vertical_url', 'hero_url',
 ]);
@@ -78,7 +79,12 @@ export async function PATCH(
   for (const [key, value] of Object.entries(body)) {
     if (!PATCHABLE_FIELDS.has(key)) continue;
 
-    if (key === 'default_min_badge') {
+    if (key === 'is_published') {
+      if (typeof value !== 'boolean') {
+        return NextResponse.json({ error: 'is_published deve essere booleano' }, { status: 400 });
+      }
+      updateData[key] = value;
+    } else if (key === 'default_min_badge') {
       const badge = asText(value);
       if (!badge || !VALID_BADGES.has(badge)) {
         return NextResponse.json({ error: 'default_min_badge non valido' }, { status: 400 });
@@ -128,5 +134,9 @@ export async function PATCH(
     actor_email: actorEmailFromRequest(request),
   });
 
-  return NextResponse.json({ item: after });
+  // Publishing a format never changes the activation state of its episodes.
+  const appRefreshed = before.is_published !== after.is_published
+    ? await revalidateAppContent()
+    : undefined;
+  return NextResponse.json({ item: after, appRefreshed });
 }

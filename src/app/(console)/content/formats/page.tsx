@@ -24,6 +24,7 @@ import { Plus, RefreshCw, Search, ChevronRight, Lock } from 'lucide-react';
 interface FormatRow {
   id: string;
   title: string | null;
+  is_published: boolean;
   description: string | null;
   category: string | null;
   team_id: string | null;
@@ -210,7 +211,8 @@ export default function FormatsPage() {
                 <div className="hstack" style={{ gap: 'var(--s2)', alignItems: 'center', flexWrap: 'wrap' }}>
                   <span className="typ-body" style={{ fontWeight: 600 }}>{f.title ?? f.id}</span>
                   <span className="badge">{f.default_min_badge}</span>
-                  {f.episodes_total === 0 && (
+                  <span className="badge">{f.is_published ? "Pubblicato" : "Bozza · solo Control"}</span>
+                  {f.is_published && f.episodes_total === 0 && (
                     <span className="badge" style={{ background: 'var(--warning-soft)', color: 'var(--warning)' }}>
                       Coming Soon
                     </span>
