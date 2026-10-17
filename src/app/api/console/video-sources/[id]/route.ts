@@ -1,3 +1,4 @@
+import { sourceProcessingError } from '@/lib/video-sources/policy';
 /**
  * GET    /api/console/video-sources/[id]    → dettaglio source
  * PATCH  /api/console/video-sources/[id]    → modifica (NO id, NO format_id changes)
@@ -114,6 +115,17 @@ export async function PATCH(
     .maybeSingle();
   if (!before) return NextResponse.json({ error: 'Source non trovata' }, { status: 404 });
 
+  // PATCH must not erase settings the current Control form does not expose.
+  for (const key of ['processing', 'filters', 'naming', 'season', 'metadata', 'notifications', 'ui_format']) {
+    const value = updateData[key];
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      updateData[key] = { ...(before[key] || {}), ...value };
+    }
+  }
+  const policyError = sourceProcessingError(updateData.platform ?? before.platform, (updateData.processing ?? before.processing) as Record<string, unknown> | null);
+  if (policyError) return NextResponse.json({ error: policyError }, { status: 400 });
+
+
   const { data: after, error } = await supabaseServer
     .from('video_sources')
     .update(updateData)
@@ -154,10 +166,6 @@ export async function DELETE(
     .eq('id', id)
     .maybeSingle();
   if (!before) return NextResponse.json({ error: 'Source non trovata' }, { status: 404 });
-
-  if (!before.enabled) {
-    return NextResponse.json({ ok: true, mode: 'already_disabled' });
-  }
 
   const { data: after, error } = await supabaseServer
     .from('video_sources')

@@ -1,3 +1,4 @@
+import { sourceProcessingError } from '@/lib/video-sources/policy';
 /**
  * GET  /api/console/video-sources       → lista source (filtro format_id, enabled)
  * POST /api/console/video-sources       → crea source nuova
@@ -150,6 +151,9 @@ export async function POST(request: Request) {
   // category è legacy (campo storico pre-format_id). Default = format_id se non
   // specificata, così sync legacy continua a funzionare anche per source nuove.
   const categoryValue = asText(body.category) ?? formatId;
+
+  const policyError = sourceProcessingError(platform, asObject(body.processing));
+  if (policyError) return NextResponse.json({ error: policyError }, { status: 400 });
 
   const insertPayload = {
     id,

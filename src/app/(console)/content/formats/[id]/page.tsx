@@ -47,7 +47,10 @@ interface SourceRow {
   max_videos_per_run: number;
   schedule_cron: string | null;
   created_at: string;
+  naming?: { strategy?: string; prefix?: string; [key: string]: unknown } | null;
   filters: {
+    titleRegex?: string;
+    [key: string]: unknown;
     dateRange?: { from?: string; to?: string };
     minDuration?: number;
     maxDuration?: number;
@@ -57,6 +60,14 @@ interface SourceRow {
   } | null;
   season: { name?: string; startDate?: string; endDate?: string } | null;
   processing?: {
+    youtubeOnly?: boolean;
+    periodicDiscovery?: boolean;
+    discoveryIntervalMinutes?: number;
+    descriptionMode?: string;
+    episodeDateFromTitle?: boolean;
+    partFromTitleSuffix?: boolean;
+    youtubeLanguage?: string;
+    [key: string]: unknown;
     order?: string;
     skipThumbnail?: boolean;
     thumbnail_bucket?: string;
@@ -439,7 +450,7 @@ export default function FormatDetailPage() {
       >
         {sources.length === 0 && !addingSource ? (
           <p className="typ-micro" style={{ color: 'var(--text-muted)', margin: 0 }}>
-            Nessuna source. Clicca "+ Aggiungi" per crearne una.
+            Nessuna source. Clicca &quot;+ Aggiungi&quot; per crearne una.
           </p>
         ) : (
           <div className="vstack" style={{ gap: 'var(--s2)' }}>
@@ -525,7 +536,7 @@ export default function FormatDetailPage() {
       {/* Sezione Inietta video da URL */}
       <Section title="Inietta video da URL">
         <p className="typ-micro" style={{ color: 'var(--text-muted)', marginTop: 0, marginBottom: 'var(--s2)' }}>
-          Incolla l&apos;URL di un video (YouTube o Facebook) per scaricarlo e processarlo a mano su
+          Incolla l&apos;URL di un video per importarlo con la modalità configurata nella sorgente di
           questo format, anche se la discovery automatica l&apos;ha saltato (es. titolo senza parola chiave).
           Passa per la stessa pipeline del sync → HLS V2.
         </p>
@@ -697,10 +708,21 @@ function BigStat({ label, value, muted }: { label: string; value: number; muted?
 /* ─── New Source form (inline) ─────────────────────────────────────── */
 
 interface NewSourceForm {
+  original?: SourceRow;
+  youtube_only: boolean;
+  periodic_discovery: boolean;
+  discovery_interval: string;
+  description_mode: string;
+  naming_strategy: string;
+  title_prefix: string;
+  title_regex: string;
+  date_from_title: boolean;
+  part_from_title: boolean;
+  youtube_language: string;
   name: string;
   id: string;
   id_touched: boolean;
-  platform: 'youtube' | 'manual';
+  platform: 'youtube' | 'facebook' | 'manual';
   channel: string;
   season_name: string;
   season_start: string;     // yyyy-mm-dd
@@ -720,6 +742,9 @@ interface NewSourceForm {
 
 function emptyNewSourceForm(): NewSourceForm {
   return {
+    youtube_only: false, periodic_discovery: false, discovery_interval: '60',
+    description_mode: 'source', naming_strategy: 'teams-season', title_prefix: '', title_regex: '',
+    date_from_title: false, part_from_title: false, youtube_language: 'it',
     name: '',
     id: '',
     id_touched: false,
@@ -764,8 +789,18 @@ function buildProcessing(form: NewSourceForm): Record<string, unknown> {
   const base: Record<string, unknown> = {
     order: 'uploadDate-asc',
     resolveMissingUploadDate: true,
+    ...form.original?.processing,
+    youtubeOnly: form.platform === 'youtube' && form.youtube_only,
+    periodicDiscovery: form.periodic_discovery,
+    discoveryIntervalMinutes: Number(form.discovery_interval) || 60,
+    descriptionMode: form.description_mode,
+    episodeDateFromTitle: form.date_from_title,
+    partFromTitleSuffix: form.part_from_title,
+    ...(form.platform === 'youtube' ? { youtubeLanguage: form.youtube_language || 'it' } : {}),
+    ...(form.youtube_only ? { requireFinishedVideo: true } : {}),
   };
-  if (form.download_thumbnail) {
+  if (form.download_thumbnail && !form.youtube_only) {
+    base.skipThumbnail = false;
     base.thumbnail_bucket = form.thumbnail_bucket || 'lavika-media';
     base.thumbnail_prefix = form.thumbnail_prefix || 'episodes';
   } else {
@@ -786,7 +821,7 @@ function buildSourcePayload(form: NewSourceForm, formatId: string) {
   const minDur = Number(form.min_duration);
   const maxDur = Number(form.max_duration);
 
-  const filters: Record<string, unknown> = {};
+  const filters: Record<string, unknown> = { ...form.original?.filters, titleRegex: form.title_regex || null, requiredWords: required, titleContains: required, excludeWords: exclude, minDuration: minDur > 0 ? minDur : null, maxDuration: maxDur > 0 ? maxDur : null };
   if (Number.isFinite(minDur) && minDur > 0) filters.minDuration = minDur;
   if (Number.isFinite(maxDur) && maxDur > 0) filters.maxDuration = maxDur;
   if (required.length > 0) {
@@ -801,13 +836,15 @@ function buildSourcePayload(form: NewSourceForm, formatId: string) {
     };
   }
 
-  const seasonObj: Record<string, unknown> = {};
+  const seasonObj: Record<string, unknown> = { ...form.original?.season, ...(form.youtube_only ? { strategy: 'year-from-upload-date' } : {}) };
   if (form.season_name) seasonObj.name = form.season_name;
   if (form.season_start) seasonObj.startDate = form.season_start;
   if (form.season_end) seasonObj.endDate = form.season_end;
 
   const naming: Record<string, unknown> = {
-    strategy: 'teams-season',
+    ...form.original?.naming,
+    strategy: form.naming_strategy,
+    prefix: form.title_prefix || undefined,
     seasonLabel: form.season_name.replace('/', '-') || undefined,
   };
 
@@ -902,7 +939,7 @@ function NewSourceFormView({
 
       <FieldGroup label={isEdit ? 'Platform (immutabile)' : 'Platform'}>
         <div className="hstack" style={{ gap: 'var(--s2)' }}>
-          {(['youtube', 'manual'] as const).map((p) => (
+          {(['youtube', 'facebook', 'manual'] as const).map((p) => (
             <label key={p} className="hstack" style={{ gap: 4, cursor: isEdit ? 'not-allowed' : 'pointer', fontSize: 13, opacity: isEdit && value.platform !== p ? 0.4 : 1 }}>
               <input
                 type="radio"
@@ -918,8 +955,8 @@ function NewSourceFormView({
         </div>
       </FieldGroup>
 
-      {value.platform === 'youtube' && (
-        <FieldGroup label="Playlist URL">
+      {value.platform !== 'manual' && (
+        <FieldGroup label="URL canale o playlist">
           <input
             type="text"
             value={value.channel}
@@ -982,6 +1019,37 @@ function NewSourceFormView({
         </FieldGroup>
       </div>
 
+      {value.platform === 'youtube' && <FieldGroup label="Riproduzione">
+        <select className="input" value={value.youtube_only ? 'embed' : 'download'} onChange={e => update({ youtube_only: e.target.value === 'embed', ...(e.target.value === 'embed' ? { download_thumbnail: false } : {}) })}>
+          <option value="download">Video ospitato da LAVIKA</option>
+          <option value="embed">Solo YouTube — nessun download</option>
+        </select>
+        <p className="typ-micro">Le nuove puntate seguono la visibilità del format. Gli episodi già modificati restano invariati.</p>
+      </FieldGroup>}
+      <FieldGroup label="Ricerca automatica">
+        <label><input type="checkbox" checked={value.periodic_discovery} onChange={e => update({ periodic_discovery: e.target.checked })} /> Cerca nuove puntate periodicamente</label>
+        {value.periodic_discovery && <select className="input" value={value.discovery_interval} onChange={e => update({ discovery_interval: e.target.value })}>
+          {[15, 30, 60, 120, 240].map(n => <option key={n} value={n}>Ogni {n} minuti</option>)}
+        </select>}
+      </FieldGroup>
+      <FieldGroup label="Titoli degli episodi">
+        <select className="input" value={value.naming_strategy} onChange={e => update({ naming_strategy: e.target.value })}>
+          {Array.from(new Set(['title-only', 'prefix-date', 'teams-season', value.naming_strategy])).map(strategy => <option key={strategy} value={strategy}>{strategy === 'title-only' ? 'Titolo originale' : strategy === 'prefix-date' ? 'Nome del format + data' : strategy === 'teams-season' ? 'Squadre e stagione' : strategy}</option>)}
+        </select>
+        {value.naming_strategy === 'prefix-date' && <input className="input" aria-label="Nome nel titolo" placeholder="PIANETA CATANIA" value={value.title_prefix} onChange={e => update({ title_prefix: e.target.value })} />}
+        <label><input type="checkbox" checked={value.date_from_title} onChange={e => update({ date_from_title: e.target.checked })} /> Usa la data presente nel titolo</label>
+        <label><input type="checkbox" checked={value.part_from_title} onChange={e => update({ part_from_title: e.target.checked })} /> Riconosci il numero della parte alla fine del titolo</label>
+      </FieldGroup>
+      <FieldGroup label="Info episodio">
+        <select className="input" value={value.description_mode} onChange={e => update({ description_mode: e.target.value })}>
+          <option value="source">Descrizione della sorgente</option>
+          <option value="participants-after-date">Partecipanti scritti dopo la data nel titolo</option>
+        </select>
+      </FieldGroup>
+      <details><summary>Filtro avanzato e lingua YouTube</summary>
+        <FieldGroup label="Espressione regolare del titolo"><input className="input" value={value.title_regex} onChange={e => update({ title_regex: e.target.value })} /></FieldGroup>
+        <FieldGroup label="Lingua dei metadati"><input className="input" value={value.youtube_language} onChange={e => update({ youtube_language: e.target.value })} /></FieldGroup>
+      </details>
       <FieldGroup label="Copertina episodio">
         <label className="hstack" style={{
           gap: 10,
@@ -992,6 +1060,7 @@ function NewSourceFormView({
         }}>
           <input
             type="checkbox"
+            disabled={value.youtube_only}
             checked={value.download_thumbnail}
             onChange={(e) => update({ download_thumbnail: e.target.checked })}
             style={{ width: 20, height: 20 }}
@@ -1073,11 +1142,21 @@ function NewSourceFormView({
  * la modifica.
  */
 function sourceRowToForm(src: SourceRow): NewSourceForm {
-  const platform: 'youtube' | 'manual' =
-    src.platform === 'youtube' ? 'youtube' : 'manual';
+  const platform: 'youtube' | 'facebook' | 'manual' =
+    src.platform === 'youtube' ? 'youtube' : src.platform === 'facebook' ? 'facebook' : 'manual';
   // skipThumbnail=true significa "non scaricare" → toggle OFF nel form
   const skipThumb = src.processing?.skipThumbnail === true;
   return {
+    original: src,
+    youtube_only: src.processing?.youtubeOnly === true,
+    periodic_discovery: src.processing?.periodicDiscovery === true,
+    discovery_interval: String(src.processing?.discoveryIntervalMinutes || 60),
+    description_mode: src.processing?.descriptionMode || 'source',
+    naming_strategy: src.naming?.strategy || 'teams-season',
+    title_prefix: src.naming?.prefix || '', title_regex: src.filters?.titleRegex || '',
+    date_from_title: src.processing?.episodeDateFromTitle === true,
+    part_from_title: src.processing?.partFromTitleSuffix === true,
+    youtube_language: src.processing?.youtubeLanguage || 'it',
     id: src.id,
     id_touched: true,
     name: src.name ?? '',
@@ -1086,7 +1165,7 @@ function sourceRowToForm(src: SourceRow): NewSourceForm {
     season_name: src.season?.name ?? '',
     season_start: src.season?.startDate ?? src.filters?.dateRange?.from ?? '',
     season_end: src.season?.endDate ?? src.filters?.dateRange?.to ?? '',
-    required_words: (src.filters?.requiredWords ?? []).join(', '),
+    required_words: (src.filters?.requiredWords ?? src.filters?.titleContains ?? []).join(', '),
     exclude_words: (src.filters?.excludeWords ?? []).join(', '),
     min_duration: src.filters?.minDuration != null ? String(src.filters.minDuration) : '',
     max_duration: src.filters?.maxDuration != null ? String(src.filters.maxDuration) : '',
@@ -1109,7 +1188,7 @@ function buildSourcePatchPayload(form: NewSourceForm) {
   const minDur = Number(form.min_duration);
   const maxDur = Number(form.max_duration);
 
-  const filters: Record<string, unknown> = {};
+  const filters: Record<string, unknown> = { ...form.original?.filters, titleRegex: form.title_regex || null, requiredWords: required, titleContains: required, excludeWords: exclude, minDuration: minDur > 0 ? minDur : null, maxDuration: maxDur > 0 ? maxDur : null };
   if (Number.isFinite(minDur) && minDur > 0) filters.minDuration = minDur;
   if (Number.isFinite(maxDur) && maxDur > 0) filters.maxDuration = maxDur;
   if (required.length > 0) {
@@ -1124,7 +1203,7 @@ function buildSourcePatchPayload(form: NewSourceForm) {
     };
   }
 
-  const seasonObj: Record<string, unknown> = {};
+  const seasonObj: Record<string, unknown> = { ...form.original?.season, ...(form.youtube_only ? { strategy: 'year-from-upload-date' } : {}) };
   if (form.season_name) seasonObj.name = form.season_name;
   if (form.season_start) seasonObj.startDate = form.season_start;
   if (form.season_end) seasonObj.endDate = form.season_end;
@@ -1134,7 +1213,9 @@ function buildSourcePatchPayload(form: NewSourceForm) {
     channel: form.platform === 'manual' ? null : form.channel,
     filters,
     naming: {
-      strategy: 'teams-season',
+      ...form.original?.naming,
+      strategy: form.naming_strategy,
+      prefix: form.title_prefix || undefined,
       seasonLabel: form.season_name.replace('/', '-') || undefined,
     },
     season: Object.keys(seasonObj).length > 0 ? seasonObj : null,
