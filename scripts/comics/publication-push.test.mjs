@@ -20,6 +20,7 @@ test('Comics first-publication push: copy, audience, atomicity and lifetime dedu
  }
  const legacy=await card(1,9,'published');
  await db.exec(await readFile(new URL('20261013181134_comics_publication_push.sql',root),'utf8'));
+ await db.exec(await readFile(new URL('20261020080158_comics_series01_notification_copy.sql',root),'utf8'));
  const jobs=async()=> (await db.query('select * from notification_jobs order by episode_id')).rows;
  assert.equal((await jobs()).length,0,'no retrospective notifications');
  await db.query(`update comics_episodes set status='draft' where id=$1`,[legacy]);
@@ -31,8 +32,8 @@ test('Comics first-publication push: copy, audience, atomicity and lifetime dedu
  await db.query(`update comics_episodes set status='published' where id=$1`,[first]);
  let job=(await jobs())[0];
  assert.equal(job.topic,'new_comic');assert.deepEqual(job.audience_filter,{type:'all_active'});
- assert.equal(job.payload.title,'LAVIKA COMICS');
- assert.equal(job.payload.body,'Il fischio finale è solo l’inizio. Scopri l’episodio #010.');
+ assert.equal(job.payload.title,'Serie 01 · Il dopo partita è qui');
+ assert.equal(job.payload.body,'La partita finisce. La vignetta comincia. Scopri l’episodio #010.');
  assert.equal(job.payload.url,`/comics/${first}`);
  await db.query(`update comics_episodes set caption='Edit',push_on_publish_consumed=false where id=$1`,[first]);
  assert.equal((await jobs()).length,1,'edits cannot reset dedup');
