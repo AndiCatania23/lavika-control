@@ -17,7 +17,9 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { engagementRate, firstAvailableMetric, firstMetricValue, pipelineStatus, sumKnownMetrics, sumMetricValues } from "./metrics.ts";
+import { engagementRate, firstAvailableMetric, firstMetricValue, pipelineStatus, sumKnownMetrics } from "./metrics.ts";
+
+import { fetchInstagramAccountMetrics } from "./instagramAccount.ts";
 
 const META_GRAPH_VERSION = "v21.0";
 const META_BASE = `https://graph.facebook.com/${META_GRAPH_VERSION}`;
@@ -82,39 +84,22 @@ async function snapshotAccounts(): Promise<{ instagram: unknown; facebook: unkno
       fields: "followers_count,follows_count,media_count",
     });
 
-    // IG insights — period=day per ultimi 28d, sommiamo
-    const since = Math.floor((Date.now() - 28 * 86_400_000) / 1000);
-    const until = Math.floor(Date.now() / 1000);
-
-    // Meta v18+: 'impressions' rimossa per IG, sostituita da 'views'.
-    // Lista valida oggi: reach, views, profile_views, accounts_engaged, total_interactions, ...
-    let igInsights: { data?: Array<{ name: string; values?: Array<{ value: number }> }> } = {};
-    try {
-      igInsights = await fetchMeta(`/${c.IG_BUSINESS_ID}/insights`, {
-        metric: "reach,views,profile_views,accounts_engaged,total_interactions",
-        period: "day",
-        since: String(since),
-        until: String(until),
-        metric_type: "total_value",
-      });
-    } catch {
-      igInsights = await fetchMeta(`/${c.IG_BUSINESS_ID}/insights`, {
-        metric: "reach,views,profile_views",
-        metric_type: "total_value",
-        period: "day",
-      });
-    }
+    const accountMetrics = await fetchInstagramAccountMetrics(
+      (params) => fetchMeta(`/${c.IG_BUSINESS_ID}/insights`, params),
+      Date.now(),
+    );
 
     const row = {
       platform: "instagram" as const,
       account_id: c.IG_BUSINESS_ID,
       snapshot_date: today,
       followers_count: igInfo.followers_count ?? null,
-      reach_28d: sumMetricValues(igInsights, "reach"),
-      // Meta IG v18+: 'impressions' rinominato in 'views' (content views)
-      impressions_28d: firstAvailableMetric(sumMetricValues(igInsights, "views"), sumMetricValues(igInsights, "impressions")),
-      profile_views_28d: sumMetricValues(igInsights, "profile_views"),
-      raw: { igInfo, igInsights },
+      ...accountMetrics.columns,
+      raw: {
+        igInfo,
+        igInsights: accountMetrics.insights,
+        measurement: accountMetrics.measurement,
+      },
     };
 
     const { error } = await sb
