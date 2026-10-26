@@ -211,7 +211,7 @@ export default function FormatsPage() {
                 <div className="hstack" style={{ gap: 'var(--s2)', alignItems: 'center', flexWrap: 'wrap' }}>
                   <span className="typ-body" style={{ fontWeight: 600 }}>{f.title ?? f.id}</span>
                   <span className="badge">{f.default_min_badge}</span>
-                  <span className="badge">{f.is_published ? "Pubblicato" : "Bozza · solo Control"}</span>
+                  <span className="badge" style={{ color: f.is_published ? 'var(--ok)' : 'var(--text-muted)' }}>{f.is_published ? 'Pubblico' : 'Nascosto'}</span>
                   {f.is_published && f.episodes_total === 0 && (
                     <span className="badge" style={{ background: 'var(--warning-soft)', color: 'var(--warning)' }}>
                       Coming Soon
